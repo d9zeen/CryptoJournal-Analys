@@ -9,6 +9,8 @@ import { Alert } from '@/components/ui/Alert'
 import { NumberField, SelectField, TextField } from '@/components/ui/Field'
 import { parseDecimal, toInput } from '@/lib/parse'
 import { dbErrorMessage } from '@/lib/errors'
+import { useNavigate } from 'react-router'
+import { deleteMyAccount, downloadTradesCsv } from './dataApi'
 
 export function SettingsPage() {
   const t = useT()
@@ -24,6 +26,7 @@ export function SettingsPage() {
         <ListEditor kind="mistake_tags" />
         <ListEditor kind="emotions" />
       </div>
+      <DataCard />
     </div>
   )
 }
@@ -117,6 +120,89 @@ function PlanCard() {
           <div className={`h-full ${pct >= 100 ? 'bg-loss' : 'bg-primary'}`} style={{ width: `${pct}%` }} />
         </div>
       )}
+    </Card>
+  )
+}
+
+function DataCard() {
+  const t = useT()
+  const d = t.settings.data
+  const navigate = useNavigate()
+  const { user } = useAuth()
+  const [exportState, setExportState] = useState<{ busy: boolean; done?: number; error?: string }>({ busy: false })
+  const [confirming, setConfirming] = useState(false)
+  const [typed, setTyped] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const email = user?.email ?? ''
+
+  async function onExport() {
+    setExportState({ busy: true })
+    try {
+      setExportState({ busy: false, done: await downloadTradesCsv() })
+    } catch (e) {
+      setExportState({ busy: false, error: dbErrorMessage(e, t) })
+    }
+  }
+
+  async function onDelete() {
+    if (!user) return
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      await deleteMyAccount(user.id)
+      navigate('/login', { replace: true })
+    } catch (e) {
+      setDeleteError(dbErrorMessage(e, t))
+      setDeleting(false)
+    }
+  }
+
+  return (
+    <Card className="flex flex-col gap-4">
+      <h2 className="font-medium">{d.title}</h2>
+      <div className="flex flex-col gap-2">
+        <p className="text-sm text-muted">{d.exportHint}</p>
+        <Button variant="secondary" className="self-start" loading={exportState.busy} onClick={() => void onExport()}>
+          {exportState.busy ? d.exporting : d.export}
+        </Button>
+        {exportState.done !== undefined && <Alert tone="success">{fmt(d.exported, { n: exportState.done })}</Alert>}
+        {exportState.error && <Alert tone="error">{exportState.error}</Alert>}
+      </div>
+
+      <div className="flex flex-col gap-2 border-t border-border pt-4">
+        <h3 className="text-sm font-medium text-loss">{d.deleteTitle}</h3>
+        <p className="text-sm text-muted">{d.deleteHint}</p>
+        {!confirming ? (
+          <Button variant="secondary" className="self-start" onClick={() => setConfirming(true)}>
+            {d.deleteStart}
+          </Button>
+        ) : (
+          <div className="flex flex-col gap-2 sm:max-w-sm">
+            <TextField
+              label={fmt(d.deleteConfirmLabel, { email })}
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              autoComplete="off"
+              inputMode="email"
+            />
+            <div className="flex gap-2">
+              <Button
+                variant="danger"
+                disabled={typed.trim().toLowerCase() !== email.toLowerCase() || !email}
+                loading={deleting}
+                onClick={() => void onDelete()}
+              >
+                {deleting ? d.deleting : d.deleteConfirm}
+              </Button>
+              <Button variant="ghost" onClick={() => { setConfirming(false); setTyped('') }} disabled={deleting}>
+                {t.common.cancel}
+              </Button>
+            </div>
+            {deleteError && <Alert tone="error">{deleteError}</Alert>}
+          </div>
+        )}
+      </div>
     </Card>
   )
 }
