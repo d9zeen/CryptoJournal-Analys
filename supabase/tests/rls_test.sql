@@ -127,6 +127,31 @@ update profiles set plan = 'pro', plan_until = now() + interval '30 days' where 
 set role authenticated;
 insert into trades (exchange, symbol, side, entry_at, entry_price, size_usd) values ('okx', 'SOLUSDT', 'long', now(), 150, 100);
 select pg_temp.check((select trade_limit is null and plan = 'pro' from get_my_usage()), 'на Pro лимита нет');
+
+-- Импорт CSV (этап 4). Делаем на Pro, чтобы не упираться в лимит.
+insert into imports (id, exchange, filename, rows_total) values ('aaaaaaaa-2222-0000-0000-000000000000', 'bybit', 'closed_pnl.csv', 2);
+insert into trades (exchange, symbol, side, entry_at, exit_at, entry_price, exit_price, size_usd, fee, pnl, source, import_id, external_id) values
+  ('bybit', 'BTCUSDT', 'long',  now() - interval '1 hour', now(), 60000, 61000, 600,  0.66, 9.34, 'import', 'aaaaaaaa-2222-0000-0000-000000000000', 'o:a1'),
+  ('bybit', 'ETHUSDT', 'short', now() - interval '1 hour', now(), 3000,  2900,  3000, 0.5,  99.5, 'import', 'aaaaaaaa-2222-0000-0000-000000000000', 'o:a2');
+select pg_temp.check((select count(*) from trades where import_id = 'aaaaaaaa-2222-0000-0000-000000000000') = 2, 'импорт: сделки привязаны к записи импорта');
+select trades_created as used_before from get_my_usage() \gset
+select pg_temp.expect_error($$insert into trades (exchange, symbol, side, entry_at, exit_at, entry_price, exit_price, size_usd, pnl, source, external_id)
+  values ('bybit', 'BTCUSDT', 'long', now() - interval '1 hour', now(), 60000, 61000, 600, 9.34, 'import', 'o:a1')$$, 'duplicate key');
+select pg_temp.check((select trades_created from get_my_usage()) = :used_before, 'повторный импорт той же сделки отклоняется и не расходует лимит');
+insert into trades (exchange, symbol, side, entry_at, exit_at, entry_price, exit_price, size_usd, pnl, source, external_id)
+  values ('okx', 'BTCUSDT', 'long', now() - interval '1 hour', now(), 60000, 61000, 600, 10, 'import', 'o:a1');
+select pg_temp.check(true, 'тот же id сделки на другой бирже — не дубль');
+reset role;
+insert into imports (id, user_id, exchange) values ('bbbbbbbb-2222-0000-0000-000000000000', 'bbbbbbbb-0000-0000-0000-000000000002', 'bybit');
+set role authenticated;
+select pg_temp.check((select count(*) from imports) = 1, 'A видит только свои импорты');
+select pg_temp.expect_error($$insert into trades (exchange, symbol, side, entry_at, entry_price, size_usd, import_id)
+  values ('bybit', 'BTCUSDT', 'long', now(), 1, 1, 'bbbbbbbb-2222-0000-0000-000000000000')$$, 'foreign key');
+select pg_temp.check(true, 'нельзя привязать сделку к чужому импорту');
+-- Отмена импорта: удалить его сделки, затем запись
+delete from trades where import_id = 'aaaaaaaa-2222-0000-0000-000000000000';
+delete from imports where id = 'aaaaaaaa-2222-0000-0000-000000000000';
+select pg_temp.check((select count(*) from trades where source = 'import') = 1 and (select count(*) from imports) = 0, 'отмена импорта удаляет только его сделки');
 reset role;
 update profiles set plan_until = now() - interval '1 day' where id = 'aaaaaaaa-0000-0000-0000-000000000001';
 set role authenticated;

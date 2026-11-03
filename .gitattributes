@@ -1,0 +1,2 @@
+# .bat-файлы Windows должны храниться с CRLF, иначе cmd.exe может их неверно читать
+*.bat text eol=crlf

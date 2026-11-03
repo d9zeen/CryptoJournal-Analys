@@ -1,7 +1,378 @@
-import { PagePlaceholder } from '@/components/PagePlaceholder'
-import { useT } from '@/i18n'
+import { useMemo, useRef, useState, type DragEvent } from 'react'
+import { Link } from 'react-router'
+import { useQuery } from '@tanstack/react-query'
+import { fmt, useT } from '@/i18n'
+import { useAuth } from '@/features/auth/AuthProvider'
+import { useUsage } from '@/features/settings/api'
+import { Card } from '@/components/ui/Card'
+import { Button } from '@/components/ui/Button'
+import { Alert } from '@/components/ui/Alert'
+import { SelectField } from '@/components/ui/Field'
+import { exchangeName } from '@/lib/exchanges'
+import { dbErrorMessage } from '@/lib/errors'
+import { formatDateTime, formatPnl, formatUsd, pnlClass } from '@/lib/format'
+import { IMPORT_PARSERS, parserFor } from '@/lib/import/registry'
+import { planImport, prepareImport, type RowStatus } from '@/lib/import/plan'
+import type { ColumnMapping } from '@/lib/import/mapping'
+import type { RowWarning } from '@/lib/import/types'
+import { stableHash } from '@/lib/import/values'
+import { fetchExistingIds, useDeleteImport, useImports, useRunImport, type RunImportResult } from './api'
+
+const MAX_BYTES = 5 * 1024 * 1024
+const PREVIEW_ROWS = 100
+const NO_IDS: ReadonlySet<string> = new Set()
+/** Часовые пояса для выбора, в минутах от UTC */
+const OFFSETS = [...Array.from({ length: 27 }, (_, i) => (i - 12) * 60), 210, 270, 330, 345, 390, 570].sort((a, b) => a - b)
+
+const offsetLabel = (m: number) => {
+  const sign = m < 0 ? '−' : '+'
+  const abs = Math.abs(m)
+  return `UTC${sign}${Math.floor(abs / 60)}${abs % 60 ? `:${String(abs % 60).padStart(2, '0')}` : ''}`
+}
+
+type LoadedFile = { name: string; text: string }
 
 export function ImportPage() {
   const t = useT()
-  return <PagePlaceholder title={t.pages.import.title} note={t.pages.import.stage} />
+  const { user } = useAuth()
+  const [exchange, setExchange] = useState(IMPORT_PARSERS[0].exchange)
+  const [file, setFile] = useState<LoadedFile | null>(null)
+  const [fileError, setFileError] = useState<string | null>(null)
+  const [mappingOverride, setMappingOverride] = useState<ColumnMapping<string> | null>(null)
+  const [offsetOverride, setOffsetOverride] = useState<number | null>(null)
+  const [showMapping, setShowMapping] = useState(false)
+  const [result, setResult] = useState<RunImportResult | null>(null)
+  const [dragging, setDragging] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const parser = parserFor(exchange)!
+  const { data: usage } = useUsage()
+  const run = useRunImport()
+
+  const prepared = useMemo(
+    () =>
+      file
+        ? prepareImport(file.text, parser, { mapping: mappingOverride ?? undefined, utcOffsetMinutes: offsetOverride ?? undefined })
+        : null,
+    [file, parser, mappingOverride, offsetOverride],
+  )
+
+  const ids = useMemo(() => prepared?.rows.flatMap((r) => (r.trade ? [r.trade.external_id] : [])) ?? [], [prepared])
+  const existing = useQuery({
+    queryKey: ['importCheck', user?.id, exchange, stableHash(ids.join(','))],
+    enabled: ids.length > 0,
+    queryFn: () => fetchExistingIds(exchange, ids),
+  })
+
+  const remaining = usage && usage.trade_limit !== null ? Math.max(0, usage.trade_limit - usage.trades_created) : null
+  // если в файле нет ни одной годной строки — проверять дубли не нужно
+  const existingIds = ids.length === 0 ? NO_IDS : existing.data
+  const plan = useMemo(
+    () => (prepared && existingIds ? planImport(prepared.rows, existingIds, remaining) : null),
+    [prepared, existingIds, remaining],
+  )
+
+  const warnings = useMemo(() => {
+    const count = new Map<RowWarning, number>()
+    for (const r of prepared?.rows ?? []) for (const w of r.warnings) count.set(w, (count.get(w) ?? 0) + 1)
+    return count
+  }, [prepared])
+
+  async function loadFile(f: File | undefined) {
+    if (!f) return
+    setResult(null)
+    setFileError(null)
+    setMappingOverride(null)
+    setOffsetOverride(null)
+    if (f.size > MAX_BYTES) {
+      setFile(null)
+      setFileError(t.import.tooBig)
+      return
+    }
+    try {
+      const text = await f.text()
+      setFile({ name: f.name, text })
+      setShowMapping(false)
+    } catch {
+      setFile(null)
+      setFileError(t.import.readError)
+    }
+  }
+
+  function onDrop(e: DragEvent) {
+    e.preventDefault()
+    setDragging(false)
+    void loadFile(e.dataTransfer.files[0])
+  }
+
+  async function submit() {
+    if (!plan || !file || !prepared) return
+    const res = await run.mutateAsync({ exchange, filename: file.name, rowsTotal: prepared.rows.length, trades: plan.toInsert })
+    setResult(res)
+    setFile(null)
+    if (inputRef.current) inputRef.current.value = ''
+  }
+
+  const requiredFields = new Set(parser.required.flat())
+  const fieldLabel = (f: string) => (t.import.fields as Record<string, string>)[f] ?? f
+  const howTo = (t.import.howTo as Record<string, string>)[exchange]
+
+  return (
+    <div className="flex flex-col gap-4">
+      <h1 className="text-xl font-semibold">{t.import.title}</h1>
+
+      {usage && usage.trade_limit !== null && (
+        <p className={`text-sm ${remaining === 0 ? 'text-loss' : 'text-muted'}`}>
+          {fmt(t.tradeForm.usage, { used: usage.trades_created, limit: usage.trade_limit })}
+        </p>
+      )}
+
+      {result && <ResultAlert result={result} />}
+      {run.error && <Alert tone="error">{dbErrorMessage(run.error, t)}</Alert>}
+
+      <Card className="flex flex-col gap-4 !p-4">
+        <div className="grid gap-3 sm:grid-cols-[200px_1fr] sm:items-end">
+          <SelectField
+            label={t.import.exchange}
+            value={exchange}
+            onChange={(e) => {
+              setExchange(e.target.value)
+              setMappingOverride(null)
+            }}
+          >
+            {IMPORT_PARSERS.map((p) => (
+              <option key={p.exchange} value={p.exchange}>
+                {exchangeName(p.exchange, t.exchange.other)}
+              </option>
+            ))}
+          </SelectField>
+          {howTo && <p className="text-sm text-muted">{howTo}</p>}
+        </div>
+
+        <label
+          onDragOver={(e) => {
+            e.preventDefault()
+            setDragging(true)
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={onDrop}
+          className={`flex cursor-pointer flex-col items-center gap-3 rounded-lg border border-dashed px-4 py-6 text-center text-sm transition-colors ${dragging ? 'border-primary bg-primary/10' : 'border-border hover:border-muted'}`}
+        >
+          <span className="text-muted">{file ? fmt(t.import.file, { name: file.name, n: prepared?.table.rows.length ?? 0 }) : t.import.drop}</span>
+          <span className="rounded-lg border border-border bg-surface-2 px-3 py-1.5 font-medium">{file ? t.import.another : t.import.pick}</span>
+          <input ref={inputRef} type="file" accept=".csv,text/csv,text/plain" className="sr-only" onChange={(e) => void loadFile(e.target.files?.[0])} />
+        </label>
+        {fileError && <Alert tone="error">{fileError}</Alert>}
+      </Card>
+
+      {prepared && prepared.table.rows.length === 0 && <Alert tone="error">{t.import.emptyFile}</Alert>}
+
+      {prepared && prepared.table.rows.length > 0 && (
+        <>
+          {prepared.missing.length > 0 && (
+            <Alert tone="error">{fmt(t.import.missing, { fields: prepared.missing.map(fieldLabel).join(', ') })}</Alert>
+          )}
+
+          {/* Сопоставление колонок и часовой пояс */}
+          <Card className="!p-4">
+            <button type="button" className="flex w-full items-center justify-between text-left" onClick={() => setShowMapping((v) => !v)} aria-expanded={showMapping || prepared.missing.length > 0}>
+              <span className="font-medium">{t.import.mapping}</span>
+              <span className="text-muted">{showMapping || prepared.missing.length > 0 ? '▴' : '▾'}</span>
+            </button>
+            {(showMapping || prepared.missing.length > 0) && (
+              <div className="mt-3 flex flex-col gap-3">
+                <p className="text-xs text-muted">{t.import.mappingHint}</p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {Object.keys(parser.fields).map((f) => (
+                    <SelectField
+                      key={f}
+                      label={`${fieldLabel(f)}${requiredFields.has(f) ? ` · ${t.import.required}` : ''}`}
+                      value={prepared.mapping[f]}
+                      onChange={(e) => setMappingOverride({ ...prepared.mapping, [f]: Number(e.target.value) })}
+                    >
+                      <option value={-1}>{t.import.notInFile}</option>
+                      {prepared.table.headers.map((h, i) => (
+                        <option key={i} value={i}>
+                          {h || `#${i + 1}`}
+                        </option>
+                      ))}
+                    </SelectField>
+                  ))}
+                </div>
+                <SelectField
+                  label={t.import.timezone}
+                  hint={prepared.offsetDetected && offsetOverride === null ? t.import.timezoneDetected : t.import.timezoneGuess}
+                  value={prepared.utcOffsetMinutes}
+                  onChange={(e) => setOffsetOverride(Number(e.target.value))}
+                  wrapClassName="sm:max-w-xs"
+                >
+                  {OFFSETS.map((m) => (
+                    <option key={m} value={m}>
+                      {offsetLabel(m)}
+                    </option>
+                  ))}
+                </SelectField>
+              </div>
+            )}
+          </Card>
+
+          {prepared.missing.length === 0 && (
+            <>
+              {existing.isLoading && <p className="text-sm text-muted">{t.import.checking}</p>}
+              {existing.error && <Alert tone="error">{dbErrorMessage(existing.error, t)}</Alert>}
+
+              {plan && (
+                <Card className="flex flex-col gap-3 !p-4">
+                  <div className="flex flex-wrap gap-2 text-sm">
+                    <Badge status="new">{fmt(t.import.summary.new, { n: plan.counts.new })}</Badge>
+                    {plan.counts.duplicate > 0 && <Badge status="duplicate">{fmt(t.import.summary.duplicate, { n: plan.counts.duplicate })}</Badge>}
+                    {plan.counts.error > 0 && <Badge status="error">{fmt(t.import.summary.error, { n: plan.counts.error })}</Badge>}
+                    {plan.counts.overLimit > 0 && <Badge status="overLimit">{fmt(t.import.summary.overLimit, { n: plan.counts.overLimit })}</Badge>}
+                  </div>
+
+                  {plan.counts.overLimit > 0 && remaining !== null && <p className="text-sm text-warning">{fmt(t.import.overLimitNote, { n: remaining })}</p>}
+                  {warnings.has('noEntryTime') && <p className="text-xs text-muted">{t.import.warnings.noEntryTime}</p>}
+                  {warnings.has('feeDerived') && <p className="text-xs text-muted">{fmt(t.import.warnings.feeDerived, { n: warnings.get('feeDerived')! })}</p>}
+                  {warnings.has('pnlFromFile') && <p className="text-xs text-muted">{fmt(t.import.warnings.pnlFromFile, { n: warnings.get('pnlFromFile')! })}</p>}
+
+                  <div className="-mx-4 overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-left text-xs text-muted">
+                        <tr>
+                          <th className="hidden px-4 py-2 font-normal sm:table-cell">{t.import.col.line}</th>
+                          <th className="px-4 py-2 font-normal">{t.import.col.status}</th>
+                          <th className="px-2 py-2 font-normal">{t.import.col.trade}</th>
+                          <th className="hidden px-2 py-2 font-normal md:table-cell">{t.import.col.exitAt}</th>
+                          <th className="hidden px-2 py-2 text-right font-normal sm:table-cell">{t.import.col.size}</th>
+                          <th className="px-4 py-2 text-right font-normal">{t.import.col.pnl}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {prepared.rows.slice(0, PREVIEW_ROWS).map((r) => {
+                          const status = plan.status.get(r.line)!
+                          return (
+                            <tr key={r.line} className="border-t border-border">
+                              <td className="hidden px-4 py-2 text-muted sm:table-cell">{r.line}</td>
+                              <td className="px-4 py-2">
+                                <Badge status={status}>{t.import.status[status]}</Badge>
+                              </td>
+                              <td className="px-2 py-2">
+                                {r.trade ? (
+                                  <>
+                                    <span className="font-medium">{r.trade.symbol}</span>{' '}
+                                    <span className={r.trade.side === 'long' ? 'text-profit' : 'text-loss'}>{t.side[r.trade.side]}</span>
+                                    <div className="text-xs text-muted md:hidden">{formatDateTime(r.trade.exit_at)}</div>
+                                  </>
+                                ) : (
+                                  <span className="text-loss">
+                                    {t.import.col.line} {r.line}: {t.import.rowError[r.error!]}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="hidden whitespace-nowrap px-2 py-2 text-muted md:table-cell">{r.trade ? formatDateTime(r.trade.exit_at) : ''}</td>
+                              <td className="hidden whitespace-nowrap px-2 py-2 text-right sm:table-cell">{r.trade ? formatUsd(r.trade.size_usd) : ''}</td>
+                              <td className={`whitespace-nowrap px-4 py-2 text-right font-medium ${pnlClass(r.trade?.pnl)}`}>{r.trade ? formatPnl(r.trade.pnl) : ''}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  {prepared.rows.length > PREVIEW_ROWS && (
+                    <p className="text-xs text-muted">{fmt(t.import.previewMore, { shown: PREVIEW_ROWS, n: prepared.rows.length })}</p>
+                  )}
+
+                  {plan.toInsert.length === 0 && plan.counts.duplicate > 0 ? (
+                    <p className="text-sm text-muted">{t.import.nothing}</p>
+                  ) : (
+                    <Button onClick={() => void submit()} loading={run.isPending} disabled={plan.toInsert.length === 0} className="self-start">
+                      {run.isPending ? t.import.submitting : fmt(t.import.submit, { n: plan.toInsert.length })}
+                    </Button>
+                  )}
+                </Card>
+              )}
+            </>
+          )}
+        </>
+      )}
+
+      <ImportHistory />
+    </div>
+  )
+}
+
+const badgeStyles: Record<RowStatus, string> = {
+  new: 'bg-profit/15 text-profit',
+  duplicate: 'bg-surface-2 text-muted',
+  error: 'bg-loss/15 text-loss',
+  overLimit: 'bg-warning/15 text-warning',
+}
+
+function Badge({ status, children }: { status: RowStatus; children: string }) {
+  return <span className={`inline-block whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-medium ${badgeStyles[status]}`}>{children}</span>
+}
+
+function ResultAlert({ result }: { result: RunImportResult }) {
+  const t = useT()
+  const stopped = result.error !== null
+  return (
+    <Alert tone={stopped ? 'error' : 'success'}>
+      <p>
+        {stopped ? fmt(t.import.stopped, { n: result.inserted }) : fmt(t.import.done, { n: result.inserted })}
+        {result.duplicates > 0 && ` ${fmt(t.import.doneDuplicates, { n: result.duplicates })}`}
+      </p>
+      {stopped && <p className="mt-1">{dbErrorMessage(result.error, t)}</p>}
+      {result.inserted > 0 && (
+        <Link to="/trades" className="mt-1 inline-block underline">
+          {t.import.toTrades}
+        </Link>
+      )}
+    </Alert>
+  )
+}
+
+function ImportHistory() {
+  const t = useT()
+  const { data: imports = [] } = useImports()
+  const del = useDeleteImport()
+
+  return (
+    <Card className="!p-4">
+      <h2 className="font-medium">{t.import.history}</h2>
+      {del.error && (
+        <div className="mt-2">
+          <Alert tone="error">{dbErrorMessage(del.error, t)}</Alert>
+        </div>
+      )}
+      {imports.length === 0 ? (
+        <p className="mt-2 text-sm text-muted">{t.import.historyEmpty}</p>
+      ) : (
+        <ul className="mt-2 flex flex-col">
+          {imports.map((imp) => (
+            <li key={imp.id} className="flex items-center justify-between gap-3 border-t border-border py-2 first:border-t-0">
+              <div className="min-w-0">
+                <div className="truncate text-sm">
+                  {exchangeName(imp.exchange, t.exchange.other)}
+                  {imp.filename && <span className="text-muted"> · {imp.filename}</span>}
+                </div>
+                <div className="text-xs text-muted">
+                  {fmt(t.import.historyRow, { date: formatDateTime(imp.created_at), imported: imp.rows_imported, total: imp.rows_total })}
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                className="shrink-0 py-1.5"
+                loading={del.isPending && del.variables === imp.id}
+                onClick={() => {
+                  if (window.confirm(fmt(t.import.undoConfirm, { n: imp.rows_imported }))) del.mutate(imp.id)
+                }}
+              >
+                {t.import.undo}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  )
 }

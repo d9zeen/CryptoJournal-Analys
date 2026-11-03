@@ -60,3 +60,33 @@ export function pnlClass(n: number | null | undefined): string {
   if (n === null || n === undefined || n === 0) return 'text-muted'
   return n > 0 ? 'text-profit' : 'text-loss'
 }
+
+/** 0.523 → 52,3 % */
+export function formatPercent(n: number | null | undefined, digits = 1): string {
+  if (n === null || n === undefined) return '—'
+  return new Intl.NumberFormat(LOCALE, { style: 'percent', maximumFractionDigits: digits }).format(n)
+}
+
+/** Profit factor: 1,85 · ∞ · — */
+export function formatRatio(n: number | null | undefined): string {
+  if (n === null || n === undefined) return '—'
+  if (n === Infinity) return '∞'
+  return new Intl.NumberFormat(LOCALE, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
+}
+
+/** Короткая сумма для осей графиков: 1,2 тыс. $ */
+export function formatUsdShort(n: number): string {
+  return new Intl.NumberFormat(LOCALE, { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 }).format(n)
+}
+
+/** YYYY-MM-DD → 03.11 */
+export function formatDayShort(date: string): string {
+  const [, m, d] = date.split('-')
+  return `${d}.${m}`
+}
+
+/** YYYY-MM-DD → 03.11.2026 */
+export function formatDay(date: string): string {
+  const [y, m, d] = date.split('-')
+  return `${d}.${m}.${y}`
+}
