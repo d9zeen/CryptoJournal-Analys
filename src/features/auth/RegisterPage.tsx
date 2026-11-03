@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import { AuthLayout } from './AuthLayout'
 import { MIN_PASSWORD_LENGTH, authErrorMessage } from './errors'
+import { appUrl } from '@/lib/url'
 
 export function RegisterPage() {
   const t = useT()
@@ -30,7 +31,7 @@ export function RegisterPage() {
       email: cleanEmail,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/login`,
+        emailRedirectTo: appUrl('login'),
         // часовой пояс браузера → профиль (для статистики по часам)
         data: { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone },
       },

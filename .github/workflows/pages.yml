@@ -1,0 +1,54 @@
+# Сайт на GitHub Pages: при каждом обновлении основной ветки — тесты, сборка, выкладка.
+# Адрес: https://<владелец>.github.io/<репозиторий>/
+# Нужно один раз: Settings → Pages → Source: GitHub Actions.
+# Ключи Supabase — публичные (те же, что в .env.example). Чтобы подставить другие,
+# заведи секреты VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY в Settings → Secrets and variables → Actions:
+# они важнее значений ниже. service_role / secret key сюда НЕ класть никогда.
+name: Сайт на GitHub Pages
+
+on:
+  push:
+    branches: [claude/amazing-bohr-gt7ta9]
+  workflow_dispatch: # кнопка «Run workflow» — пересобрать вручную (например, после смены ключей)
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Сборка
+        run: npm run build
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}/
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://dkjavndvuulnzflowdhj.supabase.co' }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'sb_publishable_b-HoCt2aJnh-PSAlMxrEsw_U8nbSs0i' }}
+      # GitHub Pages не умеет SPA-фолбэк: прямые ссылки (/trades/123) отдаём через 404.html = index.html
+      - run: cp dist/index.html dist/404.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

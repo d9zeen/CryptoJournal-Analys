@@ -115,6 +115,30 @@ where id = (select id from auth.users where email = 'твой@email');
 - Лимит Free (30 сделок в месяц) проверяется и в интерфейсе, и в самой базе.
 - Схема базы хранится в репозитории (`supabase/migrations`) и покрыта тестами (`supabase/tests`).
 
-## Позже: хостинг и домен (этап 5)
+## Сайт в интернете: GitHub Pages (бесплатно)
 
-Инструкцию по выкладке (Cloudflare Pages или свой сервер, с учётом доступности из РФ) добавим, когда всё будет готово и проверено на localhost.
+Адрес: **https://d9zeen.github.io/CryptoJournal-Analys/**
+
+Сайт собирается и выкладывается сам (`.github/workflows/pages.yml`) при каждом обновлении ветки
+`claude/amazing-bohr-gt7ta9`: тесты → сборка → выкладка, 1–2 минуты. Ход видно во вкладке **Actions** репозитория.
+
+Настроить один раз:
+
+1. **Settings → Pages → Build and deployment → Source: GitHub Actions.**
+2. Ключи Supabase уже вписаны в workflow (публичные, как в `.env.example`). Нужен другой проект Supabase —
+   заведи секреты `VITE_SUPABASE_URL` и `VITE_SUPABASE_ANON_KEY` в **Settings → Secrets and variables → Actions**,
+   они важнее вписанных значений.
+3. **Actions → «Сайт на GitHub Pages» → Run workflow** — пересобрать вручную.
+4. В Supabase: **Authentication → URL Configuration**
+   - **Site URL**: `https://d9zeen.github.io/CryptoJournal-Analys/`
+   - **Redirect URLs**: добавь `https://d9zeen.github.io/CryptoJournal-Analys/**` и оставь `http://localhost:5173/**`.
+
+   Без этого ссылки из писем (подтверждение, сброс пароля) будут вести на localhost.
+
+Поменял ключи — обнови секреты (или значения в workflow и `.env.example`) и снова нажми **Run workflow**: переменные `VITE_…` вшиваются в сайт при сборке.
+
+Как устроено: сайт живёт в подпапке `/CryptoJournal-Analys/` — сборка получает `BASE_PATH`, роутер и ссылки из писем
+берут её из `src/lib/url.ts`. Прямые ссылки (например, `/trades/123`) работают через `404.html` — его создаёт сборка, в репозитории его нет.
+Локально и на Cloudflare Pages подпапки нет (`BASE_PATH` не задан) — там всё работает как раньше.
+
+Доступность из РФ проверим перед публичным запуском — план в `docs/PLAN.md`.

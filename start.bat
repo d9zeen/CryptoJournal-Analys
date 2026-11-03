@@ -26,12 +26,8 @@ if errorlevel 1 goto npm_failed
 
 if exist .env goto env_ok
 echo.
-echo [3/4] Создаю файл .env с настройками Supabase.
+echo [3/4] Создаю файл .env с настройками Supabase из .env.example
 copy /y .env.example .env >nul
-echo      Сейчас откроется Блокнот. Вставь два значения из Supabase:
-echo      Project Settings - API: Project URL и anon / publishable key.
-echo      Сохрани файл Ctrl+S и закрой Блокнот - запуск продолжится.
-start /wait notepad .env
 :env_ok
 
 echo.
