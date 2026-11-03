@@ -58,8 +58,17 @@ export type Trade = {
   updated_at: string
 }
 
-/** Сделка вместе с id тегов ошибок */
-export type TradeWithTags = Trade & { trade_mistakes: { tag_id: string }[] }
+/** Скриншот сделки (их может быть несколько) */
+export type TradeScreenshot = {
+  id: string
+  trade_id: string
+  path: string
+  sort_order: number
+  created_at: string
+}
+
+/** Сделка вместе с id тегов ошибок и скриншотами */
+export type TradeWithTags = Trade & { trade_mistakes: { tag_id: string }[]; trade_screenshots?: TradeScreenshot[] }
 
 /** Поля, которые отправляем при создании/изменении */
 export type TradeInput = Omit<Trade, 'user_id' | 'created_at' | 'updated_at' | 'source' | 'import_id' | 'external_id'>

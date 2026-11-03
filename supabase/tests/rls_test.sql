@@ -168,6 +168,31 @@ select pg_temp.expect_error($$select * from profiles$$, 'permission denied');
 select pg_temp.check(true, 'аноним не имеет доступа к профилям');
 select pg_temp.check((select count(*) from storage.objects) = 0, 'аноним не видит скриншоты');
 
+-- Несколько скриншотов на сделку (0003)
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
+insert into trade_screenshots (trade_id, path) values
+  ('bbbbbbbb-1111-0000-0000-000000000000', 'bbbbbbbb-0000-0000-0000-000000000002/bbbbbbbb-1111-0000-0000-000000000000/1.webp'),
+  ('bbbbbbbb-1111-0000-0000-000000000000', 'bbbbbbbb-0000-0000-0000-000000000002/bbbbbbbb-1111-0000-0000-000000000000/2.webp');
+select pg_temp.check((select count(*) from trade_screenshots) = 2, 'B прикрепляет несколько скриншотов к своей сделке');
+select pg_temp.expect_error($$insert into trade_screenshots (trade_id, path) values ('bbbbbbbb-1111-0000-0000-000000000000', 'aaaaaaaa-0000-0000-0000-000000000001/x.webp')$$, 'trade_screenshots_path_owner');
+select pg_temp.check(true, 'путь скриншота должен быть в своей папке');
+insert into trade_screenshots (trade_id, path)
+select 'bbbbbbbb-1111-0000-0000-000000000000', 'bbbbbbbb-0000-0000-0000-000000000002/bbbbbbbb-1111-0000-0000-000000000000/n' || g || '.webp' from generate_series(3, 10) g;
+select pg_temp.expect_error($$insert into trade_screenshots (trade_id, path) values ('bbbbbbbb-1111-0000-0000-000000000000', 'bbbbbbbb-0000-0000-0000-000000000002/bbbbbbbb-1111-0000-0000-000000000000/11.webp')$$, 'SCREENSHOT_LIMIT_REACHED');
+select pg_temp.check(true, 'не больше 10 скриншотов на сделку');
+set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
+select pg_temp.check((select count(*) from trade_screenshots) = 0, 'A не видит скриншоты B');
+select pg_temp.expect_error($$insert into trade_screenshots (trade_id, path) values ('bbbbbbbb-1111-0000-0000-000000000000', 'aaaaaaaa-0000-0000-0000-000000000001/y.webp')$$, 'foreign key|row-level security');
+select pg_temp.check(true, 'A не может прикрепить скриншот к сделке B');
+delete from trade_screenshots;
+reset role;
+select pg_temp.check((select count(*) from trade_screenshots) = 10, 'A не может удалить скриншоты B');
+delete from trades where id = 'bbbbbbbb-1111-0000-0000-000000000000';
+select pg_temp.check((select count(*) from trade_screenshots) = 0, 'удаление сделки удаляет записи её скриншотов');
+insert into trades (id, user_id, exchange, symbol, side, entry_at, entry_price, size_usd)
+values ('bbbbbbbb-1111-0000-0000-000000000000', 'bbbbbbbb-0000-0000-0000-000000000002', 'bybit', 'ETHUSDT', 'short', now(), 3000, 500);
+
 -- Удаление своего аккаунта (0002)
 reset role;
 insert into auth.users (id, email) values ('cccccccc-0000-0000-0000-000000000003', 'c@test');

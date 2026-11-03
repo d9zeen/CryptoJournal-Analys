@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/features/auth/AuthProvider'
-import { deleteScreenshot } from '@/features/trades/screenshot'
+import { deleteScreenshots } from '@/features/trades/screenshot'
 import type { ImportedTrade } from '@/lib/import/types'
 
 export type ImportRecord = {
@@ -125,11 +125,18 @@ export function useDeleteImport() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (importId: string) => {
-      const { data: shots, error: shotErr } = await supabase.from('trades').select('screenshot_path').eq('import_id', importId).not('screenshot_path', 'is', null)
+      const { data: shots, error: shotErr } = await supabase
+        .from('trades')
+        .select('screenshot_path, trade_screenshots(path)')
+        .eq('import_id', importId)
       if (shotErr) throw shotErr
+      const paths = (shots as { screenshot_path: string | null; trade_screenshots: { path: string }[] }[]).flatMap((s) => [
+        ...s.trade_screenshots.map((x) => x.path),
+        ...(s.screenshot_path ? [s.screenshot_path] : []),
+      ])
       const { error } = await supabase.from('trades').delete().eq('import_id', importId)
       if (error) throw error
-      for (const s of shots as { screenshot_path: string }[]) await deleteScreenshot(s.screenshot_path)
+      await deleteScreenshots([...new Set(paths)])
       const { error: recErr } = await supabase.from('imports').delete().eq('id', importId)
       if (recErr) throw recErr
     },

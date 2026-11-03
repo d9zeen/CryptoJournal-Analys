@@ -5,6 +5,7 @@ export function dbErrorMessage(error: unknown, t: Dict): string {
   const msg = error && typeof error === 'object' && 'message' in error ? String((error as { message: unknown }).message) : ''
   const code = error && typeof error === 'object' && 'code' in error ? String((error as { code: unknown }).code) : ''
   if (msg.includes('FREE_LIMIT_REACHED')) return t.errors.freeLimit
+  if (msg.includes('SCREENSHOT_LIMIT_REACHED')) return t.errors.screenshotLimit
   if (code === '23505') return t.errors.duplicate
   if (code === '23514') return t.errors.invalidData
   if (msg.toLowerCase().includes('failed to fetch') || msg.toLowerCase().includes('network')) return t.errors.network

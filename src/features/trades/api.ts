@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/features/auth/AuthProvider'
-import type { TradeInput, TradeWithTags } from '@/types/db'
-import { deleteScreenshot, uploadScreenshot } from './screenshot'
+import type { TradeInput, TradeScreenshot, TradeWithTags } from '@/types/db'
+import { deleteScreenshots, uploadScreenshot } from './screenshot'
 
-const SELECT = '*, trade_mistakes(tag_id)'
+const SELECT = '*, trade_mistakes(tag_id), trade_screenshots(id, trade_id, path, sort_order, created_at)'
 
 export type DateRange = { from: string | null; to: string | null }
 
@@ -42,15 +42,15 @@ export type SaveTradeArgs = {
   trade: TradeInput
   tagIds: string[]
   isNew: boolean
-  /** новый скриншот (Blob), null — удалить текущий, undefined — не трогать */
-  screenshot?: Blob | null
+  /** скриншоты: добавить новые (сжатые картинки) и убрать сохранённые */
+  screenshots?: { add: Blob[]; remove: TradeScreenshot[]; nextOrder: number }
 }
 
 export function useSaveTrade() {
   const qc = useQueryClient()
   const { user } = useAuth()
   return useMutation({
-    mutationFn: async ({ trade, tagIds, isNew, screenshot }: SaveTradeArgs) => {
+    mutationFn: async ({ trade, tagIds, isNew, screenshots }: SaveTradeArgs) => {
       // 1. сама сделка
       const { error } = isNew
         ? await supabase.from('trades').insert(trade)
@@ -70,15 +70,23 @@ export function useSaveTrade() {
         if (tagErr) throw tagErr
       }
 
-      // 3. скриншот
-      if (screenshot === null && trade.screenshot_path) {
-        await deleteScreenshot(trade.screenshot_path)
-        await supabase.from('trades').update({ screenshot_path: null }).eq('id', trade.id)
-      } else if (screenshot) {
-        if (trade.screenshot_path) await deleteScreenshot(trade.screenshot_path)
-        const path = await uploadScreenshot(user!.id, trade.id, screenshot)
-        const { error: pathErr } = await supabase.from('trades').update({ screenshot_path: path }).eq('id', trade.id)
-        if (pathErr) throw pathErr
+      // 3. скриншоты: сначала убрать отмеченные, потом загрузить новые
+      if (screenshots?.remove.length) {
+        const { error: rmErr } = await supabase.from('trade_screenshots').delete().in('id', screenshots.remove.map((s) => s.id))
+        if (rmErr) throw rmErr
+        await deleteScreenshots(screenshots.remove.map((s) => s.path))
+      }
+      if (screenshots?.add.length) {
+        const uploaded: string[] = []
+        try {
+          for (const blob of screenshots.add) uploaded.push(await uploadScreenshot(user!.id, trade.id, blob))
+          const rows = uploaded.map((path, i) => ({ trade_id: trade.id, path, sort_order: screenshots.nextOrder + i }))
+          const { error: insErr } = await supabase.from('trade_screenshots').insert(rows)
+          if (insErr) throw insErr
+        } catch (e) {
+          await deleteScreenshots(uploaded) // не оставляем «осиротевшие» файлы
+          throw e
+        }
       }
       return trade.id
     },
@@ -93,10 +101,12 @@ export function useSaveTrade() {
 export function useDeleteTrade() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (trade: { id: string; screenshot_path: string | null }) => {
+    mutationFn: async (trade: Pick<TradeWithTags, 'id' | 'screenshot_path' | 'trade_screenshots'>) => {
+      const paths = (trade.trade_screenshots ?? []).map((s) => s.path)
+      if (trade.screenshot_path && !paths.includes(trade.screenshot_path)) paths.push(trade.screenshot_path)
       const { error } = await supabase.from('trades').delete().eq('id', trade.id)
       if (error) throw error
-      if (trade.screenshot_path) await deleteScreenshot(trade.screenshot_path)
+      await deleteScreenshots(paths)
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['trades'] }),
   })
