@@ -1,0 +1,81 @@
+# CryptoJournal — контекст для Claude
+
+Онлайн-дневник сделок для русскоязычных криптотрейдеров (фьючерсы Bybit / BingX / OKX + спот):
+запись сделок, статистика, импорт CSV. Подписка Free / Pro (оплаты в MVP нет, только поле `plan` и лимиты).
+
+Владелец — не профессиональный разработчик: объяснять простым языком, маленькие шаги,
+после каждого шага — как проверить результат. Общение на русском.
+
+**Все договорённости и формулы — в `docs/PLAN.md`. Читать перед работой.**
+
+## Стек
+
+- Vite + React 19 + TypeScript + Tailwind CSS v4 — статический SPA
+- React Router (`createBrowserRouter`, импорт из `react-router`)
+- Supabase: Postgres, Auth (email + пароль), Storage — без своего сервера
+- Recharts — графики (этап 3)
+- Хостинг: Cloudflare Pages, автодеплой из GitHub (SPA-фолбэк работает автоматически, т.к. нет `404.html`)
+
+## Команды
+
+```bash
+npm install        # зависимости
+npm run dev        # локальный сервер http://localhost:5173
+npm run build      # проверка типов + сборка в dist/
+npm run typecheck  # только проверка типов
+```
+
+Node 22 (см. `.node-version`).
+
+## Структура
+
+```
+src/
+  styles/theme.css     ВСЕ цвета и шрифты (Tailwind @theme). Классы: bg-bg, bg-surface, bg-surface-2,
+                       border-border, text-text, text-muted, text-primary, text-profit, text-loss
+  i18n/ru.ts           ВСЕ тексты интерфейса. Новый язык = файл с той же структурой (тип Dict)
+  i18n/index.ts        useT(), fmt()
+  lib/supabase.ts      клиент Supabase (только публичный ключ)
+  lib/calc/            формулы PnL / R / статистики (+ тесты) — этап 2–3
+  lib/import/          парсеры CSV бирж, реестр парсеров — этап 4
+  components/ui/       базовые компоненты (Button, Input, Card, Alert, Spinner)
+  layout/AppLayout.tsx шапка + нижнее меню на телефоне
+  features/<раздел>/   auth, dashboard, trades, import, settings
+supabase/migrations/   SQL-миграции, нумерация 0001_..., 0002_...
+docs/PLAN.md           решения, формулы, схема БД, этапы
+```
+
+## Правила
+
+1. **Тексты** — только через `useT()` и `src/i18n/ru.ts`. Никаких строк на русском прямо в JSX.
+2. **Цвета/шрифты** — только токены из `theme.css`. Никаких `#hex` и `text-green-500` в компонентах.
+3. **Безопасность:**
+   - RLS включён на КАЖДОЙ таблице, политика `user_id = auth.uid()`; Storage — по папке `{user_id}/`.
+   - Во frontend только anon / publishable key. `service_role` / secret key — никогда.
+   - `.env` в `.gitignore`, в репо только `.env.example`.
+   - Поле `profiles.plan` пользователь менять не может (защита в БД).
+   - Лимиты проверяются и на клиенте, и триггером в БД.
+4. **Миграции** — каждое изменение схемы новым SQL-файлом в `supabase/migrations/`, старые не редактировать после применения. Владелец применяет их через Supabase → SQL Editor.
+5. **Деньги** — формулы в `src/lib/calc/`, покрыты тестами (Vitest). Время хранится в UTC (`timestamptz`).
+6. **Вёрстка** — mobile-first, проверять на ширине 390px.
+7. После каждого этапа: краткий отчёт «что сделано / как проверить», коммит с понятным сообщением, обновить статус этапов в `docs/PLAN.md`.
+
+## Переменные окружения
+
+| Имя | Что это |
+|---|---|
+| `VITE_SUPABASE_URL` | Project URL из Supabase |
+| `VITE_SUPABASE_ANON_KEY` | anon key или publishable key (публичный) |
+
+Без них приложение показывает экран «Supabase ещё не подключён» вместо белого экрана.
+
+## Статус
+
+- [x] Этап 0 — документация
+- [x] Этап 1 — каркас, роутинг, auth
+- [ ] Этап 2 — сделки + RLS
+- [ ] Этап 3 — дашборд
+- [ ] Этап 4 — импорт Bybit CSV
+- [ ] Этап 5 — лимиты, полировка, деплой
+
+Рабочая ветка: `claude/amazing-bohr-gt7ta9`.

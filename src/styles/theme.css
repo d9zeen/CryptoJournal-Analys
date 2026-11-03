@@ -1,0 +1,41 @@
+/*
+ * ЕДИНОЕ МЕСТО ДЛЯ ЦВЕТОВ И ШРИФТОВ.
+ * Меняешь значение здесь — меняется во всём приложении.
+ * В коде используются классы вида bg-bg, bg-surface, text-muted, text-profit, border-border и т.д.
+ */
+@import 'tailwindcss';
+
+@theme {
+  /* Шрифты */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Фон и поверхности */
+  --color-bg: #0b0e14;          /* фон страницы */
+  --color-surface: #131823;     /* карточки, панели */
+  --color-surface-2: #1b2130;   /* поля ввода, ховеры */
+  --color-border: #262e3f;
+
+  /* Текст */
+  --color-text: #e6e9ef;
+  --color-muted: #8b93a7;
+
+  /* Акценты */
+  --color-primary: #3b82f6;
+  --color-primary-hover: #2563eb;
+  --color-on-primary: #ffffff;
+
+  /* Торговые цвета */
+  --color-profit: #22c55e;      /* прибыль, long */
+  --color-loss: #ef4444;        /* убыток, short */
+  --color-warning: #f59e0b;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-bg text-text font-sans antialiased;
+  }
+}

@@ -1,0 +1,16 @@
+# зависимости и сборка
+node_modules/
+dist/
+*.tsbuildinfo
+
+# секреты — НИКОГДА не коммитим
+.env
+.env.*
+!.env.example
+
+# служебное
+.DS_Store
+*.log
+.vite/
+coverage/
+supabase/.temp/
