@@ -1,6 +1,7 @@
 import type { MarketType, Side } from '@/lib/calc/trade'
 import type { CsvTable } from './csv'
 import type { ColumnMapping } from './mapping'
+import type { ImportField } from './fields'
 
 /** Сделка из файла — в том виде, в каком пойдёт в таблицу trades. */
 export type ImportedTrade = {
@@ -23,44 +24,60 @@ export type ImportedTrade = {
   external_id: string
 }
 
-/** Почему строку нельзя импортировать */
-export type RowError = 'symbol' | 'side' | 'entryPrice' | 'exitPrice' | 'size' | 'time' | 'pnl'
+/** Почему строку (или позицию) нельзя импортировать */
+export type RowError =
+  | 'symbol'
+  | 'side'
+  | 'entryPrice'
+  | 'exitPrice'
+  | 'price'
+  | 'size'
+  | 'time'
+  | 'pnl'
+  | 'stillOpen' // в истории сделок позиция так и не закрылась к концу файла
+  | 'spotNoBuy' // спот: продажа монет, купленных до начала файла
 
 /** Предупреждения — строку импортируем, но пользователю стоит знать */
 export type RowWarning =
   | 'noEntryTime' // в файле нет времени входа — ставим время выхода
   | 'feeDerived' // комиссий в файле нет — посчитали как разницу между валовым PnL и PnL из файла
   | 'pnlFromFile' // PnL из файла не сходится с формулой — оставили биржевой
+  | 'feeNotUsd' // комиссия в посторонней монете (BNB и т.п.) — не учли
 
 export type ParsedRow = {
-  /** номер строки в файле (заголовок = 1) */
+  /** номер строки в файле (заголовок = 1); для истории сделок — первая строка позиции */
   line: number
+  /** последняя строка позиции (история сделок: позиция собрана из нескольких строк) */
+  lineTo?: number
   trade: ImportedTrade | null
   error: RowError | null
   warnings: RowWarning[]
 }
 
+/** Вид выгрузки: закрытые позиции (строка = позиция) или история исполнений (строка = исполнение ордера) */
+export type ImportMode = 'positions' | 'fills'
+
+/** Рынок: auto — по названию пары (BTCUSD — coin-M, остальное — USDT-фьючерсы) */
+export type MarketChoice = 'auto' | 'linear' | 'inverse' | 'spot'
+
 export type ParseOptions = {
   /** в каком поясе записано время без явного смещения, минуты (UTC+3 → 180) */
   utcOffsetMinutes: number
+  market: MarketChoice
 }
 
-/** Парсер файла одной биржи. Новая биржа = новый объект в registry.ts */
-export type ImportParser<F extends string = string> = {
+/** Парсер файлов одной биржи. Все биржи используют общий движок (universal.ts) со своими настройками. */
+export type ImportParser = {
   /** id биржи (как в lib/exchanges.ts) */
   exchange: string
-  /** поля и синонимы названий колонок; порядок важен для автосопоставления */
-  fields: Record<F, readonly string[]>
-  /** без каких полей импорт невозможен (группа — «хотя бы одно из») */
-  required: (F | F[])[]
+  fields: Record<ImportField, readonly string[]>
   /** поле времени, по заголовку которого определяем часовой пояс файла */
-  timeField: F
-  parse: (table: CsvTable, mapping: ColumnMapping<F>, options: ParseOptions) => ParsedRow[]
-}
-
-/** Каких обязательных полей не хватает (для группы — первое поле группы). */
-export function missingFields<F extends string>(parser: ImportParser<F>, mapping: ColumnMapping<F>): F[] {
-  return parser.required
-    .filter((r) => (Array.isArray(r) ? r.every((f) => mapping[f] < 0) : mapping[r] < 0))
-    .map((r) => (Array.isArray(r) ? r[0] : r))
+  timeField: ImportField
+  /** вид выгрузки по найденным колонкам; null — не понятно */
+  mode: (mapping: ColumnMapping<string>) => ImportMode | null
+  /** обязательные поля для вида выгрузки */
+  required: (mode: ImportMode | null) => ImportField[]
+  /** каких обязательных полей не хватает */
+  missing: (mapping: ColumnMapping<string>) => ImportField[]
+  parse: (table: CsvTable, mapping: ColumnMapping<string>, options: ParseOptions) => ParsedRow[]
 }

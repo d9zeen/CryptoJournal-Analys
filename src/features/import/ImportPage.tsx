@@ -14,7 +14,8 @@ import { formatDateTime, formatPnl, formatUsd, pnlClass } from '@/lib/format'
 import { IMPORT_PARSERS, parserFor } from '@/lib/import/registry'
 import { planImport, prepareImport, type RowStatus } from '@/lib/import/plan'
 import type { ColumnMapping } from '@/lib/import/mapping'
-import type { RowWarning } from '@/lib/import/types'
+import type { MarketChoice, RowWarning } from '@/lib/import/types'
+import type { CsvTable } from '@/lib/import/csv'
 import { stableHash } from '@/lib/import/values'
 import { fetchExistingIds, useDeleteImport, useImports, useRunImport, type RunImportResult } from './api'
 
@@ -30,7 +31,7 @@ const offsetLabel = (m: number) => {
   return `UTC${sign}${Math.floor(abs / 60)}${abs % 60 ? `:${String(abs % 60).padStart(2, '0')}` : ''}`
 }
 
-type LoadedFile = { name: string; text: string }
+type LoadedFile = { name: string; source: string | CsvTable }
 
 export function ImportPage() {
   const t = useT()
@@ -40,6 +41,7 @@ export function ImportPage() {
   const [fileError, setFileError] = useState<string | null>(null)
   const [mappingOverride, setMappingOverride] = useState<ColumnMapping<string> | null>(null)
   const [offsetOverride, setOffsetOverride] = useState<number | null>(null)
+  const [market, setMarket] = useState<MarketChoice>('auto')
   const [showMapping, setShowMapping] = useState(false)
   const [result, setResult] = useState<RunImportResult | null>(null)
   const [dragging, setDragging] = useState(false)
@@ -52,9 +54,9 @@ export function ImportPage() {
   const prepared = useMemo(
     () =>
       file
-        ? prepareImport(file.text, parser, { mapping: mappingOverride ?? undefined, utcOffsetMinutes: offsetOverride ?? undefined })
+        ? prepareImport(file.source, parser, { mapping: mappingOverride ?? undefined, utcOffsetMinutes: offsetOverride ?? undefined, market })
         : null,
-    [file, parser, mappingOverride, offsetOverride],
+    [file, parser, mappingOverride, offsetOverride, market],
   )
 
   const ids = useMemo(() => prepared?.rows.flatMap((r) => (r.trade ? [r.trade.external_id] : [])) ?? [], [prepared])
@@ -90,8 +92,9 @@ export function ImportPage() {
       return
     }
     try {
-      const text = await f.text()
-      setFile({ name: f.name, text })
+      // Excel читаем отдельным модулем — он грузится, только когда нужен
+      const { readTableFile } = await import('@/lib/import/xlsx')
+      setFile({ name: f.name, source: await readTableFile(f) })
       setShowMapping(false)
     } catch {
       setFile(null)
@@ -113,7 +116,7 @@ export function ImportPage() {
     if (inputRef.current) inputRef.current.value = ''
   }
 
-  const requiredFields = new Set(parser.required.flat())
+  const requiredFields = new Set<string>(parser.required(prepared?.mode ?? null))
   const fieldLabel = (f: string) => (t.import.fields as Record<string, string>)[f] ?? f
   const howTo = (t.import.howTo as Record<string, string>)[exchange]
 
@@ -131,7 +134,7 @@ export function ImportPage() {
       {run.error && <Alert tone="error">{dbErrorMessage(run.error, t)}</Alert>}
 
       <Card className="flex flex-col gap-4 !p-4">
-        <div className="grid gap-3 sm:grid-cols-[200px_1fr] sm:items-end">
+        <div className="grid gap-3 sm:grid-cols-[200px_200px_1fr] sm:items-end">
           <SelectField
             label={t.import.exchange}
             value={exchange}
@@ -146,7 +149,13 @@ export function ImportPage() {
               </option>
             ))}
           </SelectField>
-          {howTo && <p className="text-sm text-muted">{howTo}</p>}
+          <SelectField label={t.import.market} value={market} onChange={(e) => setMarket(e.target.value as MarketChoice)}>
+            <option value="auto">{t.import.marketAuto}</option>
+            <option value="linear">{t.market.linear}</option>
+            <option value="inverse">{t.market.inverse}</option>
+            <option value="spot">{t.market.spot}</option>
+          </SelectField>
+          {howTo && <p className="text-sm text-muted sm:col-span-3">{howTo}</p>}
         </div>
 
         <label
@@ -160,7 +169,7 @@ export function ImportPage() {
         >
           <span className="text-muted">{file ? fmt(t.import.file, { name: file.name, n: prepared?.table.rows.length ?? 0 }) : t.import.drop}</span>
           <span className="rounded-lg border border-border bg-surface-2 px-3 py-1.5 font-medium">{file ? t.import.another : t.import.pick}</span>
-          <input ref={inputRef} type="file" accept=".csv,text/csv,text/plain" className="sr-only" onChange={(e) => void loadFile(e.target.files?.[0])} />
+          <input ref={inputRef} type="file" accept=".csv,.xlsx,.txt,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="sr-only" onChange={(e) => void loadFile(e.target.files?.[0])} />
         </label>
         {fileError && <Alert tone="error">{fileError}</Alert>}
       </Card>
@@ -170,7 +179,9 @@ export function ImportPage() {
       {prepared && prepared.table.rows.length > 0 && (
         <>
           {prepared.missing.length > 0 && (
-            <Alert tone="error">{fmt(t.import.missing, { fields: prepared.missing.map(fieldLabel).join(', ') })}</Alert>
+            <Alert tone="error">
+              {prepared.mode === null ? t.import.formatUnknown : fmt(t.import.missing, { fields: prepared.missing.map(fieldLabel).join(', ') })}
+            </Alert>
           )}
 
           {/* Сопоставление колонок и часовой пояс */}
@@ -223,6 +234,9 @@ export function ImportPage() {
 
               {plan && (
                 <Card className="flex flex-col gap-3 !p-4">
+                  <p className="text-xs text-muted">
+                    {prepared.mode === 'fills' ? fmt(t.import.formatFills, { rows: prepared.table.rows.length }) : t.import.formatPositions}
+                  </p>
                   <div className="flex flex-wrap gap-2 text-sm">
                     <Badge status="new">{fmt(t.import.summary.new, { n: plan.counts.new })}</Badge>
                     {plan.counts.duplicate > 0 && <Badge status="duplicate">{fmt(t.import.summary.duplicate, { n: plan.counts.duplicate })}</Badge>}
@@ -234,6 +248,7 @@ export function ImportPage() {
                   {warnings.has('noEntryTime') && <p className="text-xs text-muted">{t.import.warnings.noEntryTime}</p>}
                   {warnings.has('feeDerived') && <p className="text-xs text-muted">{fmt(t.import.warnings.feeDerived, { n: warnings.get('feeDerived')! })}</p>}
                   {warnings.has('pnlFromFile') && <p className="text-xs text-muted">{fmt(t.import.warnings.pnlFromFile, { n: warnings.get('pnlFromFile')! })}</p>}
+                  {warnings.has('feeNotUsd') && <p className="text-xs text-warning">{fmt(t.import.warnings.feeNotUsd, { n: warnings.get('feeNotUsd')! })}</p>}
 
                   <div className="-mx-4 overflow-x-auto">
                     <table className="w-full text-sm">
@@ -248,11 +263,11 @@ export function ImportPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {prepared.rows.slice(0, PREVIEW_ROWS).map((r) => {
-                          const status = plan.status.get(r.line)!
+                        {prepared.rows.slice(0, PREVIEW_ROWS).map((r, idx) => {
+                          const status = plan.status.get(idx)!
                           return (
-                            <tr key={r.line} className="border-t border-border">
-                              <td className="hidden px-4 py-2 text-muted sm:table-cell">{r.line}</td>
+                            <tr key={idx} className="border-t border-border">
+                              <td className="hidden whitespace-nowrap px-4 py-2 text-muted sm:table-cell">{r.lineTo && r.lineTo !== r.line ? `${r.line}–${r.lineTo}` : r.line}</td>
                               <td className="px-4 py-2">
                                 <Badge status={status}>{t.import.status[status]}</Badge>
                               </td>
@@ -265,7 +280,7 @@ export function ImportPage() {
                                   </>
                                 ) : (
                                   <span className="text-loss">
-                                    {t.import.col.line} {r.line}: {t.import.rowError[r.error!]}
+                                    {r.lineTo && r.lineTo !== r.line ? fmt(t.import.lines, { from: r.line, to: r.lineTo }) : `${t.import.col.line} ${r.line}`}: {t.import.rowError[r.error!]}
                                   </span>
                                 )}
                               </td>

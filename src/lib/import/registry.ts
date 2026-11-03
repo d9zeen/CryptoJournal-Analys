@@ -1,13 +1,20 @@
 /**
- * Реестр парсеров CSV. Чтобы добавить биржу (BingX, OKX…):
- * 1) создать lib/import/<биржа>.ts по образцу bybit.ts;
- * 2) добавить его в список ниже;
- * 3) добавить подписи полей в i18n (import.fields), если появились новые.
+ * Биржи для импорта. Все работают через один движок (universal.ts) — отличаются только тем,
+ * как понимать Buy/Sell в выгрузке закрытых позиций. Новая биржа = строка ниже + подсказка
+ * «где взять файл» в i18n (import.howTo).
  */
-import { bybitParser } from './bybit'
+import { makeParser } from './universal'
 import type { ImportParser } from './types'
 
-export const IMPORT_PARSERS: ImportParser[] = [bybitParser as unknown as ImportParser]
+export const IMPORT_PARSERS: ImportParser[] = [
+  makeParser('bybit', 'closing'), // Closed P&L: Sell = закрыл лонг
+  makeParser('binance', 'opening'),
+  makeParser('okx', 'opening'),
+  makeParser('bingx', 'opening'),
+  makeParser('bitget', 'opening'),
+  makeParser('mexc', 'opening'),
+  makeParser('other', 'opening'),
+]
 
 export function parserFor(exchange: string): ImportParser | undefined {
   return IMPORT_PARSERS.find((p) => p.exchange === exchange)

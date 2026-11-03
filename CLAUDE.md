@@ -47,7 +47,9 @@ src/
   lib/period.ts        пресеты периода (неделя/месяц/всё/свой)
   lib/queryClient.ts   TanStack Query — кэш запросов к Supabase
   types/db.ts          типы строк БД (писать руками при изменении схемы)
-  lib/import/          импорт CSV: csv.ts, mapping.ts, values.ts, bybit.ts, plan.ts, registry.ts (+ тесты)
+  lib/import/          импорт с любой биржи: csv.ts / xlsx.ts (чтение файла), fields.ts (колонки-синонимы, направление, комиссии),
+                       universal.ts (движок) → positions.ts (закрытые позиции) | fills.ts (история исполнений → сделки),
+                       pnl.ts, plan.ts (новые/дубли/лимит), registry.ts (список бирж) + тесты
   lib/export/          выгрузка сделок в CSV (+ тесты); features/settings/dataApi.ts — выгрузка и удаление аккаунта
   components/ui/       базовые компоненты (Button, Input, Card, Alert, Spinner)
   layout/AppLayout.tsx шапка + нижнее меню на телефоне
@@ -81,7 +83,8 @@ docs/ADMIN.md          SQL для владельца: выдать/снять Pr
 | `VITE_SUPABASE_ANON_KEY` | anon key или publishable key (публичный) |
 | `BASE_PATH` | только при сборке для GitHub Pages: `/CryptoJournal-Analys/` (ставит workflow) |
 
-Проект Supabase: `cryptojournal`, ref `dkjavndvuulnzflowdhj` (Frankfurt), миграции 0001–0002 применены.
+Проект Supabase: `cryptojournal`, ref `dkjavndvuulnzflowdhj` (Frankfurt), миграции 0001–0003 применены.
+Скриншоты: таблица `trade_screenshots` (до 10 на сделку), файлы `{user_id}/{trade_id}/{uuid}.webp`; старое поле `trades.screenshot_path` не используется.
 Публичные URL и publishable key вписаны в `.env.example` и `.github/workflows/pages.yml` (секреты репозитория НЕ используются — старый секрет однажды перебил адрес).
 Новые миграции владелец применяет в SQL Editor (или Claude через коннектор Supabase, если он подключён).
 

@@ -5,7 +5,8 @@ import { useDeleteTrade, useSaveTrade, useTrade } from './api'
 import { buildTrade, computeDerived, emptyForm, formFromTrade, type FormErrors, type FormState } from './formLogic'
 import { ListSelect } from './ListSelect'
 import { MistakePicker } from './MistakePicker'
-import { ScreenshotField } from './ScreenshotField'
+import { ScreenshotsField } from './ScreenshotsField'
+import type { TradeScreenshot } from '@/types/db'
 import { useUsage } from '@/features/settings/api'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -63,7 +64,13 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
   const [tradeId] = useState(() => existing?.id ?? crypto.randomUUID())
   const [form, setForm] = useState<FormState>(() => (existing ? formFromTrade(existing) : emptyForm(loadDefaults())))
   const [errors, setErrors] = useState<FormErrors>({})
-  const [screenshot, setScreenshot] = useState<Blob | null | undefined>(undefined)
+  const [addShots, setAddShots] = useState<Blob[]>([])
+  const [removeShots, setRemoveShots] = useState<TradeScreenshot[]>([])
+  const allSaved = useMemo(
+    () => [...(existing?.trade_screenshots ?? [])].sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at)),
+    [existing],
+  )
+  const savedShots = allSaved.filter((s) => !removeShots.some((r) => r.id === s.id))
   const [submitError, setSubmitError] = useState<string | null>(null)
 
   const save = useSaveTrade()
@@ -92,7 +99,7 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     setSubmitError(null)
-    const { trade, errors } = buildTrade(form, { id: tradeId, screenshot_path: existing?.screenshot_path ?? null })
+    const { trade, errors } = buildTrade(form, { id: tradeId, screenshot_path: null }) // старое одиночное поле: файлы уже в trade_screenshots (миграция 0003)
     setErrors(errors)
     if (!trade) {
       setSubmitError(t.tradeForm.errors.form)
@@ -104,7 +111,8 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
       if (existing.exit_at && trade.exit_at && form.exitAt === isoToLocalInput(existing.exit_at)) trade.exit_at = existing.exit_at
     }
     try {
-      await save.mutateAsync({ trade, tagIds: form.tagIds, isNew, screenshot })
+      const nextOrder = allSaved.reduce((m, s) => Math.max(m, s.sort_order + 1), 0)
+      await save.mutateAsync({ trade, tagIds: form.tagIds, isNew, screenshots: { add: addShots, remove: removeShots, nextOrder } })
       if (isNew) saveDefaults(form)
       navigate('/trades')
     } catch (error) {
@@ -251,7 +259,13 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
         </div>
         <MistakePicker value={form.tagIds} onChange={(v) => set('tagIds', v)} />
         <TextArea label={t.tradeForm.note} placeholder={t.tradeForm.notePlaceholder} maxLength={5000} value={form.note} onChange={(e) => set('note', e.target.value)} />
-        <ScreenshotField existingPath={existing?.screenshot_path ?? null} value={screenshot} onChange={setScreenshot} />
+        <ScreenshotsField
+          saved={savedShots}
+          pending={addShots}
+          onAdd={(blobs) => setAddShots((a) => [...a, ...blobs])}
+          onRemoveSaved={(s) => setRemoveShots((r) => [...r, s])}
+          onRemovePending={(i) => setAddShots((a) => a.filter((_, j) => j !== i))}
+        />
       </Section>
 
       {submitError && <Alert tone="error">{submitError}</Alert>}

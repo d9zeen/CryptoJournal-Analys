@@ -21,21 +21,29 @@ export async function compressImage(file: File | Blob): Promise<Blob> {
   return jpeg
 }
 
-/** Загружает скриншот сделки. Путь: {user_id}/{trade_id}.{ext} */
+/** Загружает скриншот сделки. Путь: {user_id}/{trade_id}/{случайное имя}.{ext} */
 export async function uploadScreenshot(userId: string, tradeId: string, blob: Blob): Promise<string> {
   const ext = blob.type === 'image/webp' ? 'webp' : 'jpg'
-  const path = `${userId}/${tradeId}.${ext}`
-  const { error } = await supabase.storage.from(BUCKET).upload(path, blob, { upsert: true, contentType: blob.type })
+  const path = `${userId}/${tradeId}/${crypto.randomUUID()}.${ext}`
+  const { error } = await supabase.storage.from(BUCKET).upload(path, blob, { contentType: blob.type })
   if (error) throw error
   return path
 }
 
-export async function deleteScreenshot(path: string): Promise<void> {
-  await supabase.storage.from(BUCKET).remove([path])
+/** Удалить файлы из хранилища (ошибки не критичны: запись в базе уже удалена). */
+export async function deleteScreenshots(paths: string[]): Promise<void> {
+  for (let i = 0; i < paths.length; i += 100) {
+    await supabase.storage.from(BUCKET).remove(paths.slice(i, i + 100))
+  }
 }
 
-/** Временная ссылка на приватный файл (1 час). */
-export async function screenshotUrl(path: string): Promise<string | null> {
-  const { data } = await supabase.storage.from(BUCKET).createSignedUrl(path, 3600)
-  return data?.signedUrl ?? null
+/** Временные ссылки на приватные файлы (1 час): путь → ссылка. */
+export async function screenshotUrls(paths: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  if (!paths.length) return out
+  const { data } = await supabase.storage.from(BUCKET).createSignedUrls(paths, 3600)
+  for (const item of data ?? []) if (item.path && item.signedUrl) out.set(item.path, item.signedUrl)
+  return out
 }
+
+export const MAX_SCREENSHOTS = 10

@@ -148,6 +148,7 @@ export function TradesPage() {
                       <Link to={`/trades/${tr.id}`} onClick={(e) => e.stopPropagation()} className="hover:underline">
                         {tr.symbol}
                       </Link>
+                      <ShotsBadge trade={tr} />
                     </td>
                     <td className="px-4 py-3 text-muted">{exchangeName(tr.exchange, t.exchange.other)}</td>
                     <td className="px-4 py-3">
@@ -187,6 +188,22 @@ function SideBadge({ side }: { side: 'long' | 'short' }) {
   )
 }
 
+/** 📷 и число скриншотов у сделки */
+function ShotsBadge({ trade }: { trade: TradeWithTags }) {
+  const t = useT()
+  const n = trade.trade_screenshots?.length ?? 0
+  if (!n) return null
+  return (
+    <span className="ml-1.5 inline-flex items-center gap-0.5 text-xs font-normal text-muted" title={t.tradeForm.screenshot}>
+      <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
+        <path d="M4 8h3l2-3h6l2 3h3v11H4z" />
+        <circle cx="12" cy="13" r="3.5" />
+      </svg>
+      {n}
+    </span>
+  )
+}
+
 function OpenBadge() {
   const t = useT()
   return <span className="rounded bg-warning/15 px-1.5 py-0.5 text-xs text-warning">{t.trades.open}</span>
@@ -201,6 +218,7 @@ function TradeCard({ trade: tr, setupName }: { trade: TradeWithTags; setupName?:
           <div className="flex items-center gap-2">
             <span className="font-medium">{tr.symbol}</span>
             <SideBadge side={tr.side} />
+            <ShotsBadge trade={tr} />
             {tr.exit_at === null && <OpenBadge />}
           </div>
           <span className={`font-medium ${pnlClass(tr.pnl)}`}>{formatPnl(tr.pnl)}</span>

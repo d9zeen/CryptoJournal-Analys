@@ -45,13 +45,17 @@ export async function downloadTradesCsv(): Promise<number> {
 
 const BUCKET = 'screenshots'
 
-/** Все файлы пользователя в хранилище скриншотов (папка {user_id}/). */
-async function listOwnScreenshots(userId: string): Promise<string[]> {
+/** Все файлы в папке хранилища, включая вложенные ({user_id}/ и {user_id}/{trade_id}/). */
+async function listFilesDeep(folder: string): Promise<string[]> {
   const paths: string[] = []
   for (let offset = 0; ; offset += PAGE) {
-    const { data, error } = await supabase.storage.from(BUCKET).list(userId, { limit: PAGE, offset })
+    const { data, error } = await supabase.storage.from(BUCKET).list(folder, { limit: PAGE, offset })
     if (error) throw error
-    paths.push(...data.filter((f) => f.id !== null).map((f) => `${userId}/${f.name}`))
+    for (const f of data) {
+      // у папок id = null
+      if (f.id === null) paths.push(...(await listFilesDeep(`${folder}/${f.name}`)))
+      else paths.push(`${folder}/${f.name}`)
+    }
     if (data.length < PAGE) return paths
   }
 }
@@ -61,7 +65,7 @@ async function listOwnScreenshots(userId: string): Promise<string[]> {
  * затем пользователя (функция delete_my_account, всё остальное удаляется каскадом в базе).
  */
 export async function deleteMyAccount(userId: string): Promise<void> {
-  const paths = await listOwnScreenshots(userId)
+  const paths = await listFilesDeep(userId)
   for (let i = 0; i < paths.length; i += 100) {
     const { error } = await supabase.storage.from(BUCKET).remove(paths.slice(i, i + 100))
     if (error) throw error

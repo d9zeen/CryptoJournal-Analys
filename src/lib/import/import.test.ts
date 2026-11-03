@@ -222,7 +222,7 @@ describe('planImport', () => {
     const plan = planImport(prep.rows, new Set(), 2)
     expect(plan.toInsert.map((t) => t.external_id)).toEqual(['o:a1', 'o:a2'])
     expect(plan.counts.overLimit).toBe(2)
-    expect(plan.status.get(5)).toBe('overLimit')
+    expect(plan.status.get(3)).toBe('overLimit') // 4-я запись = строка 5 файла
     expect(planImport(prep.rows, new Set(), 0).toInsert).toEqual([])
   })
 })
