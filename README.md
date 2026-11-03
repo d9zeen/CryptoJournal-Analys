@@ -126,8 +126,7 @@ where id = (select id from auth.users where email = 'твой@email');
 
 1. **Settings → Pages → Build and deployment → Source: GitHub Actions.**
 2. Ключи Supabase уже вписаны в workflow (публичные, как в `.env.example`). Нужен другой проект Supabase —
-   заведи секреты `VITE_SUPABASE_URL` и `VITE_SUPABASE_ANON_KEY` в **Settings → Secrets and variables → Actions**,
-   они важнее вписанных значений.
+   поменяй значения в `.github/workflows/pages.yml` и `.env.example`. Секреты репозитория для них не используются.
 3. **Actions → «Сайт на GitHub Pages» → Run workflow** — пересобрать вручную.
 4. В Supabase: **Authentication → URL Configuration**
    - **Site URL**: `https://d9zeen.github.io/CryptoJournal-Analys/`
@@ -135,7 +134,7 @@ where id = (select id from auth.users where email = 'твой@email');
 
    Без этого ссылки из писем (подтверждение, сброс пароля) будут вести на localhost.
 
-Поменял ключи — обнови секреты (или значения в workflow и `.env.example`) и снова нажми **Run workflow**: переменные `VITE_…` вшиваются в сайт при сборке.
+Поменял ключи — обнови значения в workflow и `.env.example`; сайт пересоберётся сам после push: переменные `VITE_…` вшиваются в сайт при сборке.
 
 Как устроено: сайт живёт в подпапке `/CryptoJournal-Analys/` — сборка получает `BASE_PATH`, роутер и ссылки из писем
 берут её из `src/lib/url.ts`. Прямые ссылки (например, `/trades/123`) работают через `404.html` — его создаёт сборка, в репозитории его нет.
