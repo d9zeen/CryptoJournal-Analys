@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import { AuthLayout } from './AuthLayout'
 import { authErrorMessage } from './errors'
+import { appUrl } from '@/lib/url'
 
 /** Шаг 1: пользователь вводит email, получает письмо со ссылкой на /update-password */
 export function ResetPasswordPage() {
@@ -21,7 +22,7 @@ export function ResetPasswordPage() {
     setError(null)
     setLoading(true)
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/update-password`,
+      redirectTo: appUrl('update-password'),
     })
     setLoading(false)
     if (error) return setError(authErrorMessage(error, t))

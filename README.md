@@ -115,33 +115,32 @@ where id = (select id from auth.users where email = 'твой@email');
 - Лимит Free (30 сделок в месяц) проверяется и в интерфейсе, и в самой базе.
 - Схема базы хранится в репозитории (`supabase/migrations`) и покрыта тестами (`supabase/tests`).
 
-## Сайт в интернете: Cloudflare Pages (бесплатно)
+## Сайт в интернете: GitHub Pages (бесплатно)
 
-Настраивается один раз. Дальше каждый `git push` в основную ветку сам обновляет сайт за 1–2 минуты.
+Адрес: **https://d9zeen.github.io/CryptoJournal-Analys/**
 
-1. Зарегистрируйся на [dash.cloudflare.com](https://dash.cloudflare.com/sign-up) (бесплатно).
-2. **Workers & Pages → Create → вкладка Pages → Connect to Git.** Разреши доступ к GitHub и выбери репозиторий `d9zeen/CryptoJournal-Analys`.
-3. Настройки сборки:
-   | Поле | Значение |
-   |---|---|
-   | Production branch | `claude/amazing-bohr-gt7ta9` |
-   | Framework preset | `React (Vite)` (или `None`) |
-   | Build command | `npm run build` |
-   | Build output directory | `dist` |
-4. **Environment variables** (там же, ниже) — добавь три переменные:
+Сайт собирается и выкладывается сам (`.github/workflows/pages.yml`) при каждом обновлении ветки
+`claude/amazing-bohr-gt7ta9`: тесты → сборка → выкладка, 1–2 минуты. Ход видно во вкладке **Actions** репозитория.
+
+Настроить один раз:
+
+1. **Settings → Pages → Build and deployment → Source: GitHub Actions.**
+2. **Settings → Secrets and variables → Actions → New repository secret** — два секрета:
    | Имя | Значение |
    |---|---|
    | `VITE_SUPABASE_URL` | Project URL из Supabase |
-   | `VITE_SUPABASE_ANON_KEY` | anon / publishable key из Supabase |
-   | `NODE_VERSION` | `22` |
-5. **Save and Deploy.** Через пару минут появится адрес вида `https://cryptojournal-analys.pages.dev`.
-6. В Supabase: **Authentication → URL Configuration**
-   - **Site URL** — адрес сайта из шага 5;
-   - **Redirect URLs** — добавь `https://<твой-адрес>.pages.dev/**` и оставь `http://localhost:5173/**`.
+   | `VITE_SUPABASE_ANON_KEY` | anon / publishable key из Supabase (НЕ service_role) |
+3. **Actions → «Сайт на GitHub Pages» → Run workflow** — первая сборка с ключами.
+4. В Supabase: **Authentication → URL Configuration**
+   - **Site URL**: `https://d9zeen.github.io/CryptoJournal-Analys/`
+   - **Redirect URLs**: добавь `https://d9zeen.github.io/CryptoJournal-Analys/**` и оставь `http://localhost:5173/**`.
 
    Без этого ссылки из писем (подтверждение, сброс пароля) будут вести на localhost.
 
-Ключи Supabase поменял? Cloudflare → проект → Settings → Variables, затем Deployments → Retry deployment
-(переменные `VITE_…` вшиваются в сайт при сборке).
+Поменял ключи — обнови секреты и снова нажми **Run workflow**: переменные `VITE_…` вшиваются в сайт при сборке.
 
-Доступность из РФ (`*.pages.dev` иногда тормозит у российских провайдеров) проверим перед публичным запуском — план в `docs/PLAN.md`.
+Как устроено: сайт живёт в подпапке `/CryptoJournal-Analys/` — сборка получает `BASE_PATH`, роутер и ссылки из писем
+берут её из `src/lib/url.ts`. Прямые ссылки (например, `/trades/123`) работают через `404.html` — его создаёт сборка, в репозитории его нет.
+Локально и на Cloudflare Pages подпапки нет (`BASE_PATH` не задан) — там всё работает как раньше.
+
+Доступность из РФ проверим перед публичным запуском — план в `docs/PLAN.md`.

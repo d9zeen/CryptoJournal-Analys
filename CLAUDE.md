@@ -14,7 +14,9 @@
 - React Router (`createBrowserRouter`, импорт из `react-router`)
 - Supabase: Postgres, Auth (email + пароль), Storage — без своего сервера
 - Recharts — графики (этап 3)
-- Хостинг: Cloudflare Pages, автодеплой из GitHub (SPA-фолбэк работает автоматически, т.к. нет `404.html`)
+- Хостинг: GitHub Pages (`.github/workflows/pages.yml`, адрес https://d9zeen.github.io/CryptoJournal-Analys/), автодеплой при push в основную ветку.
+  Сайт в подпапке: `BASE_PATH` при сборке → `src/lib/url.ts` (`BASENAME`, `appUrl`). Абсолютные пути `/…` в коде не писать —
+  ссылки только через роутер, адреса для писем — через `appUrl()`. `404.html` создаёт сборка (SPA-фолбэк), в репо его нет
 
 ## Команды
 
@@ -75,6 +77,9 @@ docs/PLAN.md           решения, формулы, схема БД, этап
 |---|---|
 | `VITE_SUPABASE_URL` | Project URL из Supabase |
 | `VITE_SUPABASE_ANON_KEY` | anon key или publishable key (публичный) |
+| `BASE_PATH` | только при сборке для GitHub Pages: `/CryptoJournal-Analys/` (ставит workflow) |
+
+На GitHub Pages ключи Supabase лежат в секретах репозитория (Settings → Secrets and variables → Actions).
 
 Без них приложение показывает экран «Supabase ещё не подключён» вместо белого экрана.
 
