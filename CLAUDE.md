@@ -38,7 +38,8 @@ src/
   i18n/ru.ts           ВСЕ тексты интерфейса. Новый язык = файл с той же структурой (тип Dict)
   i18n/index.ts        useT(), fmt()
   lib/supabase.ts      клиент Supabase (только публичный ключ)
-  lib/calc/            формулы PnL / R / статистики (+ тесты)
+  lib/calc/            формулы PnL / R (trade.ts), статистика дашборда (stats.ts) + тесты
+  lib/tz.ts            дата / час / день недели в часовом поясе пользователя
   lib/format.ts        форматирование $, цен, R, дат
   lib/parse.ts         ввод чисел (понимает запятую)
   lib/period.ts        пресеты периода (неделя/месяц/всё/свой)
@@ -82,7 +83,7 @@ docs/PLAN.md           решения, формулы, схема БД, этап
 - [x] Этап 0 — документация
 - [x] Этап 1 — каркас, роутинг, auth
 - [x] Этап 2 — сделки + RLS
-- [ ] Этап 3 — дашборд
+- [x] Этап 3 — дашборд
 - [ ] Этап 4 — импорт Bybit CSV
 - [ ] Этап 5 — лимиты, полировка, деплой
 
@@ -90,4 +91,6 @@ docs/PLAN.md           решения, формулы, схема БД, этап
 Данные: TanStack Query, ключи `['trades', ...]`, `['trade', id]`, `['list', kind]`, `['profile']`, `['usage']`.
 Ошибка лимита из БД приходит как `FREE_LIMIT_REACHED` → `lib/errors.ts`.
 
-Рабочая ветка: `claude/amazing-bohr-gt7ta9`.
+Основная ветка: `claude/amazing-bohr-gt7ta9`. Новые этапы приходят в неё через Pull Request.
+Графики (`features/dashboard/charts.tsx`) грузятся лениво (`lazy`): Recharts — отдельный файл сборки.
+Цвета в графиках — `var(--color-…)` из theme.css.
