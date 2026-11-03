@@ -79,7 +79,9 @@ docs/PLAN.md           решения, формулы, схема БД, этап
 | `VITE_SUPABASE_ANON_KEY` | anon key или publishable key (публичный) |
 | `BASE_PATH` | только при сборке для GitHub Pages: `/CryptoJournal-Analys/` (ставит workflow) |
 
-На GitHub Pages ключи Supabase лежат в секретах репозитория (Settings → Secrets and variables → Actions).
+Проект Supabase: `cryptojournal`, ref `dkjavndvuulnzflowdhj` (Frankfurt), миграция 0001 применена.
+Публичные URL и publishable key вписаны в `.env.example` и `.github/workflows/pages.yml` (секреты репозитория, если заданы, важнее).
+Новые миграции владелец применяет в SQL Editor (или Claude через коннектор Supabase, если он подключён).
 
 Без них приложение показывает экран «Supabase ещё не подключён» вместо белого экрана.
 
