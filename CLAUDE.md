@@ -80,7 +80,7 @@ docs/PLAN.md           решения, формулы, схема БД, этап
 | `BASE_PATH` | только при сборке для GitHub Pages: `/CryptoJournal-Analys/` (ставит workflow) |
 
 Проект Supabase: `cryptojournal`, ref `dkjavndvuulnzflowdhj` (Frankfurt), миграция 0001 применена.
-Публичные URL и publishable key вписаны в `.env.example` и `.github/workflows/pages.yml` (секреты репозитория, если заданы, важнее).
+Публичные URL и publishable key вписаны в `.env.example` и `.github/workflows/pages.yml` (секреты репозитория НЕ используются — старый секрет однажды перебил адрес).
 Новые миграции владелец применяет в SQL Editor (или Claude через коннектор Supabase, если он подключён).
 
 Без них приложение показывает экран «Supabase ещё не подключён» вместо белого экрана.
