@@ -115,6 +115,33 @@ where id = (select id from auth.users where email = 'твой@email');
 - Лимит Free (30 сделок в месяц) проверяется и в интерфейсе, и в самой базе.
 - Схема базы хранится в репозитории (`supabase/migrations`) и покрыта тестами (`supabase/tests`).
 
-## Позже: хостинг и домен (этап 5)
+## Сайт в интернете: Cloudflare Pages (бесплатно)
 
-Инструкцию по выкладке (Cloudflare Pages или свой сервер, с учётом доступности из РФ) добавим, когда всё будет готово и проверено на localhost.
+Настраивается один раз. Дальше каждый `git push` в основную ветку сам обновляет сайт за 1–2 минуты.
+
+1. Зарегистрируйся на [dash.cloudflare.com](https://dash.cloudflare.com/sign-up) (бесплатно).
+2. **Workers & Pages → Create → вкладка Pages → Connect to Git.** Разреши доступ к GitHub и выбери репозиторий `d9zeen/CryptoJournal-Analys`.
+3. Настройки сборки:
+   | Поле | Значение |
+   |---|---|
+   | Production branch | `claude/amazing-bohr-gt7ta9` |
+   | Framework preset | `React (Vite)` (или `None`) |
+   | Build command | `npm run build` |
+   | Build output directory | `dist` |
+4. **Environment variables** (там же, ниже) — добавь три переменные:
+   | Имя | Значение |
+   |---|---|
+   | `VITE_SUPABASE_URL` | Project URL из Supabase |
+   | `VITE_SUPABASE_ANON_KEY` | anon / publishable key из Supabase |
+   | `NODE_VERSION` | `22` |
+5. **Save and Deploy.** Через пару минут появится адрес вида `https://cryptojournal-analys.pages.dev`.
+6. В Supabase: **Authentication → URL Configuration**
+   - **Site URL** — адрес сайта из шага 5;
+   - **Redirect URLs** — добавь `https://<твой-адрес>.pages.dev/**` и оставь `http://localhost:5173/**`.
+
+   Без этого ссылки из писем (подтверждение, сброс пароля) будут вести на localhost.
+
+Ключи Supabase поменял? Cloudflare → проект → Settings → Variables, затем Deployments → Retry deployment
+(переменные `VITE_…` вшиваются в сайт при сборке).
+
+Доступность из РФ (`*.pages.dev` иногда тормозит у российских провайдеров) проверим перед публичным запуском — план в `docs/PLAN.md`.
