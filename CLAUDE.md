@@ -23,6 +23,8 @@ npm install        # зависимости
 npm run dev        # локальный сервер http://localhost:5173
 npm run build      # проверка типов + сборка в dist/
 npm run typecheck  # только проверка типов
+npm test           # тесты формул и логики (Vitest)
+npm run test:db    # миграции + тесты RLS на локальном Postgres (нужен psql; PGPASSWORD при необходимости)
 ```
 
 Node 22 (см. `.node-version`).
@@ -36,12 +38,18 @@ src/
   i18n/ru.ts           ВСЕ тексты интерфейса. Новый язык = файл с той же структурой (тип Dict)
   i18n/index.ts        useT(), fmt()
   lib/supabase.ts      клиент Supabase (только публичный ключ)
-  lib/calc/            формулы PnL / R / статистики (+ тесты) — этап 2–3
+  lib/calc/            формулы PnL / R / статистики (+ тесты)
+  lib/format.ts        форматирование $, цен, R, дат
+  lib/parse.ts         ввод чисел (понимает запятую)
+  lib/period.ts        пресеты периода (неделя/месяц/всё/свой)
+  lib/queryClient.ts   TanStack Query — кэш запросов к Supabase
+  types/db.ts          типы строк БД (писать руками при изменении схемы)
   lib/import/          парсеры CSV бирж, реестр парсеров — этап 4
   components/ui/       базовые компоненты (Button, Input, Card, Alert, Spinner)
   layout/AppLayout.tsx шапка + нижнее меню на телефоне
   features/<раздел>/   auth, dashboard, trades, import, settings
 supabase/migrations/   SQL-миграции, нумерация 0001_..., 0002_...
+supabase/tests/        заглушка Supabase для чистого Postgres + тесты RLS (rls_test.sql)
 docs/PLAN.md           решения, формулы, схема БД, этапы
 ```
 
@@ -55,7 +63,7 @@ docs/PLAN.md           решения, формулы, схема БД, этап
    - `.env` в `.gitignore`, в репо только `.env.example`.
    - Поле `profiles.plan` пользователь менять не может (защита в БД).
    - Лимиты проверяются и на клиенте, и триггером в БД.
-4. **Миграции** — каждое изменение схемы новым SQL-файлом в `supabase/migrations/`, старые не редактировать после применения. Владелец применяет их через Supabase → SQL Editor.
+4. **Миграции** — каждое изменение схемы новым SQL-файлом в `supabase/migrations/`, старые не редактировать после применения. Владелец применяет их через Supabase → SQL Editor. Любое изменение схемы/RLS — дописать проверку в `supabase/tests/rls_test.sql` и прогнать `npm run test:db`.
 5. **Деньги** — формулы в `src/lib/calc/`, покрыты тестами (Vitest). Время хранится в UTC (`timestamptz`).
 6. **Вёрстка** — mobile-first, проверять на ширине 390px.
 7. После каждого этапа: краткий отчёт «что сделано / как проверить», коммит с понятным сообщением, обновить статус этапов в `docs/PLAN.md`.
@@ -73,9 +81,13 @@ docs/PLAN.md           решения, формулы, схема БД, этап
 
 - [x] Этап 0 — документация
 - [x] Этап 1 — каркас, роутинг, auth
-- [ ] Этап 2 — сделки + RLS
+- [x] Этап 2 — сделки + RLS
 - [ ] Этап 3 — дашборд
 - [ ] Этап 4 — импорт Bybit CSV
 - [ ] Этап 5 — лимиты, полировка, деплой
+
+Разработка сейчас идёт на localhost (`npm run dev`), деплой и домен — позже (этап 5).
+Данные: TanStack Query, ключи `['trades', ...]`, `['trade', id]`, `['list', kind]`, `['profile']`, `['usage']`.
+Ошибка лимита из БД приходит как `FREE_LIMIT_REACHED` → `lib/errors.ts`.
 
 Рабочая ветка: `claude/amazing-bohr-gt7ta9`.

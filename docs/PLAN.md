@@ -22,6 +22,7 @@
 | 9 | Эмоции | Выпадающий список: готовые эмоции + пользователь может добавить свои (как сетапы) |
 | 10 | Формат CSV Bybit | Парсер по экспорту «Closed P&L» деривативов с гибким сопоставлением колонок + предпросмотр перед импортом. Проверим на реальном файле |
 | 11 | Тема | Пока тёмная по умолчанию, дизайн — отдельно позже |
+| — | Где разрабатываем | Сначала localhost, потом хостинг, потом домен |
 
 ## Формулы
 
@@ -39,13 +40,16 @@
 - **Макс. просадка** = наибольшее падение от пика кривой накопленного PnL (в $; в % — если задан стартовый депозит)
 - **Топ ошибок** = сумма убытков сделок с этим тегом (сделка с двумя тегами учитывается в обоих)
 - Статистика по часам и дням недели — в часовом поясе пользователя (хранение в UTC)
+- Фильтр периода в списке сделок — по дате входа; неделя начинается с понедельника
 
 PnL считается автоматически, но его можно поправить вручную (флаг `pnl_manual`).
 
-## Схема БД (этап 2)
+## Схема БД (этап 2, `supabase/migrations/0001_init.sql`)
+
+Количество монет не храним — считается как `size_usd / entry_price`. Для PnL в USD формулы linear и inverse дают одинаковый результат (разница только в валюте залога).
 
 - `profiles` — id (= auth.users.id), display_name, plan (free/pro), plan_until, timezone, starting_balance, locale, created_at
-- `trades` — id, user_id, exchange, market_type (linear/inverse/spot), symbol, side, entry_at, exit_at (NULL = открыта), entry_price, exit_price, size_usd, qty, leverage, fee, funding, stop_loss, take_profit, pnl, pnl_manual, r_multiple, setup_id, emotion_id, note, screenshot_path, source (manual/import), import_id, external_id, created_at, updated_at
+- `trades` — id, user_id, exchange, market_type (linear/inverse/spot), symbol, side, entry_at, exit_at (NULL = открыта), entry_price, exit_price, size_usd, leverage, fee, funding, stop_loss, take_profit, pnl, pnl_manual, r_multiple, setup_id, emotion_id, note, screenshot_path, source (manual/import), import_id, external_id, created_at, updated_at
 - `setups`, `mistake_tags`, `emotions` — личные списки пользователя (с готовыми значениями при регистрации)
 - `trade_mistakes` — связь сделка ↔ теги ошибок (многие-ко-многим)
 - `imports` — журнал импортов
@@ -62,7 +66,7 @@ PnL считается автоматически, но его можно поп
 
 0. ✅ Документация, `CLAUDE.md`, `.gitignore`, `.env.example`
 1. ✅ Каркас, Tailwind, роутинг, вход/регистрация/сброс пароля через Supabase
-2. Таблицы + RLS, форма сделки, список с фильтрами, сетапы/теги/эмоции, скриншоты
+2. ✅ Таблицы + RLS, форма сделки, список с фильтрами, сетапы/теги/эмоции, скриншоты
 3. Дашборд со статистикой и графиками (Recharts)
 4. Импорт CSV из Bybit (расширяемо под BingX, OKX)
 5. Лимиты Free/Pro, полировка, боевой деплой
@@ -71,7 +75,7 @@ PnL считается автоматически, но его можно поп
 
 Cloudflare и Supabase (который тоже за Cloudflare) периодически замедляются российскими провайдерами.
 План:
-- Во время разработки — превью на Cloudflare Pages (удобно, бесплатно).
+- Порядок (решение от ноября 2026): **сначала всё делаем и проверяем на localhost**, потом выкладываем на GitHub/хостинг, потом подключаем домен.
 - Перед запуском (этап 5) — проверить доступность из РФ. Если плохо: свой домен + недорогой VPS вне РФ,
   который отдаёт статику и проксирует запросы к Supabase (~$3–5/мес). Код к этому готов:
   адрес Supabase берётся из переменной окружения, сайт — чистая статика.

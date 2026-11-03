@@ -2,76 +2,108 @@
 
 Онлайн-дневник сделок для криптотрейдеров: записываешь сделки и видишь статистику, которая помогает торговать лучше.
 
-Стек: Vite + React + TypeScript + Tailwind CSS + Supabase, хостинг на Cloudflare Pages.
+Стек: Vite + React + TypeScript + Tailwind CSS + Supabase.
 Решения, формулы и этапы описаны в [`docs/PLAN.md`](docs/PLAN.md).
 
----
-
-## Что сделать руками
-
-### Шаг 1. Supabase (~5 минут)
-
-1. Зарегистрируйся на [supabase.com](https://supabase.com) и нажми **New project**.
-2. Name: `cryptojournal`. **Region: Central EU (Frankfurt)**, ближе всего к СНГ.
-3. Database password: придумай и сохрани у себя (в менеджере паролей). **Никому не отправляй, мне тоже.**
-4. Когда проект создастся, открой **Project Settings → API Keys** (или **Settings → API**) и скопируй:
-   - **Project URL**: `https://xxxx.supabase.co`;
-   - **anon public** key (`eyJ...`) или **publishable** key (`sb_publishable_...`).
-
-   Оба значения публичные: они всё равно видны в браузере, данные защищает база правилами RLS.
-   ⚠️ Ключ `service_role` / `secret` **не копируй никуда**.
-
-### Шаг 2. Настройки входа в Supabase
-
-**Authentication → Sign In / Providers → Email:**
-- на время разработки **выключи «Confirm email»**: так можно регистрироваться без письма. Встроенная почта Supabase шлёт письма только участникам твоей команды в Supabase, поэтому перед запуском подключим нормальный SMTP.
-
-**Authentication → URL Configuration:**
-- **Site URL**: адрес сайта на Cloudflare (появится в шаге 3), например `https://cryptojournal.pages.dev`;
-- **Redirect URLs**: добавь
-  - `http://localhost:5173/**`
-  - `https://cryptojournal.pages.dev/**`
-  - `https://*.cryptojournal.pages.dev/**` (превью-ссылки веток)
-
-  Подставь своё имя проекта, если оно отличается.
-
-### Шаг 3. Cloudflare Pages (автодеплой из GitHub)
-
-1. Зарегистрируйся на [dash.cloudflare.com](https://dash.cloudflare.com).
-2. **Workers & Pages → Create application → Pages → Connect to Git.** Если по умолчанию открывается мастер Workers, внизу будет ссылка *«Looking to deploy Pages? Get started»*.
-3. Подключи GitHub и выбери репозиторий `CryptoJournal-Analys`.
-4. Настройки сборки:
-   - Framework preset: **React (Vite)** или None;
-   - Build command: `npm run build`;
-   - Build output directory: `dist`.
-5. **Environment variables** (для Production и для Preview):
-   - `VITE_SUPABASE_URL` = Project URL из шага 1;
-   - `VITE_SUPABASE_ANON_KEY` = anon / publishable key из шага 1;
-   - `NODE_VERSION` = `22`.
-6. **Save and Deploy.** Через 1–2 минуты появится адрес `https://<проект>.pages.dev`.
-7. Каждый пуш в любую ветку даёт превью-ссылку вида `https://<ветка>.<проект>.pages.dev`. Найти её можно во вкладке **Deployments**.
-
-> Если поменял переменные окружения, нажми **Retry deployment**: переменные вшиваются в сайт при сборке.
-
-### Шаг 4. Миграции базы (с этапа 2)
-
-SQL-файлы лежат в `supabase/migrations/`. Применяй их **по порядку номеров**:
-Supabase → **SQL Editor → New query** → вставь содержимое файла → **Run**.
+Порядок работы: **сначала всё на localhost**, потом хостинг, потом свой домен.
 
 ---
 
-## Запуск на своём компьютере (необязательно)
+## Запуск на своём компьютере
 
-Нужен [Node.js 22+](https://nodejs.org).
+### Шаг 1. Установи программы (один раз)
+
+- **Node.js 22 LTS**: [nodejs.org](https://nodejs.org) → кнопка LTS → установить.
+  Проверка в терминале: `node -v` должно показать `v22...` или новее.
+- **Git**: [git-scm.com](https://git-scm.com/downloads). На Mac он обычно уже есть.
+
+### Шаг 2. Скачай проект
+
+Открой терминал (Windows: PowerShell; Mac: Терминал) в папке, где хочешь хранить проект:
 
 ```bash
+git clone https://github.com/d9zeen/CryptoJournal-Analys.git
+cd CryptoJournal-Analys
+git checkout claude/amazing-bohr-gt7ta9
 npm install
-cp .env.example .env    # и впиши в .env URL и ключ из шага 1
-npm run dev             # откроется http://localhost:5173
 ```
+
+Когда я добавлю новые изменения, забрать их так:
+
+```bash
+git pull
+npm install
+```
+
+### Шаг 3. Supabase: база и вход (~5 минут, бесплатно)
+
+Даже на localhost сайту нужна база. Она живёт в бесплатном облаке Supabase.
+
+1. Зарегистрируйся на [supabase.com](https://supabase.com) и нажми **New project**.
+2. Name: `cryptojournal`. **Region: Central EU (Frankfurt)**.
+3. Database password: придумай и сохрани у себя. **Никому не отправляй, мне тоже.**
+4. **Project Settings → API Keys** (или **Settings → API**): скопируй **Project URL** и **anon / publishable key**.
+   ⚠️ Ключ `service_role` / `secret` **не копируй никуда**.
+5. **Authentication → Sign In / Providers → Email**: выключи **Confirm email** на время разработки.
+6. **Authentication → URL Configuration**:
+   - Site URL: `http://localhost:5173`;
+   - Redirect URLs: добавь `http://localhost:5173/**`.
+
+### Шаг 4. Создай таблицы
+
+Supabase → **SQL Editor → New query** → вставь **всё содержимое** файла
+`supabase/migrations/0001_init.sql` → **Run**. Должно появиться «Success. No rows returned».
+
+Новые миграции (`0002_...` и дальше) применяй так же, по порядку номеров. Каждую — один раз.
+
+### Шаг 5. Впиши ключи и запусти
+
+В папке проекта создай файл `.env`: скопируй `.env.example` и переименуй копию. Впиши в него значения из шага 3:
+
+```
+VITE_SUPABASE_URL=https://xxxx.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJ...
+```
+
+Запуск:
+
+```bash
+npm run dev
+```
+
+Открой в браузере **http://localhost:5173**. Остановить сервер: `Ctrl + C` в терминале.
+
+> Поменял `.env` — останови сервер и запусти `npm run dev` заново.
+
+---
+
+## Полезные команды
+
+| Команда | Что делает |
+|---|---|
+| `npm run dev` | запустить сайт на http://localhost:5173 |
+| `npm test` | прогнать тесты формул (PnL, R и т.д.) |
+| `npm run build` | проверить, что проект собирается без ошибок |
+| `npm run test:db` | проверить базу и правила доступа (нужен локальный Postgres, необязательно) |
+
+## Как выдать себе Pro (для проверки)
+
+Supabase → **SQL Editor**:
+
+```sql
+update profiles set plan = 'pro', plan_until = null
+where id = (select id from auth.users where email = 'твой@email');
+```
+
+Сам пользователь из браузера поменять тариф не может: это запрещено правилами базы.
 
 ## Безопасность
 
-- Row Level Security на всех таблицах: каждый пользователь видит и меняет только свои данные.
+- Row Level Security на всех таблицах и в хранилище скриншотов: каждый видит и меняет только своё.
 - Во frontend только публичный ключ. Файл `.env` не попадает в git.
-- Схема базы хранится в репозитории (`supabase/migrations`).
+- Лимит Free (30 сделок в месяц) проверяется и в интерфейсе, и в самой базе.
+- Схема базы хранится в репозитории (`supabase/migrations`) и покрыта тестами (`supabase/tests`).
+
+## Позже: хостинг и домен (этап 5)
+
+Инструкцию по выкладке (Cloudflare Pages или свой сервер, с учётом доступности из РФ) добавим, когда всё будет готово и проверено на localhost.

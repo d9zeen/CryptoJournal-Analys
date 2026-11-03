@@ -29,7 +29,11 @@ export function RegisterPage() {
     const { data, error } = await supabase.auth.signUp({
       email: cleanEmail,
       password,
-      options: { emailRedirectTo: `${window.location.origin}/login` },
+      options: {
+        emailRedirectTo: `${window.location.origin}/login`,
+        // часовой пояс браузера → профиль (для статистики по часам)
+        data: { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+      },
     })
     setLoading(false)
     if (error) return setError(authErrorMessage(error, t))
