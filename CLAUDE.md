@@ -48,12 +48,14 @@ src/
   lib/queryClient.ts   TanStack Query — кэш запросов к Supabase
   types/db.ts          типы строк БД (писать руками при изменении схемы)
   lib/import/          импорт CSV: csv.ts, mapping.ts, values.ts, bybit.ts, plan.ts, registry.ts (+ тесты)
+  lib/export/          выгрузка сделок в CSV (+ тесты); features/settings/dataApi.ts — выгрузка и удаление аккаунта
   components/ui/       базовые компоненты (Button, Input, Card, Alert, Spinner)
   layout/AppLayout.tsx шапка + нижнее меню на телефоне
   features/<раздел>/   auth, dashboard, trades, import, settings
 supabase/migrations/   SQL-миграции, нумерация 0001_..., 0002_...
 supabase/tests/        заглушка Supabase для чистого Postgres + тесты RLS (rls_test.sql)
 docs/PLAN.md           решения, формулы, схема БД, этапы
+docs/ADMIN.md          SQL для владельца: выдать/снять Pro, список пользователей, сброс лимита
 ```
 
 ## Правила
@@ -79,7 +81,7 @@ docs/PLAN.md           решения, формулы, схема БД, этап
 | `VITE_SUPABASE_ANON_KEY` | anon key или publishable key (публичный) |
 | `BASE_PATH` | только при сборке для GitHub Pages: `/CryptoJournal-Analys/` (ставит workflow) |
 
-Проект Supabase: `cryptojournal`, ref `dkjavndvuulnzflowdhj` (Frankfurt), миграция 0001 применена.
+Проект Supabase: `cryptojournal`, ref `dkjavndvuulnzflowdhj` (Frankfurt), миграции 0001–0002 применены.
 Публичные URL и publishable key вписаны в `.env.example` и `.github/workflows/pages.yml` (секреты репозитория НЕ используются — старый секрет однажды перебил адрес).
 Новые миграции владелец применяет в SQL Editor (или Claude через коннектор Supabase, если он подключён).
 
@@ -99,5 +101,5 @@ docs/PLAN.md           решения, формулы, схема БД, этап
 Ошибка лимита из БД приходит как `FREE_LIMIT_REACHED` → `lib/errors.ts`.
 
 Основная ветка: `claude/amazing-bohr-gt7ta9`. Новые этапы приходят в неё через Pull Request.
-Графики (`features/dashboard/charts.tsx`) грузятся лениво (`lazy`): Recharts — отдельный файл сборки.
+Страницы приложения грузятся лениво (`lazyPage` в `App.tsx`), графики (`features/dashboard/charts.tsx`) — тоже: Recharts — отдельный файл сборки.
 Цвета в графиках — `var(--color-…)` из theme.css.

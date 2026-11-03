@@ -168,6 +168,31 @@ select pg_temp.expect_error($$select * from profiles$$, 'permission denied');
 select pg_temp.check(true, 'аноним не имеет доступа к профилям');
 select pg_temp.check((select count(*) from storage.objects) = 0, 'аноним не видит скриншоты');
 
+-- Удаление своего аккаунта (0002)
+reset role;
+insert into auth.users (id, email) values ('cccccccc-0000-0000-0000-000000000003', 'c@test');
+set role authenticated;
+set request.jwt.claim.sub = 'cccccccc-0000-0000-0000-000000000003';
+insert into trades (exchange, symbol, side, entry_at, entry_price, size_usd) values ('bybit', 'BTCUSDT', 'long', now(), 1, 1);
+select pg_temp.check((select count(*) from setups) = 6 and (select count(*) from trades) = 1, 'C создан со своими данными');
+select delete_my_account();
+reset role;
+select pg_temp.check(not exists (select 1 from auth.users where id = 'cccccccc-0000-0000-0000-000000000003')
+  and not exists (select 1 from profiles where id = 'cccccccc-0000-0000-0000-000000000003')
+  and not exists (select 1 from trades where user_id = 'cccccccc-0000-0000-0000-000000000003')
+  and not exists (select 1 from setups where user_id = 'cccccccc-0000-0000-0000-000000000003')
+  and not exists (select 1 from usage_counters where user_id = 'cccccccc-0000-0000-0000-000000000003'), 'delete_my_account удаляет пользователя и все его данные');
+select pg_temp.check(exists (select 1 from auth.users where id = 'bbbbbbbb-0000-0000-0000-000000000002')
+  and exists (select 1 from trades where user_id = 'bbbbbbbb-0000-0000-0000-000000000002'), 'чужие данные при этом не тронуты');
+set role anon;
+set request.jwt.claim.sub = '';
+select pg_temp.expect_error($$select delete_my_account()$$, 'permission denied');
+select pg_temp.check(true, 'аноним не может вызвать delete_my_account');
+set role authenticated;
+select pg_temp.expect_error($$select delete_my_account()$$, 'NOT_AUTHENTICATED');
+select pg_temp.check(true, 'без входа delete_my_account ничего не удаляет');
+reset role;
+
 -- Удаление аккаунта чистит всё
 reset role;
 delete from auth.users where id = 'aaaaaaaa-0000-0000-0000-000000000001';

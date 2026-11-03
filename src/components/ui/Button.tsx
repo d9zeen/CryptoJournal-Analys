@@ -1,11 +1,12 @@
 import type { ButtonHTMLAttributes } from 'react'
 
-type Variant = 'primary' | 'secondary' | 'ghost'
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
 
 const styles: Record<Variant, string> = {
   primary: 'bg-primary text-on-primary hover:bg-primary-hover',
   secondary: 'bg-surface-2 text-text border border-border hover:border-muted',
   ghost: 'text-muted hover:text-text hover:bg-surface-2',
+  danger: 'bg-loss text-on-primary hover:opacity-90',
 }
 
 type Props = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; loading?: boolean }

@@ -1,0 +1,74 @@
+/** Резервная копия сделок (CSV) и удаление аккаунта. */
+import { supabase } from '@/lib/supabase'
+import { queryClient } from '@/lib/queryClient'
+import { exportFilename, tradesToCsv } from '@/lib/export/tradesCsv'
+import type { ListItem, TradeWithTags } from '@/types/db'
+
+const PAGE = 1000
+
+/** Все сделки пользователя — постранично, без лимита на количество. */
+export async function fetchAllTrades(): Promise<TradeWithTags[]> {
+  const all: TradeWithTags[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from('trades')
+      .select('*, trade_mistakes(tag_id)')
+      .order('entry_at', { ascending: true })
+      .order('id')
+      .range(from, from + PAGE - 1)
+    if (error) throw error
+    all.push(...(data as TradeWithTags[]))
+    if (data.length < PAGE) return all
+  }
+}
+
+async function fetchNames(kind: 'setups' | 'emotions' | 'mistake_tags'): Promise<Map<string, string>> {
+  const { data, error } = await supabase.from(kind).select('id, name')
+  if (error) throw error
+  return new Map((data as Pick<ListItem, 'id' | 'name'>[]).map((x) => [x.id, x.name]))
+}
+
+/** Скачать все сделки одним CSV-файлом. Возвращает число выгруженных сделок. */
+export async function downloadTradesCsv(): Promise<number> {
+  const [trades, setups, emotions, tags] = await Promise.all([fetchAllTrades(), fetchNames('setups'), fetchNames('emotions'), fetchNames('mistake_tags')])
+  const csv = tradesToCsv(trades, { setups, emotions, tags })
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = exportFilename()
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  return trades.length
+}
+
+const BUCKET = 'screenshots'
+
+/** Все файлы пользователя в хранилище скриншотов (папка {user_id}/). */
+async function listOwnScreenshots(userId: string): Promise<string[]> {
+  const paths: string[] = []
+  for (let offset = 0; ; offset += PAGE) {
+    const { data, error } = await supabase.storage.from(BUCKET).list(userId, { limit: PAGE, offset })
+    if (error) throw error
+    paths.push(...data.filter((f) => f.id !== null).map((f) => `${userId}/${f.name}`))
+    if (data.length < PAGE) return paths
+  }
+}
+
+/**
+ * Удалить аккаунт навсегда: сначала скриншоты (через Storage API — SQL их удалить не может),
+ * затем пользователя (функция delete_my_account, всё остальное удаляется каскадом в базе).
+ */
+export async function deleteMyAccount(userId: string): Promise<void> {
+  const paths = await listOwnScreenshots(userId)
+  for (let i = 0; i < paths.length; i += 100) {
+    const { error } = await supabase.storage.from(BUCKET).remove(paths.slice(i, i + 100))
+    if (error) throw error
+  }
+  const { error } = await supabase.rpc('delete_my_account')
+  if (error) throw error
+  // Пользователя на сервере больше нет — выходим только локально и чистим кэш
+  await supabase.auth.signOut({ scope: 'local' })
+  queryClient.clear()
+}
