@@ -29,7 +29,7 @@ export function AppLayout() {
     <div className="min-h-dvh pb-20 md:pb-0">
       {/* Верхняя панель */}
       <header className="sticky top-0 z-10 border-b border-border bg-bg/90 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4">
+        <div className="mx-auto flex h-14 max-w-[1800px] items-center gap-6 px-4 lg:px-8">
           <span className="font-semibold tracking-tight">{t.app.name}</span>
           <nav className="hidden gap-1 md:flex">
             {items.map((item) => (
@@ -53,7 +53,7 @@ export function AppLayout() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-6">
+      <main className="mx-auto max-w-[1800px] px-4 py-6 lg:px-8">
         <Outlet />
       </main>
 

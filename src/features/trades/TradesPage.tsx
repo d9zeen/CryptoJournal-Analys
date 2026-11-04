@@ -39,7 +39,12 @@ export function TradesPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-xl font-semibold">{t.trades.title}</h1>
-        <Button onClick={() => navigate('/trades/new')}>+ {t.trades.add}</Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => navigate('/import')}>
+            {t.trades.importFile}
+          </Button>
+          <Button onClick={() => navigate('/trades/new')}>+ {t.trades.add}</Button>
+        </div>
       </div>
 
       {usage && usage.trade_limit !== null && (
@@ -109,9 +114,12 @@ export function TradesPage() {
         <Card className="text-center">
           <p className="text-muted">{trades?.length ? t.trades.emptyFiltered : t.trades.empty}</p>
           {!trades?.length && (
-            <Button className="mt-4" onClick={() => navigate('/trades/new')}>
-              {t.trades.addLong}
-            </Button>
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+              <Button onClick={() => navigate('/import')}>{t.trades.importFileLong}</Button>
+              <Button variant="secondary" onClick={() => navigate('/trades/new')}>
+                {t.trades.addLong}
+              </Button>
+            </div>
           )}
         </Card>
       ) : (
