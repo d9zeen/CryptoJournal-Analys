@@ -17,7 +17,8 @@ import type { TradeWithTags } from '@/types/db'
 export function TradesPage() {
   const t = useT()
   const navigate = useNavigate()
-  const [preset, setPreset] = useState<PeriodPreset>('month')
+  // по умолчанию — всё время: иначе импортированная история за прошлые месяцы «пропадает»
+  const [preset, setPreset] = useState<PeriodPreset>('all')
   const [custom, setCustom] = useState<CustomRange>({ from: '', to: '' })
   const [filters, setFilters] = useState<TradeFilters>(EMPTY_FILTERS)
   const [showFilters, setShowFilters] = useState(false)
@@ -112,8 +113,13 @@ export function TradesPage() {
         <p className="text-muted">{t.common.loading}</p>
       ) : filtered.length === 0 ? (
         <Card className="text-center">
-          <p className="text-muted">{trades?.length ? t.trades.emptyFiltered : t.trades.empty}</p>
-          {!trades?.length && (
+          <p className="text-muted">{trades?.length ? t.trades.emptyFiltered : preset !== 'all' ? t.trades.emptyPeriod : t.trades.empty}</p>
+          {!trades?.length && preset !== 'all' && (
+            <Button variant="secondary" className="mt-4" onClick={() => setPreset('all')}>
+              {t.trades.showAllTime}
+            </Button>
+          )}
+          {!trades?.length && preset === 'all' && (
             <div className="mt-4 flex flex-wrap justify-center gap-2">
               <Button onClick={() => navigate('/import')}>{t.trades.importFileLong}</Button>
               <Button variant="secondary" onClick={() => navigate('/trades/new')}>
