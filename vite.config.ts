@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -49,6 +50,10 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       sourcemap: false, // исходники не выкладываем
+    },
+    test: {
+      // тесты логики — только в src; сквозные (e2e/) запускает Playwright: npm run test:e2e
+      include: ['src/**/*.test.ts'],
     },
   }
 })
