@@ -58,6 +58,7 @@ supabase/migrations/   SQL-миграции, нумерация 0001_..., 0002_.
 supabase/tests/        заглушка Supabase для чистого Postgres + тесты RLS (rls_test.sql)
 docs/PLAN.md           решения, формулы, схема БД, этапы
 docs/ADMIN.md          SQL для владельца: выдать/снять Pro, список пользователей, сброс лимита
+docs/SECURITY.md       вся защита (база, сайт, сборка) + что владелец включает руками
 ```
 
 ## Правила
@@ -70,6 +71,8 @@ docs/ADMIN.md          SQL для владельца: выдать/снять Pr
    - `.env` в `.gitignore`, в репо только `.env.example`.
    - Поле `profiles.plan` пользователь менять не может (защита в БД).
    - Лимиты проверяются и на клиенте, и триггером в БД.
+   - **2FA в базе:** на каждой таблице есть restrictive-политика `*_mfa` (`mfa_ok()`); новой таблице — тоже добавить. Новые функции: `security definer` только при необходимости, `set search_path = ''`, `revoke … from public, anon`.
+   - CSP в `vite.config.ts`: новый внешний адрес (API, картинки) — добавить туда, иначе браузер его заблокирует. Никаких внешних скриптов / CDN.
 4. **Миграции** — каждое изменение схемы новым SQL-файлом в `supabase/migrations/`, старые не редактировать после применения. Владелец применяет их через Supabase → SQL Editor. Любое изменение схемы/RLS — дописать проверку в `supabase/tests/rls_test.sql` и прогнать `npm run test:db`.
 5. **Деньги** — формулы в `src/lib/calc/`, покрыты тестами (Vitest). Время хранится в UTC (`timestamptz`).
 6. **Вёрстка** — mobile-first, проверять на ширине 390px **и на широком мониторе (1920px)**: контейнер до 1800px, на xl блоки раскладываются в колонки рядом (владелец не любит узкую ленту по центру и длинную прокрутку).
@@ -83,7 +86,7 @@ docs/ADMIN.md          SQL для владельца: выдать/снять Pr
 | `VITE_SUPABASE_ANON_KEY` | anon key или publishable key (публичный) |
 | `BASE_PATH` | только при сборке для GitHub Pages: `/CryptoJournal-Analys/` (ставит workflow) |
 
-Проект Supabase: `cryptojournal`, ref `dkjavndvuulnzflowdhj` (Frankfurt), миграции 0001–0003 применены.
+Проект Supabase: `cryptojournal`, ref `dkjavndvuulnzflowdhj` (Frankfurt), миграции 0001–0004 применены.
 Скриншоты: таблица `trade_screenshots` (до 10 на сделку), файлы `{user_id}/{trade_id}/{uuid}.webp`; старое поле `trades.screenshot_path` не используется.
 Публичные URL и publishable key вписаны в `.env.example` и `.github/workflows/pages.yml` (секреты репозитория НЕ используются — старый секрет однажды перебил адрес).
 Новые миграции владелец применяет в SQL Editor (или Claude через коннектор Supabase, если он подключён).

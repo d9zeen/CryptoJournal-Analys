@@ -11,6 +11,7 @@ import { parseDecimal, toInput } from '@/lib/parse'
 import { dbErrorMessage } from '@/lib/errors'
 import { useNavigate } from 'react-router'
 import { deleteMyAccount, downloadTradesCsv } from './dataApi'
+import { SecurityCard } from './SecurityCard'
 
 export function SettingsPage() {
   const t = useT()
@@ -21,6 +22,7 @@ export function SettingsPage() {
         <ProfileCard />
         <PlanCard />
       </div>
+      <SecurityCard />
       <div className="grid gap-4 lg:grid-cols-3">
         <ListEditor kind="setups" />
         <ListEditor kind="mistake_tags" />

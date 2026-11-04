@@ -2,14 +2,21 @@ import { Navigate, Outlet, useLocation } from 'react-router'
 import { useAuth } from './AuthProvider'
 import { FullPageSpinner } from '@/components/ui/Spinner'
 import { useT } from '@/i18n'
+import { useAal } from './mfa'
+import { MfaChallengePage } from './MfaChallengePage'
 
-/** Пускает только залогиненных. Остальных отправляет на /login. */
+/**
+ * Пускает только залогиненных. Остальных отправляет на /login.
+ * Если включена 2FA и код ещё не введён — показывает экран ввода кода.
+ */
 export function RequireAuth() {
   const { user, loading } = useAuth()
   const location = useLocation()
   const t = useT()
-  if (loading) return <FullPageSpinner label={t.common.loading} />
+  const aal = useAal()
+  if (loading || (user && aal.isLoading)) return <FullPageSpinner label={t.common.loading} />
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />
+  if (aal.data?.needsCode) return <MfaChallengePage />
   return <Outlet />
 }
 

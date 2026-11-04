@@ -36,7 +36,7 @@ set role authenticated;
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
 insert into trades (id, exchange, symbol, side, entry_at, entry_price, size_usd)
 values ('bbbbbbbb-1111-0000-0000-000000000000', 'bybit', 'ETHUSDT', 'short', now(), 3000, 500);
-insert into storage.objects (bucket_id, name) values ('screenshots', 'bbbbbbbb-0000-0000-0000-000000000002/x.webp');
+insert into storage.objects (bucket_id, name) values ('screenshots', 'bbbbbbbb-0000-0000-0000-000000000002/bbbbbbbb-1111-0000-0000-000000000000/x.webp');
 
 -- Дальше работаем как A
 set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
@@ -99,8 +99,8 @@ select pg_temp.check(true, 'нельзя привязать чужой тег');
 select pg_temp.expect_error($$insert into trade_mistakes (trade_id, tag_id, user_id) select 'bbbbbbbb-1111-0000-0000-000000000000', id, 'bbbbbbbb-0000-0000-0000-000000000002' from mistake_tags limit 1$$, 'row-level security|foreign key');
 select pg_temp.check(true, 'нельзя повесить тег на чужую сделку');
 
-insert into storage.objects (bucket_id, name) values ('screenshots', 'aaaaaaaa-0000-0000-0000-000000000001/aaaaaaaa-1111-0000-0000-000000000000.webp');
-select pg_temp.expect_error($$insert into storage.objects (bucket_id, name) values ('screenshots', 'bbbbbbbb-0000-0000-0000-000000000002/evil.webp')$$, 'row-level security');
+insert into storage.objects (bucket_id, name) values ('screenshots', 'aaaaaaaa-0000-0000-0000-000000000001/aaaaaaaa-1111-0000-0000-000000000000/1.webp');
+select pg_temp.expect_error($$insert into storage.objects (bucket_id, name) values ('screenshots', 'bbbbbbbb-0000-0000-0000-000000000002/bbbbbbbb-1111-0000-0000-000000000000/evil.webp')$$, 'row-level security');
 select pg_temp.check(true, 'нельзя загрузить файл в папку другого пользователя');
 
 -- Удаление сетапа не удаляет сделку
@@ -167,6 +167,54 @@ select pg_temp.check(true, 'аноним не имеет доступа к сд�
 select pg_temp.expect_error($$select * from profiles$$, 'permission denied');
 select pg_temp.check(true, 'аноним не имеет доступа к профилям');
 select pg_temp.check((select count(*) from storage.objects) = 0, 'аноним не видит скриншоты');
+
+-- Усиление защиты (0004)
+set role authenticated;
+set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
+set request.jwt.claims = '{"aal":"aal1"}';
+select pg_temp.expect_error($$truncate trades$$, 'permission denied');
+select pg_temp.check(true, 'TRUNCATE (обходит RLS) запрещён');
+select pg_temp.expect_error($$insert into storage.objects (bucket_id, name) values ('screenshots', 'aaaaaaaa-0000-0000-0000-000000000001/x.webp')$$, 'row-level security');
+select pg_temp.check(true, 'файл только в папку сделки {user}/{trade}/');
+select pg_temp.expect_error($$insert into storage.objects (bucket_id, name) values ('screenshots', 'aaaaaaaa-0000-0000-0000-000000000001/00000000-0000-0000-0000-000000000000/x.webp')$$, 'row-level security');
+select pg_temp.check(true, 'файл нельзя загрузить к несуществующей сделке');
+select pg_temp.expect_error($$insert into storage.objects (bucket_id, name) values ('screenshots', 'aaaaaaaa-0000-0000-0000-000000000001/bbbbbbbb-1111-0000-0000-000000000000/x.webp')$$, 'row-level security');
+select pg_temp.check(true, 'файл нельзя прикрепить к чужой сделке через свою папку');
+reset role;
+select id as a_trade from trades where user_id = 'aaaaaaaa-0000-0000-0000-000000000001' order by created_at limit 1 \gset
+set role authenticated;
+insert into storage.objects (bucket_id, name)
+select 'screenshots', 'aaaaaaaa-0000-0000-0000-000000000001/' || :'a_trade' || '/f' || g || '.webp' from generate_series(1, 20) g;
+select pg_temp.expect_error(format($$insert into storage.objects (bucket_id, name) values ('screenshots', 'aaaaaaaa-0000-0000-0000-000000000001/%s/f21.webp')$$, :'a_trade'), 'row-level security');
+select pg_temp.check(true, 'не больше 20 файлов на сделку');
+update storage.objects set name = name || '.x' where name like 'aaaaaaaa-0000-0000-0000-000000000001/%';
+reset role;
+select pg_temp.check((select count(*) from storage.objects where name like '%.x') = 0, 'файлы нельзя перезаписать / переименовать');
+delete from storage.objects where name like 'aaaaaaaa-0000-0000-0000-000000000001/' || :'a_trade' || '/f%';
+set role authenticated;
+select pg_temp.expect_error($$insert into imports (exchange) values ('../../etc')$$, 'imports_exchange_format');
+select pg_temp.check(true, 'журнал импортов проверяет данные');
+insert into emotions (name) select 'e' || g from generate_series(1, 92) g;
+select pg_temp.expect_error($$insert into emotions (name) values ('лишняя')$$, 'ROW_LIMIT_REACHED');
+select pg_temp.check(true, 'не больше 100 эмоций (и сетапов, тегов) у пользователя');
+delete from emotions where name ~ '^e\d+$';
+select pg_temp.expect_error($$select plan_trade_limit('free')$$, 'permission denied');
+select pg_temp.check(true, 'служебные функции снаружи не вызываются');
+
+-- 2FA: включённый второй фактор без подтверждения кодом закрывает все данные
+reset role;
+insert into auth.mfa_factors (user_id, status) values ('aaaaaaaa-0000-0000-0000-000000000001', 'verified');
+set role authenticated;
+select pg_temp.check((select count(*) from trades) = 0 and (select count(*) from profiles) = 0 and (select count(*) from setups) = 0, '2FA включена, вход без кода (aal1) — данных не видно');
+select pg_temp.expect_error($$insert into setups (name) values ('взлом')$$, 'row-level security');
+select pg_temp.check(true, '2FA включена, без кода — записать нельзя');
+select pg_temp.expect_error($$select delete_my_account()$$, 'MFA_REQUIRED');
+select pg_temp.check(true, '2FA включена, без кода — удалить аккаунт нельзя');
+set request.jwt.claims = '{"aal":"aal2"}';
+select pg_temp.check((select count(*) from trades) > 0 and (select count(*) from profiles) = 1, 'после подтверждения кодом (aal2) — всё доступно');
+reset role;
+delete from auth.mfa_factors;
+set request.jwt.claims = '';
 
 -- Несколько скриншотов на сделку (0003)
 set role authenticated;
