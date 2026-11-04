@@ -182,3 +182,21 @@ describe('Excel (.xlsx)', () => {
     expect(excelDate(46327)).toBe('2026-11-01 00:00:00')
   })
 })
+
+import { detectExchange } from './detect'
+describe('detectExchange', () => {
+  it('по имени файла', () => {
+    expect(detectExchange([], 'Bybit_ClosedPNL_2026.csv')).toBe('bybit')
+    expect(detectExchange([], 'BINANCE-futures.xlsx')).toBe('binance')
+    expect(detectExchange([], 'export.csv')).toBe('other')
+  })
+  it('по колонкам', () => {
+    expect(detectExchange(['Contracts', 'Closing Direction', 'Qty'])).toBe('bybit')
+    expect(detectExchange(['Date(UTC)', 'Symbol', 'Side', 'Price', 'Quantity', 'Realized Profit'])).toBe('binance')
+    expect(detectExchange(['Date(UTC)', 'Pair', 'Side', 'Price', 'Executed', 'Amount', 'Fee'])).toBe('binance')
+    expect(detectExchange(['Instrument', 'Position direction', 'Avg. open price'])).toBe('okx')
+    expect(detectExchange(['Futures', 'Average opening price', 'Average closing price'])).toBe('bitget')
+    expect(detectExchange(['Symbol', 'Side', 'Avg Open Price', 'Avg Close Price', 'Position Size'])).toBe('bingx')
+    expect(detectExchange(['Symbol', 'Side', 'Price'])).toBe('other')
+  })
+})

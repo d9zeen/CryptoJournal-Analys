@@ -131,7 +131,7 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate className="mx-auto flex max-w-3xl flex-col gap-4">
+    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Link to="/trades" className="text-muted hover:text-text" aria-label={t.common.back}>
@@ -148,124 +148,133 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
 
       {limitReached && <Alert tone="error">{fmt(t.tradeForm.limitBanner, { used: usage!.trades_created, limit: usage!.trade_limit! })}</Alert>}
 
-      <Section title={t.tradeForm.sections.main}>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <SelectField label={t.tradeForm.exchange} value={form.exchange} onChange={(e) => set('exchange', e.target.value)}>
-            {EXCHANGES.map((ex) => (
-              <option key={ex.id} value={ex.id}>
-                {ex.name ?? t.exchange.other}
-              </option>
-            ))}
-          </SelectField>
-          <SelectField label={t.tradeForm.market} value={form.marketType} onChange={(e) => set('marketType', e.target.value as MarketType)}>
-            <option value="linear">{t.market.linear}</option>
-            <option value="inverse">{t.market.inverse}</option>
-            <option value="spot">{t.market.spot}</option>
-          </SelectField>
-          <TextField
-            label={t.tradeForm.symbol}
-            placeholder={t.tradeForm.symbolPlaceholder}
-            value={form.symbol}
-            onChange={(e) => set('symbol', e.target.value.toUpperCase())}
-            autoCapitalize="characters"
-            autoComplete="off"
-            error={err('symbol')}
-          />
-          <div className="flex flex-col gap-1.5">
-            <Segmented<Side>
-              label={t.tradeForm.side}
-              value={form.side}
-              disabled={form.marketType === 'spot'}
-              onChange={(v) => set('side', v)}
-              options={[
-                { value: 'long', label: t.side.long, tone: 'profit' },
-                { value: 'short', label: t.side.short, tone: 'loss' },
-              ]}
-            />
-            {form.marketType === 'spot' && <p className="text-xs text-muted">{t.tradeForm.spotLongOnly}</p>}
-          </div>
-        </div>
-      </Section>
-
-      <Section title={t.tradeForm.sections.entryExit}>
-        <Checkbox label={t.tradeForm.isClosed} checked={form.isClosed} onChange={(e) => set('isClosed', e.target.checked)} />
-        <div className="grid gap-4 sm:grid-cols-2">
-          <TextField type="datetime-local" label={t.tradeForm.entryAt} value={form.entryAt} onChange={(e) => set('entryAt', e.target.value)} error={err('entryAt')} />
-          <NumberField label={t.tradeForm.entryPrice} value={form.entryPrice} onChange={(e) => set('entryPrice', e.target.value)} error={err('entryPrice')} />
-          {form.isClosed && (
-            <>
-              <TextField type="datetime-local" label={t.tradeForm.exitAt} value={form.exitAt} onChange={(e) => set('exitAt', e.target.value)} error={err('exitAt')} />
-              <NumberField label={t.tradeForm.exitPrice} value={form.exitPrice} onChange={(e) => set('exitPrice', e.target.value)} error={err('exitPrice')} />
-            </>
-          )}
-        </div>
-        <p className="text-xs text-muted">{t.tradeForm.avgHint}</p>
-      </Section>
-
-      <Section title={t.tradeForm.sections.sizeRisk}>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <NumberField
-            label={t.tradeForm.sizeUsd}
-            value={form.sizeUsd}
-            onChange={(e) => set('sizeUsd', e.target.value)}
-            error={err('sizeUsd')}
-            hint={
-              margin !== null
-                ? qty !== null
-                  ? fmt(t.tradeForm.sizeHintCoins, { margin: formatUsd(margin), qty: formatNumber(qty, 6) })
-                  : fmt(t.tradeForm.sizeHint, { margin: formatUsd(margin) })
-                : undefined
-            }
-          />
-          <NumberField label={t.tradeForm.leverage} value={form.leverage} disabled={form.marketType === 'spot'} onChange={(e) => set('leverage', e.target.value)} error={err('leverage')} />
-          <NumberField
-            label={t.tradeForm.stopLoss}
-            value={form.stopLoss}
-            onChange={(e) => set('stopLoss', e.target.value)}
-            error={err('stopLoss')}
-            hint={
-              stopWrong ? (
-                <span className="text-warning">{t.tradeForm.stopWrongSide}</span>
-              ) : d.risk !== null ? (
-                fmt(t.tradeForm.risk, { risk: formatUsd(d.risk) })
-              ) : undefined
-            }
-          />
-          <NumberField label={t.tradeForm.takeProfit} value={form.takeProfit} onChange={(e) => set('takeProfit', e.target.value)} error={err('takeProfit')} />
-          <NumberField label={t.tradeForm.fee} placeholder="0" value={form.fee} onChange={(e) => set('fee', e.target.value)} error={err('fee')} />
-          <NumberField label={t.tradeForm.funding} placeholder="0" hint={t.tradeForm.fundingHint} value={form.funding} onChange={(e) => set('funding', e.target.value)} error={err('funding')} />
-        </div>
-      </Section>
-
-      <Section title={t.tradeForm.sections.result}>
-        {!form.isClosed ? (
-          <p className="text-sm text-muted">{t.tradeForm.pnlOpen}</p>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 gap-4">
-              <Stat label={t.tradeForm.pnl} value={formatPnl(d.pnl)} className={pnlClass(d.pnl)} hint={!form.pnlManual ? (d.pnlAuto === null ? t.tradeForm.pnlNeedData : t.tradeForm.pnlAuto) : undefined} />
-              <Stat label={t.tradeForm.r} value={formatR(d.r)} className={pnlClass(d.r)} hint={d.risk === null ? t.tradeForm.rNoStop : undefined} />
+      <div className="grid gap-4 xl:grid-cols-2 xl:items-start">
+        <div className="flex min-w-0 flex-col gap-4">
+          <Section title={t.tradeForm.sections.main}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <SelectField label={t.tradeForm.exchange} value={form.exchange} onChange={(e) => set('exchange', e.target.value)}>
+                {EXCHANGES.map((ex) => (
+                  <option key={ex.id} value={ex.id}>
+                    {ex.name ?? t.exchange.other}
+                  </option>
+                ))}
+              </SelectField>
+              <SelectField label={t.tradeForm.market} value={form.marketType} onChange={(e) => set('marketType', e.target.value as MarketType)}>
+                <option value="linear">{t.market.linear}</option>
+                <option value="inverse">{t.market.inverse}</option>
+                <option value="spot">{t.market.spot}</option>
+              </SelectField>
+              <TextField
+                label={t.tradeForm.symbol}
+                placeholder={t.tradeForm.symbolPlaceholder}
+                value={form.symbol}
+                onChange={(e) => set('symbol', e.target.value.toUpperCase())}
+                autoCapitalize="characters"
+                autoComplete="off"
+                error={err('symbol')}
+              />
+              <div className="flex flex-col gap-1.5">
+                <Segmented<Side>
+                  label={t.tradeForm.side}
+                  value={form.side}
+                  disabled={form.marketType === 'spot'}
+                  onChange={(v) => set('side', v)}
+                  options={[
+                    { value: 'long', label: t.side.long, tone: 'profit' },
+                    { value: 'short', label: t.side.short, tone: 'loss' },
+                  ]}
+                />
+                {form.marketType === 'spot' && <p className="text-xs text-muted">{t.tradeForm.spotLongOnly}</p>}
+              </div>
             </div>
-            <Checkbox label={t.tradeForm.pnlManual} checked={form.pnlManual} onChange={(e) => set('pnlManual', e.target.checked)} />
-            {form.pnlManual && <NumberField label={t.tradeForm.pnlManualLabel} value={form.pnl} onChange={(e) => set('pnl', e.target.value)} error={err('pnl')} wrapClassName="sm:max-w-xs" />}
-          </>
-        )}
-      </Section>
+          </Section>
+          <Section title={t.tradeForm.sections.sizeRisk}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <NumberField
+                label={t.tradeForm.sizeUsd}
+                value={form.sizeUsd}
+                onChange={(e) => set('sizeUsd', e.target.value)}
+                error={err('sizeUsd')}
+                hint={
+                  margin !== null
+                    ? qty !== null
+                      ? fmt(t.tradeForm.sizeHintCoins, { margin: formatUsd(margin), qty: formatNumber(qty, 6) })
+                      : fmt(t.tradeForm.sizeHint, { margin: formatUsd(margin) })
+                    : undefined
+                }
+              />
+              <NumberField label={t.tradeForm.leverage} value={form.leverage} disabled={form.marketType === 'spot'} onChange={(e) => set('leverage', e.target.value)} error={err('leverage')} />
+              <NumberField
+                label={t.tradeForm.stopLoss}
+                value={form.stopLoss}
+                onChange={(e) => set('stopLoss', e.target.value)}
+                error={err('stopLoss')}
+                hint={
+                  stopWrong ? (
+                    <span className="text-warning">{t.tradeForm.stopWrongSide}</span>
+                  ) : d.risk !== null ? (
+                    fmt(t.tradeForm.risk, { risk: formatUsd(d.risk) })
+                  ) : undefined
+                }
+              />
+              <NumberField label={t.tradeForm.takeProfit} value={form.takeProfit} onChange={(e) => set('takeProfit', e.target.value)} error={err('takeProfit')} />
+              <NumberField label={t.tradeForm.fee} placeholder="0" value={form.fee} onChange={(e) => set('fee', e.target.value)} error={err('fee')} />
+              <NumberField label={t.tradeForm.funding} placeholder="0" hint={t.tradeForm.fundingHint} value={form.funding} onChange={(e) => set('funding', e.target.value)} error={err('funding')} />
+            </div>
+          </Section>
+        </div>
+        <div className="flex min-w-0 flex-col gap-4">
+          <Section title={t.tradeForm.sections.entryExit}>
+            <Checkbox label={t.tradeForm.isClosed} checked={form.isClosed} onChange={(e) => set('isClosed', e.target.checked)} />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <TextField type="datetime-local" label={t.tradeForm.entryAt} value={form.entryAt} onChange={(e) => set('entryAt', e.target.value)} error={err('entryAt')} />
+              <NumberField label={t.tradeForm.entryPrice} value={form.entryPrice} onChange={(e) => set('entryPrice', e.target.value)} error={err('entryPrice')} />
+              {form.isClosed && (
+                <>
+                  <TextField type="datetime-local" label={t.tradeForm.exitAt} value={form.exitAt} onChange={(e) => set('exitAt', e.target.value)} error={err('exitAt')} />
+                  <NumberField label={t.tradeForm.exitPrice} value={form.exitPrice} onChange={(e) => set('exitPrice', e.target.value)} error={err('exitPrice')} />
+                </>
+              )}
+            </div>
+            <p className="text-xs text-muted">{t.tradeForm.avgHint}</p>
+          </Section>
+          <Section title={t.tradeForm.sections.result}>
+            {!form.isClosed ? (
+              <p className="text-sm text-muted">{t.tradeForm.pnlOpen}</p>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <Stat label={t.tradeForm.pnl} value={formatPnl(d.pnl)} className={pnlClass(d.pnl)} hint={!form.pnlManual ? (d.pnlAuto === null ? t.tradeForm.pnlNeedData : t.tradeForm.pnlAuto) : undefined} />
+                  <Stat label={t.tradeForm.r} value={formatR(d.r)} className={pnlClass(d.r)} hint={d.risk === null ? t.tradeForm.rNoStop : undefined} />
+                </div>
+                <Checkbox label={t.tradeForm.pnlManual} checked={form.pnlManual} onChange={(e) => set('pnlManual', e.target.checked)} />
+                {form.pnlManual && <NumberField label={t.tradeForm.pnlManualLabel} value={form.pnl} onChange={(e) => set('pnl', e.target.value)} error={err('pnl')} wrapClassName="sm:max-w-xs" />}
+              </>
+            )}
+          </Section>
+        </div>
+      </div>
 
       <Section title={t.tradeForm.sections.review}>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <ListSelect kind="setups" label={t.tradeForm.setup} value={form.setupId} onChange={(v) => set('setupId', v)} />
-          <ListSelect kind="emotions" label={t.tradeForm.emotion} value={form.emotionId} onChange={(v) => set('emotionId', v)} />
+        <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+          <div className="flex min-w-0 flex-col gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <ListSelect kind="setups" label={t.tradeForm.setup} value={form.setupId} onChange={(v) => set('setupId', v)} />
+              <ListSelect kind="emotions" label={t.tradeForm.emotion} value={form.emotionId} onChange={(v) => set('emotionId', v)} />
+            </div>
+            <MistakePicker value={form.tagIds} onChange={(v) => set('tagIds', v)} />
+            <TextArea label={t.tradeForm.note} placeholder={t.tradeForm.notePlaceholder} maxLength={5000} value={form.note} onChange={(e) => set('note', e.target.value)} />
+          </div>
+          <div className="min-w-0">
+            <ScreenshotsField
+              saved={savedShots}
+              pending={addShots}
+              onAdd={(blobs) => setAddShots((a) => [...a, ...blobs])}
+              onRemoveSaved={(s) => setRemoveShots((r) => [...r, s])}
+              onRemovePending={(i) => setAddShots((a) => a.filter((_, j) => j !== i))}
+            />
+          </div>
         </div>
-        <MistakePicker value={form.tagIds} onChange={(v) => set('tagIds', v)} />
-        <TextArea label={t.tradeForm.note} placeholder={t.tradeForm.notePlaceholder} maxLength={5000} value={form.note} onChange={(e) => set('note', e.target.value)} />
-        <ScreenshotsField
-          saved={savedShots}
-          pending={addShots}
-          onAdd={(blobs) => setAddShots((a) => [...a, ...blobs])}
-          onRemoveSaved={(s) => setRemoveShots((r) => [...r, s])}
-          onRemovePending={(i) => setAddShots((a) => a.filter((_, j) => j !== i))}
-        />
       </Section>
 
       {submitError && <Alert tone="error">{submitError}</Alert>}

@@ -89,14 +89,17 @@ export function DashboardPage() {
       ) : stats.closed.length === 0 ? (
         <Card className="text-center">
           <p className="text-muted">{t.dashboard.empty}</p>
-          <Button className="mt-4" onClick={() => navigate('/trades/new')}>
-            {t.trades.addLong}
-          </Button>
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            <Button onClick={() => navigate('/import')}>{t.trades.importFileLong}</Button>
+            <Button variant="secondary" onClick={() => navigate('/trades/new')}>
+              {t.trades.addLong}
+            </Button>
+          </div>
         </Card>
       ) : (
         <>
           {/* Ключевые цифры */}
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 2xl:grid-cols-8">
             <Kpi label={k.totalPnl} value={formatPnl(s.totalPnl)} tone={s.totalPnl} hint={fmt(k.trades, { n: s.closed })} />
             <Kpi label={k.winrate} value={formatPercent(s.winrate)} hint={fmt(k.winLoss, { w: s.wins, l: s.losses })} />
             <Kpi label={k.profitFactor} value={formatRatio(s.profitFactor)} hint={k.profitFactorHint} />
@@ -112,15 +115,16 @@ export function DashboardPage() {
             <Kpi label={k.bestWorst} value={<Pair a={s.best} b={s.worst} />} />
           </div>
 
-          <ChartCard title={t.dashboard.charts.equity} hint={t.dashboard.charts.equityHint}>
-            <EquityChart points={stats.equity} />
-          </ChartCard>
+          <div className="grid gap-3 xl:grid-cols-2">
+            <ChartCard title={t.dashboard.charts.equity} hint={t.dashboard.charts.equityHint}>
+              <EquityChart points={stats.equity} />
+            </ChartCard>
+            <ChartCard title={t.dashboard.charts.daily}>
+              <DailyPnlChart days={stats.days} />
+            </ChartCard>
+          </div>
 
-          <ChartCard title={t.dashboard.charts.daily}>
-            <DailyPnlChart days={stats.days} />
-          </ChartCard>
-
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             <GroupTable title={c.side} rows={stats.side.map((g) => ({ id: g.key, label: t.side[g.key], group: g }))} />
             <GroupTable title={c.setups} rows={toRows(stats.setups, names(setups), c.noSetup)} />
             <GroupTable
