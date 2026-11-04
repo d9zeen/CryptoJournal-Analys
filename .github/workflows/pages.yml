@@ -11,10 +11,9 @@ on:
     branches: [claude/amazing-bohr-gt7ta9]
   workflow_dispatch: # кнопка «Run workflow» — пересобрать вручную (например, после смены ключей)
 
+# по умолчанию — только чтение; права на выкладку получает лишь шаг deploy
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
@@ -23,13 +22,19 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
           cache: npm
       - run: npm ci
+      # известные уязвимости в зависимостях сайта (high и выше) — сборка падает
+      - run: npm audit --omit=dev --audit-level=high
       - run: npm test
       - name: Сборка
         run: npm run build
@@ -46,6 +51,9 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

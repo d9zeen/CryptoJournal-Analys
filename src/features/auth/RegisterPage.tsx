@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import { AuthLayout } from './AuthLayout'
-import { MIN_PASSWORD_LENGTH, authErrorMessage } from './errors'
+import { authErrorMessage, passwordProblem } from './errors'
 import { appUrl } from '@/lib/url'
 
 export function RegisterPage() {
@@ -22,7 +22,8 @@ export function RegisterPage() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
-    if (password.length < MIN_PASSWORD_LENGTH) return setError(t.auth.errors.passwordShort)
+    const problem = passwordProblem(password)
+    if (problem) return setError(problem === 'short' ? t.auth.errors.passwordShort : t.auth.errors.passwordWeak)
     if (password !== password2) return setError(t.auth.errors.passwordMismatch)
 
     setLoading(true)

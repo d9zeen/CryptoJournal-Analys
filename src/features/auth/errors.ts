@@ -32,4 +32,14 @@ export function authErrorMessage(error: AuthError, t: Dict): string {
   }
 }
 
-export const MIN_PASSWORD_LENGTH = 8
+export const MIN_PASSWORD_LENGTH = 10
+
+/** Проблема с новым паролем: короткий / только буквы или только цифры / слишком простой; null — пароль подходит */
+export function passwordProblem(password: string): 'short' | 'weak' | null {
+  if (password.length < MIN_PASSWORD_LENGTH) return 'short'
+  const hasLetter = /\p{L}/u.test(password)
+  const hasDigit = /\d/.test(password)
+  const distinct = new Set(password.toLowerCase()).size
+  if (!hasLetter || !hasDigit || distinct < 5) return 'weak'
+  return null
+}
