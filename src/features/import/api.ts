@@ -14,18 +14,25 @@ export type ImportRecord = {
   created_at: string
 }
 
-const CHUNK = 100 // столько сделок отправляем одним запросом
-const ID_CHUNK = 150 // столько id проверяем на дубли одним запросом
+const CHUNK = 500 // столько сделок отправляем одним запросом
+const ID_CHUNK = 150 // столько id проверяем на дубли одним запросом (длина адреса запроса)
+const PARALLEL = 6 // столько проверок дублей идут одновременно
 
 const chunks = <T,>(arr: T[], size: number): T[][] => Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, (i + 1) * size))
 
 /** Какие из этих id сделок уже есть у пользователя на этой бирже. */
 export async function fetchExistingIds(exchange: string, ids: string[]): Promise<Set<string>> {
   const found = new Set<string>()
-  for (const part of chunks([...new Set(ids)], ID_CHUNK)) {
-    const { data, error } = await supabase.from('trades').select('external_id').eq('exchange', exchange).in('external_id', part)
-    if (error) throw error
-    for (const r of data as { external_id: string }[]) found.add(r.external_id)
+  const parts = chunks([...new Set(ids)], ID_CHUNK)
+  // по PARALLEL запросов одновременно: 30 000 сделок — секунды, а не минута
+  for (let i = 0; i < parts.length; i += PARALLEL) {
+    const results = await Promise.all(
+      parts.slice(i, i + PARALLEL).map((part) => supabase.from('trades').select('external_id').eq('exchange', exchange).in('external_id', part)),
+    )
+    for (const { data, error } of results) {
+      if (error) throw error
+      for (const r of data as { external_id: string }[]) found.add(r.external_id)
+    }
   }
   return found
 }

@@ -110,6 +110,11 @@ docs/SECURITY.md       вся защита (база, сайт, сборка) + 
 Данные: TanStack Query, ключи `['trades', ...]`, `['trade', id]`, `['list', kind]`, `['profile']`, `['usage']`.
 Ошибка лимита из БД приходит как `FREE_LIMIT_REACHED` → `lib/errors.ts`.
 
+**Скорость (проверено на 5000 сделок, e2e/perf.spec.ts):**
+- Supabase отдаёт не больше 1000 строк за запрос — списки грузить только через `fetchTradesPaged` (пачки по 1000), никогда `.limit(N)` одним запросом.
+- Длинные списки рисовать порциями (`PAGE = 100` + «Показать ещё»), только одну раскладку (таблица ИЛИ карточки, `useMediaQuery`), не обе со скрытием.
+- Графики: не больше нескольких сотен точек — `downsampleEquity`, `pnlBars` (дни → недели → месяцы).
+
 Основная ветка: `claude/amazing-bohr-gt7ta9`. Новые этапы приходят в неё через Pull Request.
 Страницы приложения грузятся лениво (`lazyPage` в `App.tsx`), графики (`features/dashboard/charts.tsx`) — тоже: Recharts — отдельный файл сборки.
 Цвета в графиках — `var(--color-…)` из theme.css.

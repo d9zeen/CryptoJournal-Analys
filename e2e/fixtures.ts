@@ -66,7 +66,21 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
       if (method === 'GET') {
         if (url.searchParams.get('external_id')) return json([]) // проверка дублей при импорте
         if (url.searchParams.get('id')) return json(db.trades.find((t) => `eq.${t.id}` === url.searchParams.get('id')) ?? null)
-        return json(db.trades)
+        // как настоящий Supabase: не больше 1000 строк за раз (offset/limit) и общее число в Content-Range
+        const offset = Number(url.searchParams.get('offset') ?? 0)
+        const limit = Math.min(Number(url.searchParams.get('limit') ?? 1000), 1000)
+        const page = db.trades.slice(offset, offset + limit)
+        const total = db.trades.length
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          headers: {
+            'content-range': `${page.length ? `${offset}-${offset + page.length - 1}` : '*'}/${total}`,
+            'access-control-expose-headers': 'Content-Range',
+            'access-control-allow-origin': '*',
+          },
+          body: JSON.stringify(page),
+        })
       }
       if (method === 'POST') {
         const b = body()

@@ -3,23 +3,13 @@ import { supabase } from '@/lib/supabase'
 import { queryClient } from '@/lib/queryClient'
 import { exportFilename, tradesToCsv } from '@/lib/export/tradesCsv'
 import type { ListItem, TradeWithTags } from '@/types/db'
+import { fetchTradesPaged } from '@/features/trades/api'
 
 const PAGE = 1000
 
 /** Все сделки пользователя — постранично, без лимита на количество. */
-export async function fetchAllTrades(): Promise<TradeWithTags[]> {
-  const all: TradeWithTags[] = []
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
-      .from('trades')
-      .select('*, trade_mistakes(tag_id)')
-      .order('entry_at', { ascending: true })
-      .order('id')
-      .range(from, from + PAGE - 1)
-    if (error) throw error
-    all.push(...(data as TradeWithTags[]))
-    if (data.length < PAGE) return all
-  }
+export function fetchAllTrades(): Promise<TradeWithTags[]> {
+  return fetchTradesPaged({ from: null, to: null }, true)
 }
 
 async function fetchNames(kind: 'setups' | 'emotions' | 'mistake_tags'): Promise<Map<string, string>> {

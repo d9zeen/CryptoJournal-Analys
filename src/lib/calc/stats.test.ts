@@ -167,3 +167,30 @@ describe('группировки', () => {
     ])
   })
 })
+
+import { downsampleEquity, pnlBars } from './stats'
+describe('графики: прореживание и укрупнение', () => {
+  const pts = Array.from({ length: 5001 }, (_, n) => ({ n, at: null, pnl: 0, cum: Math.sin(n / 50) * 100 + (n === 2500 ? 999 : 0) + (n === 3000 ? -999 : 0) }))
+  it('кривая: не больше ~400 точек, пики и края на месте', () => {
+    const d = downsampleEquity(pts, 400)
+    expect(d.length).toBeLessThanOrEqual(402)
+    expect(d[0]).toBe(pts[0])
+    expect(d.at(-1)).toBe(pts.at(-1))
+    expect(Math.max(...d.map((p) => p.cum))).toBe(Math.max(...pts.map((p) => p.cum)))
+    expect(Math.min(...d.map((p) => p.cum))).toBe(Math.min(...pts.map((p) => p.cum)))
+    expect(d.map((p) => p.n)).toEqual([...d.map((p) => p.n)].sort((a, b) => a - b))
+    expect(downsampleEquity(pts.slice(0, 50), 400)).toHaveLength(50)
+  })
+  it('столбики: дни → недели (с понедельника) → месяцы, сумма сохраняется', () => {
+    const days = Array.from({ length: 400 }, (_, i) => ({ date: new Date(Date.UTC(2025, 0, 1 + i)).toISOString().slice(0, 10), pnl: 10, count: 1 }))
+    expect(pnlBars(days.slice(0, 100)).unit).toBe('day')
+    const w = pnlBars(days.slice(0, 300))
+    expect(w.unit).toBe('week')
+    expect(w.bars[0].date).toBe('2024-12-30') // 1 янв 2025 — среда, неделя с понедельника 30 дек
+    expect(w.bars.reduce((a, b) => a + b.pnl, 0)).toBe(3000)
+    const m = pnlBars(days, 50)
+    expect(m.unit).toBe('month')
+    expect(m.bars[0]).toEqual({ date: '2025-01-01', pnl: 310, count: 31 })
+    expect(m.bars.reduce((a, b) => a + b.count, 0)).toBe(400)
+  })
+})

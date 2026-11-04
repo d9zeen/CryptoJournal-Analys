@@ -237,3 +237,54 @@ export function byHour(closed: ClosedTrade[], timeZone: string): Group<number>[]
   const groups = groupBy(closed, (t) => [zonedParts(t.entry_at, timeZone).hour])
   return Array.from({ length: 24 }, (_, h) => groups.find((g) => g.key === h) ?? finish([makeGroup(h)])[0])
 }
+
+/**
+ * Прореживание кривой PnL для графика: не больше ~max точек, но пики и провалы сохраняются
+ * (в каждой «корзине» берём минимум и максимум), первая и последняя точки — всегда.
+ */
+export function downsampleEquity(points: EquityPoint[], max = 400): EquityPoint[] {
+  if (points.length <= max) return points
+  const size = Math.ceil((points.length - 2) / Math.max(1, Math.floor((max - 2) / 2)))
+  const out: EquityPoint[] = [points[0]]
+  for (let i = 1; i < points.length - 1; i += size) {
+    const chunk = points.slice(i, Math.min(i + size, points.length - 1))
+    let lo = chunk[0]
+    let hi = chunk[0]
+    for (const p of chunk) {
+      if (p.cum < lo.cum) lo = p
+      if (p.cum > hi.cum) hi = p
+    }
+    if (lo === hi) out.push(lo)
+    else out.push(...(lo.n < hi.n ? [lo, hi] : [hi, lo]))
+  }
+  out.push(points[points.length - 1])
+  return out
+}
+
+export type BarUnit = 'day' | 'week' | 'month'
+
+/** Понедельник недели для даты YYYY-MM-DD */
+function weekStart(date: string): string {
+  const d = new Date(`${date}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7))
+  return d.toISOString().slice(0, 10)
+}
+
+/** Если дней слишком много для графика — складываем по неделям, а если и их много — по месяцам. */
+export function pnlBars(days: DayPnl[], maxBars = 120): { unit: BarUnit; bars: DayPnl[] } {
+  if (days.length <= maxBars) return { unit: 'day', bars: days }
+  const group = (keyOf: (d: string) => string) => {
+    const map = new Map<string, DayPnl>()
+    for (const d of days) {
+      const key = keyOf(d.date)
+      const b = map.get(key) ?? { date: key, pnl: 0, count: 0 }
+      b.pnl += d.pnl
+      b.count += d.count
+      map.set(key, b)
+    }
+    return [...map.values()].sort((a, b) => a.date.localeCompare(b.date))
+  }
+  const weeks = group(weekStart)
+  if (weeks.length <= maxBars) return { unit: 'week', bars: weeks }
+  return { unit: 'month', bars: group((d) => `${d.slice(0, 7)}-01`) }
+}
