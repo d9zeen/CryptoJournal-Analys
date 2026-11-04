@@ -44,7 +44,7 @@ jobs:
           VITE_SUPABASE_ANON_KEY: sb_publishable_b-HoCt2aJnh-PSAlMxrEsw_U8nbSs0i
       # GitHub Pages не умеет SPA-фолбэк: прямые ссылки (/trades/123) отдаём через 404.html = index.html
       - run: cp dist/index.html dist/404.html
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
