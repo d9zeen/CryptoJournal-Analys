@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { fmt, useT } from '@/i18n'
 import { useTrades } from './api'
@@ -13,6 +13,10 @@ import { Alert } from '@/components/ui/Alert'
 import { EXCHANGES, exchangeName } from '@/lib/exchanges'
 import { formatDateTime, formatPnl, formatPrice, formatR, formatUsd, pnlClass } from '@/lib/format'
 import type { TradeWithTags } from '@/types/db'
+import { useMediaQuery } from '@/lib/useMediaQuery'
+
+/** Сколько сделок рисуем за раз: тысячи строк сразу тормозят браузер */
+const PAGE = 100
 
 export function TradesPage() {
   const t = useT()
@@ -30,6 +34,10 @@ export function TradesPage() {
   const { data: usage } = useUsage()
 
   const filtered = useMemo(() => applyFilters(trades ?? [], filters), [trades, filters])
+  const [shown, setShown] = useState(PAGE)
+  useEffect(() => setShown(PAGE), [preset, custom, filters])
+  const visible = filtered.slice(0, shown)
+  const desktop = useMediaQuery('(min-width: 768px)')
   const setupName = useMemo(() => new Map(setups.map((s) => [s.id, s.name])), [setups])
   const closed = filtered.filter((tr) => tr.pnl !== null)
   const openCount = filtered.length - closed.length
@@ -140,53 +148,60 @@ export function TradesPage() {
             </span>
           </div>
 
-          {/* Таблица на десктопе */}
-          <div className="hidden overflow-x-auto rounded-xl border border-border md:block">
-            <table className="w-full text-sm">
-              <thead className="bg-surface text-left text-muted">
-                <tr>
-                  {[t.trades.col.date, t.trades.col.symbol, t.trades.col.exchange, t.trades.col.side, t.trades.col.size, t.trades.col.prices, t.trades.col.setup].map((h) => (
-                    <th key={h} className="px-4 py-3 font-normal">
-                      {h}
-                    </th>
-                  ))}
-                  <th className="px-4 py-3 text-right font-normal">{t.trades.col.pnl}</th>
-                  <th className="px-4 py-3 text-right font-normal">{t.trades.col.r}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((tr) => (
-                  <tr key={tr.id} onClick={() => navigate(`/trades/${tr.id}`)} className="cursor-pointer border-t border-border hover:bg-surface">
-                    <td className="whitespace-nowrap px-4 py-3 text-muted">{formatDateTime(tr.entry_at)}</td>
-                    <td className="px-4 py-3 font-medium">
-                      <Link to={`/trades/${tr.id}`} onClick={(e) => e.stopPropagation()} className="hover:underline">
-                        {tr.symbol}
-                      </Link>
-                      <ShotsBadge trade={tr} />
-                    </td>
-                    <td className="px-4 py-3 text-muted">{exchangeName(tr.exchange, t.exchange.other)}</td>
-                    <td className="px-4 py-3">
-                      <SideBadge side={tr.side} />
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">{formatUsd(tr.size_usd)}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-muted">
-                      {formatPrice(tr.entry_price)} → {tr.exit_price !== null ? formatPrice(tr.exit_price) : <OpenBadge />}
-                    </td>
-                    <td className="px-4 py-3 text-muted">{tr.setup_id ? setupName.get(tr.setup_id) : '—'}</td>
-                    <td className={`whitespace-nowrap px-4 py-3 text-right font-medium ${pnlClass(tr.pnl)}`}>{formatPnl(tr.pnl)}</td>
-                    <td className={`whitespace-nowrap px-4 py-3 text-right ${pnlClass(tr.r_multiple)}`}>{formatR(tr.r_multiple)}</td>
+          {/* Таблица на десктопе, карточки на телефоне — рисуем только одно из двух */}
+          {desktop ? (
+            <div className="overflow-x-auto rounded-xl border border-border">
+              <table className="w-full text-sm">
+                <thead className="bg-surface text-left text-muted">
+                  <tr>
+                    {[t.trades.col.date, t.trades.col.symbol, t.trades.col.exchange, t.trades.col.side, t.trades.col.size, t.trades.col.prices, t.trades.col.setup].map((h) => (
+                      <th key={h} className="px-4 py-3 font-normal">
+                        {h}
+                      </th>
+                    ))}
+                    <th className="px-4 py-3 text-right font-normal">{t.trades.col.pnl}</th>
+                    <th className="px-4 py-3 text-right font-normal">{t.trades.col.r}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {visible.map((tr) => (
+                    <tr key={tr.id} onClick={() => navigate(`/trades/${tr.id}`)} className="cursor-pointer border-t border-border hover:bg-surface">
+                      <td className="whitespace-nowrap px-4 py-3 text-muted">{formatDateTime(tr.entry_at)}</td>
+                      <td className="px-4 py-3 font-medium">
+                        <Link to={`/trades/${tr.id}`} onClick={(e) => e.stopPropagation()} className="hover:underline">
+                          {tr.symbol}
+                        </Link>
+                        <ShotsBadge trade={tr} />
+                      </td>
+                      <td className="px-4 py-3 text-muted">{exchangeName(tr.exchange, t.exchange.other)}</td>
+                      <td className="px-4 py-3">
+                        <SideBadge side={tr.side} />
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3">{formatUsd(tr.size_usd)}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-muted">
+                        {formatPrice(tr.entry_price)} → {tr.exit_price !== null ? formatPrice(tr.exit_price) : <OpenBadge />}
+                      </td>
+                      <td className="px-4 py-3 text-muted">{tr.setup_id ? setupName.get(tr.setup_id) : '—'}</td>
+                      <td className={`whitespace-nowrap px-4 py-3 text-right font-medium ${pnlClass(tr.pnl)}`}>{formatPnl(tr.pnl)}</td>
+                      <td className={`whitespace-nowrap px-4 py-3 text-right ${pnlClass(tr.r_multiple)}`}>{formatR(tr.r_multiple)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {visible.map((tr) => (
+                <TradeCard key={tr.id} trade={tr} setupName={tr.setup_id ? setupName.get(tr.setup_id) : undefined} />
+              ))}
+            </ul>
+          )}
 
-          {/* Карточки на телефоне */}
-          <ul className="flex flex-col gap-2 md:hidden">
-            {filtered.map((tr) => (
-              <TradeCard key={tr.id} trade={tr} setupName={tr.setup_id ? setupName.get(tr.setup_id) : undefined} />
-            ))}
-          </ul>
+          {filtered.length > shown && (
+            <Button variant="secondary" className="self-center" onClick={() => setShown((n) => n + PAGE)}>
+              {fmt(t.trades.showMore, { n: Math.min(PAGE, filtered.length - shown), left: filtered.length - shown })}
+            </Button>
+          )}
         </>
       )}
     </div>

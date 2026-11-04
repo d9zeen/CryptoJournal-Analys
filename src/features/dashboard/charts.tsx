@@ -6,7 +6,7 @@ import type { ReactNode } from 'react'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { fmt, useT } from '@/i18n'
 import { formatDateTime, formatDay, formatDayShort, formatPnl, formatUsdShort, pnlClass } from '@/lib/format'
-import type { DayPnl, EquityPoint } from '@/lib/calc/stats'
+import type { BarUnit, DayPnl, EquityPoint } from '@/lib/calc/stats'
 
 const C = {
   profit: 'var(--color-profit)',
@@ -70,13 +70,22 @@ export function EquityChart({ points }: { points: EquityPoint[] }) {
   )
 }
 
-export function DailyPnlChart({ days }: { days: DayPnl[] }) {
+/** «2026-11-01» → подпись оси и подсказки в зависимости от того, что в столбике: день, неделя или месяц */
+function barLabels(unit: BarUnit, t: ReturnType<typeof useT>) {
+  const month = (d: string) => `${d.slice(5, 7)}.${d.slice(0, 4)}`
+  if (unit === 'month') return { tick: month, title: (d: string) => fmt(t.dashboard.charts.monthOf, { m: month(d) }) }
+  if (unit === 'week') return { tick: formatDayShort, title: (d: string) => fmt(t.dashboard.charts.weekOf, { d: formatDay(d) }) }
+  return { tick: formatDayShort, title: formatDay }
+}
+
+export function DailyPnlChart({ days, unit = 'day' }: { days: DayPnl[]; unit?: BarUnit }) {
   const t = useT()
+  const labels = barLabels(unit, t)
   return (
     <ResponsiveContainer width="100%" height={HEIGHT}>
       <BarChart data={days} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
         <CartesianGrid stroke={C.grid} strokeDasharray="3 3" vertical={false} />
-        <XAxis dataKey="date" {...axisProps} tickFormatter={formatDayShort} minTickGap={16} />
+        <XAxis dataKey="date" {...axisProps} tickFormatter={labels.tick} minTickGap={16} />
         <YAxis {...axisProps} width={56} tickFormatter={formatUsdShort} />
         <ReferenceLine y={0} stroke={C.muted} strokeOpacity={0.5} />
         <Tooltip
@@ -86,7 +95,7 @@ export function DailyPnlChart({ days }: { days: DayPnl[] }) {
             if (!d) return null
             return (
               <Tip>
-                <div className="text-muted">{formatDay(d.date)}</div>
+                <div className="text-muted">{labels.title(d.date)}</div>
                 <div className={`mt-0.5 font-medium ${pnlClass(d.pnl)}`}>{formatPnl(d.pnl)}</div>
                 <div className="text-muted">{fmt(t.dashboard.tooltipTrades, { n: d.count })}</div>
               </Tip>

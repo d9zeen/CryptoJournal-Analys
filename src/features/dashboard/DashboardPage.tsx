@@ -18,7 +18,9 @@ import {
   bySymbol,
   byWeekday,
   closedTrades,
+  downsampleEquity,
   equityCurve,
+  pnlBars,
   pnlByDay,
   summarize,
   topMistakes,
@@ -53,8 +55,9 @@ export function DashboardPage() {
       openCount: all.filter((tr) => tr.exit_at === null).length,
       closed,
       summary: summarize(closed, profile?.starting_balance),
-      equity: equityCurve(closed),
-      days: pnlByDay(closed, tz),
+      // для графиков — не больше нескольких сотен точек: иначе браузер тормозит на тысячах сделок
+      equity: downsampleEquity(equityCurve(closed)),
+      bars: pnlBars(pnlByDay(closed, tz)),
       side: bySide(closed),
       setups: bySetup(closed),
       emotions: byEmotion(closed),
@@ -119,8 +122,8 @@ export function DashboardPage() {
             <ChartCard title={t.dashboard.charts.equity} hint={t.dashboard.charts.equityHint}>
               <EquityChart points={stats.equity} />
             </ChartCard>
-            <ChartCard title={t.dashboard.charts.daily}>
-              <DailyPnlChart days={stats.days} />
+            <ChartCard title={stats.bars.unit === 'month' ? t.dashboard.charts.monthly : stats.bars.unit === 'week' ? t.dashboard.charts.weekly : t.dashboard.charts.daily}>
+              <DailyPnlChart days={stats.bars.bars} unit={stats.bars.unit} />
             </ChartCard>
           </div>
 

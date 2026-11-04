@@ -8,20 +8,42 @@ const SELECT = '*, trade_mistakes(tag_id), trade_screenshots(id, trade_id, path,
 
 export type DateRange = { from: string | null; to: string | null }
 
+/** Сколько строк забираем одним запросом. Supabase по умолчанию отдаёт не больше 1000 за раз. */
+const PAGE = 1000
+
+/**
+ * Все сделки за период (по дате входа), пачками по 1000 — сколько бы их ни было.
+ * Общее число узнаём у базы (count), поэтому не зависим от её лимита строк на запрос.
+ */
+export async function fetchTradesPaged(range: DateRange, ascending = false): Promise<TradeWithTags[]> {
+  const all: TradeWithTags[] = []
+  let total: number | null = null
+  for (let from = 0; ; from += PAGE) {
+    let q = supabase
+      .from('trades')
+      // общее число считаем один раз — на первой пачке
+      .select(SELECT, from === 0 ? { count: 'exact' } : undefined)
+      .order('entry_at', { ascending })
+      .order('id')
+      .range(from, from + PAGE - 1)
+    if (range.from) q = q.gte('entry_at', range.from)
+    if (range.to) q = q.lt('entry_at', range.to)
+    const { data, error, count } = await q
+    if (error) throw error
+    if (from === 0) total = count
+    all.push(...(data as TradeWithTags[]))
+    // конец: база сказала, сколько всего, и мы всё забрали — или пришла неполная пачка
+    if (data.length === 0 || (total !== null && all.length >= total) || (total === null && data.length < PAGE)) return all
+  }
+}
+
 /** Сделки за период (по дате входа). Остальные фильтры — на клиенте. */
 export function useTrades(range: DateRange) {
   const { user } = useAuth()
   return useQuery({
     queryKey: ['trades', user?.id, range.from, range.to],
     enabled: Boolean(user),
-    queryFn: async () => {
-      let q = supabase.from('trades').select(SELECT).order('entry_at', { ascending: false }).limit(5000)
-      if (range.from) q = q.gte('entry_at', range.from)
-      if (range.to) q = q.lt('entry_at', range.to)
-      const { data, error } = await q
-      if (error) throw error
-      return data as TradeWithTags[]
-    },
+    queryFn: () => fetchTradesPaged(range),
   })
 }
 
