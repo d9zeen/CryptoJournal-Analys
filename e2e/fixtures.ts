@@ -15,6 +15,8 @@ export type FakeDb = {
   factors: Row[]
   aal: 'aal1' | 'aal2'
   usage: { plan: string; trades_created: number; trade_limit: number | null }
+  /** названия сетапов / эмоций / тегов (по умолчанию — один «Пробой уровня») */
+  listNames?: string[]
 }
 
 export function makeTrade(i: number, over: Row = {}): Row {
@@ -57,7 +59,8 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
     if (path.endsWith('/rpc/get_my_usage')) return json({ ...db.usage, month: '2026-11-01' })
     if (path === '/rest/v1/profiles') return json({ id: UID, display_name: null, plan: db.usage.plan, plan_until: null, timezone: 'Europe/Moscow', starting_balance: 5000, locale: 'ru' })
     if (['/rest/v1/setups', '/rest/v1/emotions', '/rest/v1/mistake_tags'].includes(path)) {
-      return json([{ id: 's1', user_id: UID, name: 'Пробой уровня', archived: false, sort_order: 1, created_at: '' }])
+      const names = db.listNames ?? ['Пробой уровня']
+      return json(names.map((name, i) => ({ id: i === 0 ? 's1' : `s${i + 1}`, user_id: UID, name, archived: false, sort_order: i, created_at: '' })))
     }
     if (path === '/rest/v1/trades') {
       if (method === 'GET') {
