@@ -18,8 +18,10 @@ export function formatPnl(n: number | null | undefined): string {
 /** Цена: до 8 знаков, без лишних нулей. */
 export function formatPrice(n: number | null | undefined): string {
   if (n === null || n === undefined) return '—'
-  const digits = n >= 1000 ? 2 : n >= 1 ? 4 : 8
-  return new Intl.NumberFormat(LOCALE, { maximumFractionDigits: digits }).format(n)
+  const abs = Math.abs(n)
+  // дешёвые монеты (PEPE, SHIB): считаем значащие цифры, а не знаки после запятой — иначе 0,0000012345 → 0,00000123
+  if (abs > 0 && abs < 1) return new Intl.NumberFormat(LOCALE, { maximumSignificantDigits: 6 }).format(n)
+  return new Intl.NumberFormat(LOCALE, { maximumFractionDigits: abs >= 1000 ? 2 : 4 }).format(n)
 }
 
 export function formatNumber(n: number | null | undefined, maxDigits = 2): string {

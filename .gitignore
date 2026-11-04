@@ -14,3 +14,7 @@ dist/
 .vite/
 coverage/
 supabase/.temp/
+
+# сквозные тесты
+test-results/
+playwright-report/

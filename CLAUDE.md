@@ -27,6 +27,7 @@ npm run build      # проверка типов + сборка в dist/
 npm run typecheck  # только проверка типов
 npm test           # тесты формул и логики (Vitest)
 npm run test:db    # миграции + тесты RLS на локальном Postgres (нужен psql; PGPASSWORD при необходимости)
+npm run test:e2e   # сквозные тесты в браузере (Playwright): боевая сборка + фейковый Supabase (e2e/fixtures.ts)
 ```
 
 Node 22 (см. `.node-version`).
@@ -55,7 +56,10 @@ src/
   layout/AppLayout.tsx шапка + нижнее меню на телефоне
   features/<раздел>/   auth, dashboard, trades, import, settings
 supabase/migrations/   SQL-миграции, нумерация 0001_..., 0002_...
-supabase/tests/        заглушка Supabase для чистого Postgres + тесты RLS (rls_test.sql)
+supabase/tests/        заглушка Supabase для чистого Postgres + тесты RLS (rls_test.sql);
+                       live_check.sql — проверка защиты на НАСТОЯЩЕЙ базе (всё откатывает)
+e2e/                   сквозные тесты: вход, 2FA, дашборд, форма сделки, импорт, настройки, iframe; без ошибок JS и CSP
+.github/workflows/     pages.yml — выкладка сайта; ci.yml — все тесты на каждое изменение (Postgres в CI для RLS)
 docs/PLAN.md           решения, формулы, схема БД, этапы
 docs/ADMIN.md          SQL для владельца: выдать/снять Pro, список пользователей, сброс лимита
 docs/SECURITY.md       вся защита (база, сайт, сборка) + что владелец включает руками

@@ -4,8 +4,9 @@ import { parseDecimal, toInput } from './parse'
 describe('parseDecimal', () => {
   it.each([
     ['0,5', 0.5], ['0.5', 0.5], ['1 234,56', 1234.56], ['-12.5', -12.5], ['  42 ', 42], ['.5', 0.5],
+    ['1,234.5', 1234.5], ['1.234,5', 1234.5], ['12,345,678.9', 12345678.9], ['−3,5', -3.5], ['1\u00a0234', 1234],
   ])('%s → %s', (input, expected) => expect(parseDecimal(input)).toBe(expected))
-  it.each(['', 'abc', '1,2,3', '--1', '1.2.3'])('%s → null', (input) => expect(parseDecimal(input)).toBeNull())
+  it.each(['', 'abc', '1,2,3', '--1', '1.2.3', '1,2.3,4'])('%s → null', (input) => expect(parseDecimal(input)).toBeNull())
 })
 
 describe('toInput', () => {
