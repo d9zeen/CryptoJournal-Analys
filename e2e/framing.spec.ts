@@ -19,6 +19,18 @@ test('сайт не работает внутри чужой страницы (i
   await expect(page.frameLocator('iframe').getByRole('heading', { name: 'Вход' })).toHaveCount(0)
 })
 
+for (const sandbox of ['allow-scripts allow-same-origin allow-forms', 'allow-forms allow-popups']) {
+  test(`обход через «песочницу» iframe (sandbox="${sandbox}") не помогает`, async ({ page, db, baseURL }) => {
+    await fakeSupabase(page, db, { signedIn: false })
+    const evil = baseURL!.replace('127.0.0.1', 'localhost').replace(/CryptoJournal-Analys\/$/, 'evil2.html')
+    await page.route(evil, (r) => r.fulfill({ contentType: 'text/html', body: `<iframe sandbox="${sandbox}" src="${baseURL}login" width="800" height="600"></iframe>` }))
+    await page.goto(evil)
+    await page.waitForTimeout(2000)
+    await expect(page.frameLocator('iframe').getByRole('heading', { name: 'Вход' })).toHaveCount(0)
+    await expect(page.frameLocator('iframe').getByLabel('Пароль')).toHaveCount(0)
+  })
+}
+
 test('контроль: без рамки та же страница показывает вход', async ({ page, db }) => {
   await fakeSupabase(page, db, { signedIn: false })
   await page.goto('login')
