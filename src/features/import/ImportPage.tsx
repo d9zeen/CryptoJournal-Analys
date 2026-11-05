@@ -19,6 +19,7 @@ import { parseCsv, type CsvTable } from '@/lib/import/csv'
 import { detectExchange } from '@/lib/import/detect'
 import { stableHash } from '@/lib/import/values'
 import { fetchExistingIds, useDeleteImport, useImports, useRunImport, type RunImportResult } from './api'
+import { ConnectionsCard } from '@/features/connections/ConnectionsCard'
 
 const MAX_BYTES = 5 * 1024 * 1024
 const PREVIEW_ROWS = 100
@@ -146,8 +147,9 @@ export function ImportPage() {
       {run.error && <Alert tone="error">{dbErrorMessage(run.error, t)}</Alert>}
 
       <div className="grid gap-4 xl:grid-cols-[400px_minmax(0,1fr)] xl:items-start">
-        {/* Слева: файл, подсказки, история */}
+        {/* Слева: подключения бирж, файл, подсказки, история */}
         <div className="flex flex-col gap-4">
+          <ConnectionsCard />
           <Card className="flex flex-col gap-4 !p-4">
             <label
               className={`flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-dashed px-4 py-10 text-center transition-colors ${dragging ? 'border-primary bg-primary/10' : 'border-border hover:border-muted'}`}

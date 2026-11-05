@@ -13,6 +13,7 @@ export const IMPORT_PARSERS: ImportParser[] = [
   makeParser('bingx', 'opening'),
   makeParser('bitget', 'opening'),
   makeParser('mexc', 'opening'),
+  makeParser('hyperliquid', 'opening'),
   makeParser('other', 'opening'),
 ]
 

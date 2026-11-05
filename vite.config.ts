@@ -8,7 +8,7 @@ import { fileURLToPath, URL } from 'node:url'
  * Защита страницы в браузере (только в боевой сборке — в dev мешала бы горячей перезагрузке).
  * GitHub Pages не умеет отдавать свои заголовки, поэтому политику кладём в <meta>.
  * CSP: скрипты — только наши файлы (никаких чужих скриптов и inline-кода),
- * сеть — только наш сайт и наш Supabase, картинки — наши, Supabase и data:/blob: (QR-код, превью).
+ * сеть — только наш сайт, наш Supabase и публичный API Hyperliquid (история сделок по адресу кошелька), картинки — наши, Supabase и data:/blob: (QR-код, превью).
  */
 function securityMeta(supabaseUrl: string): Plugin {
   const origin = supabaseUrl ? new URL(supabaseUrl).origin : ''
@@ -18,7 +18,7 @@ function securityMeta(supabaseUrl: string): Plugin {
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
     `img-src 'self' data: blob: ${origin}`,
-    `connect-src 'self' ${origin} ${wss}`,
+    `connect-src 'self' ${origin} ${wss} https://api.hyperliquid.xyz`,
     "font-src 'self'",
     "object-src 'none'",
     "base-uri 'self'",
@@ -55,7 +55,7 @@ export default defineConfig(({ mode }) => {
     },
     test: {
       // тесты логики — только в src; сквозные (e2e/) запускает Playwright: npm run test:e2e
-      include: ['src/**/*.test.ts'],
+      include: ['src/**/*.test.ts', 'supabase/functions/**/*.test.ts'],
     },
   }
 })

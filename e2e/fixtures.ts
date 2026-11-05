@@ -21,6 +21,11 @@ export type FakeDb = {
   isAdmin?: boolean
   adminUsers?: Row[]
   adminCalls?: { fn: string; body: unknown }[]
+  /** подключения бирж; вызовы функций подключений и серверной функции exchange-proxy */
+  connections?: Row[]
+  connCalls?: { fn: string; body: Record<string, unknown> }[]
+  /** ответ Bybit на проверку ключа: 1 — только чтение */
+  bybitReadOnly?: number
 }
 
 export function makeTrade(i: number, over: Row = {}): Row {
@@ -66,6 +71,33 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
     if (path.endsWith('/rpc/admin_set_plan') || path.endsWith('/rpc/admin_reset_usage')) {
       ;(db.adminCalls ??= []).push({ fn: path.split('/').pop()!, body: body() })
       return route.fulfill({ status: 204 })
+    }
+    if (path === '/rest/v1/exchange_connections') return json(db.connections ?? [])
+    if (path.endsWith('_exchange_connection') || path === '/functions/v1/exchange-proxy') {
+      const b = (body() ?? {}) as Record<string, unknown>
+      const fn = path.split('/').pop()!
+      ;(db.connCalls ??= []).push({ fn, body: b })
+      const conns = (db.connections ??= [])
+      if (fn === 'add_exchange_connection') {
+        const id = `c${conns.length + 1}`
+        conns.push({ id, exchange: b.p_exchange, label: b.p_label, api_key: String(b.p_api_key).toLowerCase(), last_sync_at: null, cursor_at: null, last_error: null, created_at: '2026-11-05T10:00:00Z' })
+        return json(id)
+      }
+      if (fn === 'delete_exchange_connection') {
+        db.connections = conns.filter((c) => c.id !== b.p_id)
+        return route.fulfill({ status: 204 })
+      }
+      if (fn === 'touch_exchange_connection') {
+        const c = conns.find((x) => x.id === b.p_id)
+        if (c) Object.assign(c, { last_sync_at: new Date().toISOString(), cursor_at: b.p_cursor ?? c.cursor_at, last_error: b.p_error })
+        return route.fulfill({ status: 204 })
+      }
+      // exchange-proxy: ответы Bybit
+      const params = (b.params ?? {}) as Record<string, number | string>
+      if (b.path === '/v5/user/query-api') return json({ retCode: 0, retMsg: 'OK', result: { readOnly: db.bybitReadOnly ?? 1 } })
+      const recent = params.category === 'linear' && Number(params.endTime) > Date.now() - 7 * 86_400_000 && !params.cursor
+      const item = { symbol: 'ETHUSDT', orderId: 'bb-1', side: 'Buy', closedSize: '1', cumEntryValue: '3000', avgEntryPrice: '3000', cumExitValue: '2900', avgExitPrice: '2900', closedPnl: '98', leverage: '5', createdTime: String(Date.now() - 3_600_000), updatedTime: String(Date.now() - 3_600_000) }
+      return json({ retCode: 0, retMsg: 'OK', result: { list: recent ? [item] : [], nextPageCursor: '' } })
     }
     if (path === '/rest/v1/profiles') return json({ id: UID, display_name: null, plan: db.usage.plan, plan_until: null, timezone: 'Europe/Moscow', starting_balance: 5000, locale: 'ru' })
     if (['/rest/v1/setups', '/rest/v1/emotions', '/rest/v1/mistake_tags'].includes(path)) {

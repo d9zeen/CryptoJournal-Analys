@@ -4,6 +4,7 @@ import { useT } from '@/i18n'
 import { Logo, LogoMark } from '@/components/Logo'
 import { setTheme, useTheme } from '@/lib/theme'
 import { useIsAdmin } from '@/features/admin/api'
+import { useAutoSync } from '@/features/connections/api'
 
 function useNavItems() {
   const t = useT()
@@ -32,6 +33,7 @@ export function AppLayout() {
   const t = useT()
   const { user, signOut } = useAuth()
   const items = useNavItems()
+  useAutoSync() // подключённые биржи подтягивают сделки сами
 
   return (
     <div className="min-h-dvh pb-20 md:pb-0 md:pl-[72px]">
