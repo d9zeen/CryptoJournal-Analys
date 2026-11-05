@@ -282,3 +282,39 @@ describe('направление в истории исполнений: раз�
     expect(p.rows[0]).toMatchObject({ error: 'side', detail: '???' })
   })
 })
+
+describe('направление — только «Long» / «Short» (Bybit UTA Trade History)', () => {
+  const head = 'Market,Direction,Filled Qty,Filled Price,Trading Fee,feeCoin,Transaction Time(UTC+0),Order No.'
+  it('Long / Short = покупка / продажа, если так позиции сходятся', () => {
+    const csv = [head,
+      'BTCUSDT,Long,0.01,60000,0.33,USDT,2026-11-01 10:00:00,o1',
+      'BTCUSDT,Short,0.01,61000,0.3355,USDT,2026-11-01 12:00:00,o2',
+      'ETHUSDT,Short,1,3000,1.65,USDT,2026-11-02 10:00:00,o3',
+      'ETHUSDT,Long,1,2900,1.595,USDT,2026-11-02 12:00:00,o4',
+    ].join('\n')
+    const p = prepareImport(csv, bybitParser)
+    expect(p.sideFallback).toBe('longIsBuy')
+    const trades = p.rows.filter((r) => r.trade).map((r) => r.trade!)
+    expect(trades).toHaveLength(2)
+    expect(trades.find((t) => t.symbol === 'BTCUSDT')).toMatchObject({ side: 'long' })
+    expect(trades.find((t) => t.symbol === 'ETHUSDT')).toMatchObject({ side: 'short' })
+  })
+  it('по знаку объёма, если продажи записаны с минусом', () => {
+    const csv = [head,
+      'BTCUSDT,Long,0.01,60000,0.33,USDT,2026-11-01 10:00:00,o1',
+      'BTCUSDT,Long,-0.01,61000,0.3355,USDT,2026-11-01 12:00:00,o2',
+    ].join('\n')
+    const p = prepareImport(csv, bybitParser)
+    expect(p.sideFallback).toBe('qtySign')
+    expect(p.rows.filter((r) => r.trade)).toHaveLength(1)
+  })
+  it('если ни так, ни так позиции не сходятся — ничего не выдумываем', () => {
+    const csv = [head,
+      'BTCUSDT,Long,0.01,60000,0.33,USDT,2026-11-01 10:00:00,o1',
+      'BTCUSDT,Long,0.01,61000,0.3355,USDT,2026-11-01 12:00:00,o2',
+    ].join('\n')
+    const p = prepareImport(csv, bybitParser)
+    expect(p.sideFallback).toBeNull()
+    expect(p.rows.every((r) => r.error === 'side')).toBe(true)
+  })
+})

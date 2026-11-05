@@ -16,6 +16,8 @@ export type Prepared = {
   /** вид выгрузки: закрытые позиции или история исполнений */
   mode: ImportMode | null
   rows: ParsedRow[]
+  /** как понято направление, если в файле только «Long» / «Short» (null — как обычно) */
+  sideFallback: 'longIsBuy' | 'qtySign' | null
 }
 
 /** Разобрать текст файла. mapping / offset — ручные поправки пользователя (иначе автоопределение). */
@@ -33,8 +35,30 @@ export function prepareImport(
   const utcOffsetMinutes = overrides.utcOffsetMinutes ?? fromHeader ?? 0
   const missing = parser.missing(mapping)
   const mode = parser.mode(mapping)
-  const rows = missing.length ? [] : parser.parse(table, mapping, { utcOffsetMinutes, market: overrides.market ?? 'auto' })
-  return { table, mapping, utcOffsetMinutes, offsetDetected: fromHeader !== null, missing, mode, rows }
+  const base = { utcOffsetMinutes, market: overrides.market ?? 'auto' } as const
+  let rows = missing.length ? [] : parser.parse(table, mapping, base)
+  let sideFallback: Prepared['sideFallback'] = null
+  // История исполнений, где направление — просто «Long» / «Short»: пробуем понять его как покупку / продажу
+  // или по знаку объёма и берём вариант, при котором позиции собираются (открываются и закрываются в ноль)
+  if (mode === 'fills' && rows.length) {
+    const sideErrors = rows.filter((r) => r.error === 'side').length
+    if (sideErrors > rows.length / 2) {
+      let best = { trades: 0, open: Infinity }
+      for (const fb of ['qtySign', 'longIsBuy'] as const) {
+        const tryRows = parser.parse(table, mapping, { ...base, sideFallback: fb })
+        if (tryRows.filter((r) => r.error === 'side').length > tryRows.length * 0.1) continue
+        const trades = tryRows.filter((r) => r.trade).length
+        const open = tryRows.filter((r) => r.error === 'stillOpen').length
+        // позиций должно закрыться заметно больше, чем осталось открытыми
+        if (trades > 0 && trades >= open * 2 && trades > best.trades) {
+          best = { trades, open }
+          rows = tryRows
+          sideFallback = fb
+        }
+      }
+    }
+  }
+  return { table, mapping, utcOffsetMinutes, offsetDetected: fromHeader !== null, missing, mode, rows, sideFallback }
 }
 
 /**
