@@ -44,11 +44,10 @@ export function prepareImport(
     const sideErrors = rows.filter((r) => r.error === 'side').length
     if (sideErrors > rows.length / 2) {
       let best = { trades: 0, open: Infinity }
+      let fallbackRows: ParsedRow[] | null = null
       // Long / Short как сторона позиции + закрытый PnL у каждого исполнения — самый надёжный вариант (Bybit UTA)
       const order: SideFallback[] = mapping.pnl >= 0 ? ['positionSide', 'qtySign', 'longIsBuy'] : ['qtySign', 'longIsBuy', 'positionSide']
       for (const fb of order) {
-        // без PnL сторона позиции угадывается — берём, только если другие способы не сработали
-        if (fb === 'positionSide' && mapping.pnl < 0 && sideFallback) continue
         const tryRows = parser.parse(table, mapping, { ...base, sideFallback: fb })
         if (tryRows.filter((r) => r.error === 'side').length > tryRows.length * 0.1) continue
         const trades = tryRows.filter((r) => r.trade).length
@@ -60,6 +59,13 @@ export function prepareImport(
           sideFallback = fb
           if (fb === 'positionSide') break // по PnL открытие / закрытие известно точно — дальше не ищем
         }
+        if (fb === 'positionSide') fallbackRows = tryRows
+      }
+      // ни один способ не собрал сделки: показываем разбор «Long / Short = сторона позиции» —
+      // так видна настоящая причина (дата, цена, объём…), а не тысячи «непонятное направление»
+      if (!sideFallback && fallbackRows) {
+        rows = fallbackRows
+        sideFallback = 'positionSide'
       }
     }
   }

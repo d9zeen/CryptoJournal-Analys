@@ -56,6 +56,59 @@ type Position = {
 
 const EPS = 1e-9
 
+/**
+ * Long / Short без PnL и без «открытие / закрытие»: какие исполнения закрывают позицию?
+ * Перебираем варианты (лучевой поиск) и берём тот, где позиция чаще всего возвращается ровно в ноль:
+ * случайно объёмы в ноль не сходятся, поэтому это надёжный признак настоящих закрытий.
+ */
+function guessCloses(fills: Fill[], keyOf: (f: Fill) => string): Set<Fill> {
+  const byKey = new Map<string, Fill[]>()
+  for (const f of fills) {
+    const k = keyOf(f)
+    const list = byKey.get(k)
+    if (list) list.push(f)
+    else byKey.set(k, [f])
+  }
+  const closes = new Set<Fill>()
+  const BEAM = 96
+  type State = { pos: number; zeros: number; parent: number; close: boolean }
+  for (const list of byKey.values()) {
+    const steps: State[][] = []
+    let cur: State[] = [{ pos: 0, zeros: 0, parent: -1, close: false }]
+    for (const f of list) {
+      const next = new Map<string, State>()
+      const add = (st: State) => {
+        const k = st.pos.toPrecision(10)
+        const old = next.get(k)
+        if (!old || st.zeros > old.zeros) next.set(k, st)
+      }
+      cur.forEach((st, i) => {
+        add({ pos: st.pos + f.qty, zeros: st.zeros, parent: i, close: false })
+        if (st.pos > EPS && f.qty <= st.pos * (1 + 1e-6)) {
+          const left = st.pos - f.qty
+          const flat = left <= st.pos * 1e-6
+          add({ pos: flat ? 0 : left, zeros: st.zeros + (flat ? 1 : 0), parent: i, close: true })
+        }
+      })
+      // при равенстве — вариант, где позиция больше: обычно сначала набирают позицию, потом закрывают
+      cur = [...next.values()].sort((a, b) => b.zeros - a.zeros || b.pos - a.pos).slice(0, BEAM)
+      steps.push(cur)
+    }
+    // лучший конец: больше закрытий в ноль, при равенстве — позиция в конце в нуле
+    let idx = 0
+    cur.forEach((st, i) => {
+      const best = cur[idx]
+      if (st.zeros > best.zeros || (st.zeros === best.zeros && st.pos === 0 && best.pos !== 0)) idx = i
+    })
+    for (let s = steps.length - 1; s >= 0 && idx >= 0; s--) {
+      const st = steps[s][idx]
+      if (st.close) closes.add(list[s])
+      idx = st.parent
+    }
+  }
+  return closes
+}
+
 export function parseFills(table: CsvTable, mapping: ColumnMapping<string>, { utcOffsetMinutes, market: marketChoice, sideFallback }: ParseOptions, exchange: string): ParsedRow[] {
   const has = (f: ImportField) => mapping[f] >= 0
   const out: ParsedRow[] = []
@@ -76,10 +129,12 @@ export function parseFills(table: CsvTable, mapping: ColumnMapping<string>, { ut
       sideFallback === 'qtySign' ? (qtyRaw ? (Math.sign(qtyRaw) as 1 | -1) : null) : sideFallback === 'longIsBuy' ? bareSide(cell('side')) : posDir
     const sign = posDir ?? fillSign(cell('side')) ?? (has('sideHint') ? fillSign(`${cell('side') ?? ''} ${cell('sideHint') ?? ''}`) : null) ?? fallback
     if (!sign) return fail('side', [cell('side'), has('sideHint') ? cell('sideHint') : undefined].filter(Boolean).join(' / '))
-    const price = n('price')
-    if (price === null || price <= 0) return fail('price')
     const market = marketChoice === 'auto' ? marketOf(symbol) : marketChoice
     const value = n('value')
+    // цены нет (рыночный ордер, «--») — считаем из суммы и объёма
+    let price = n('price')
+    if ((price === null || price <= 0) && value && qtyRaw) price = market === 'inverse' ? Math.abs(qtyRaw / value) : Math.abs(value / qtyRaw)
+    if (price === null || !(price > 0)) return fail('price', cell('price'))
     const qty = Math.abs(qtyRaw ?? (value !== null ? (market === 'inverse' ? value : value / price) : 0))
     if (!(qty > 0)) return fail('size')
     const at = parseDateCell(cell('closeTime'), utcOffsetMinutes)
@@ -169,10 +224,11 @@ export function parseFills(table: CsvTable, mapping: ColumnMapping<string>, { ut
   const posKey = (f: Fill) => (f.posDir ? `${f.symbol}|${f.posDir}` : f.symbol)
   // PnL исполнения — не ноль и не просто комиссия (некоторые биржи пишут в PnL открытия минус комиссию)
   const realized = (f: Fill) => f.pnl !== null && Math.abs(f.pnl) > 1e-9 && Math.abs(Math.abs(f.pnl) - f.fee) > 1e-6 * Math.max(1, f.fee)
+  const guessed = sideFallback === 'positionSide' && !byPnl ? guessCloses(fills.filter((f) => f.posDir), posKey) : null
   const isClose = (f: Fill, p: Position | undefined): boolean => {
     if (!p) return false
     if (byPnl) return realized(f)
-    return f.qty <= p.open * (1 + 1e-6)
+    return guessed?.has(f) ?? false
   }
 
   for (const f of fills) {
