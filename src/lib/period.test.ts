@@ -28,3 +28,33 @@ describe('rangeFor', () => {
     expect(rangeFor('all', empty)).toEqual({ from: null, to: null })
   })
 })
+
+import { daysInRange, monthGrid, quickRange, ymd } from './period'
+
+describe('календарь своего диапазона', () => {
+  const now = new Date(2026, 10, 5, 15, 0) // чт 5 ноября 2026
+  it('быстрые варианты', () => {
+    expect(quickRange('today', now)).toEqual({ from: '2026-11-05', to: '2026-11-05' })
+    expect(quickRange('yesterday', now)).toEqual({ from: '2026-11-04', to: '2026-11-04' })
+    expect(quickRange('last7', now)).toEqual({ from: '2026-10-30', to: '2026-11-05' })
+    expect(quickRange('last30', now)).toEqual({ from: '2026-10-07', to: '2026-11-05' })
+    expect(quickRange('thisMonth', now)).toEqual({ from: '2026-11-01', to: '2026-11-05' })
+    expect(quickRange('lastMonth', now)).toEqual({ from: '2026-10-01', to: '2026-10-31' })
+    expect(quickRange('thisYear', now)).toEqual({ from: '2026-01-01', to: '2026-11-05' })
+  })
+  it('прошлый месяц в январе — декабрь прошлого года', () => {
+    expect(quickRange('lastMonth', new Date(2027, 0, 10))).toEqual({ from: '2026-12-01', to: '2026-12-31' })
+  })
+  it('сетка месяца: 42 дня, с понедельника', () => {
+    const g = monthGrid(2026, 10) // ноябрь 2026, 1-е — воскресенье
+    expect(g).toHaveLength(42)
+    expect(ymd(g[0])).toBe('2026-10-26')
+    expect(g[0].getDay()).toBe(1)
+    expect(ymd(g[6])).toBe('2026-11-01')
+  })
+  it('дней в диапазоне — включительно', () => {
+    expect(daysInRange({ from: '2026-10-01', to: '2026-10-31' })).toBe(31)
+    expect(daysInRange({ from: '2026-11-05', to: '2026-11-05' })).toBe(1)
+    expect(daysInRange({ from: '', to: '' })).toBe(0)
+  })
+})

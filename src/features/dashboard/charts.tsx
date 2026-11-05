@@ -168,39 +168,3 @@ export function DailyPnlChart({ days, unit = 'day' }: { days: DayPnl[]; unit?: B
     </ResponsiveContainer>
   )
 }
-
-export type Bucket = { label: string; pnl: number; count: number }
-
-/** Столбики PnL по корзинам (дни недели, часы) */
-export function BucketChart({ data }: { data: Bucket[] }) {
-  const t = useT()
-  return (
-    <ResponsiveContainer width="100%" height={180}>
-      <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-        <CartesianGrid stroke={C.grid} strokeDasharray="3 3" vertical={false} />
-        <XAxis dataKey="label" {...axisProps} interval="preserveStartEnd" minTickGap={4} />
-        <YAxis {...axisProps} width={56} tickFormatter={formatUsdShort} />
-        <ReferenceLine y={0} stroke={C.muted} strokeOpacity={0.5} />
-        <Tooltip
-          cursor={{ fill: C.grid, fillOpacity: 0.4 }}
-          content={(props) => {
-            const b = pointOf<Bucket>(props as TipProps<Bucket>)
-            if (!b) return null
-            return (
-              <Tip>
-                <div className="text-muted">{b.label}</div>
-                <div className={`mt-0.5 font-medium ${pnlClass(b.pnl)}`}>{formatPnl(b.pnl)}</div>
-                <div className="text-muted">{fmt(t.dashboard.tooltipTrades, { n: b.count })}</div>
-              </Tip>
-            )
-          }}
-        />
-        <Bar dataKey="pnl" radius={[4, 4, 0, 0]} maxBarSize={28} {...anim()}>
-          {data.map((b) => (
-            <Cell key={b.label} fill={b.pnl >= 0 ? C.profit : C.loss} fillOpacity={b.count ? 1 : 0} />
-          ))}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
-  )
-}
