@@ -531,6 +531,7 @@ export const ru = {
       orderId: 'ID ордера',
       symbol: 'Пара',
       side: 'Направление',
+      sideHint: 'Открытие / закрытие',
       qty: 'Объём',
       entryValue: 'Стоимость входа',
       entryPrice: 'Цена входа',

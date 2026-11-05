@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { detectDelimiter, parseCsv } from './csv'
 import { offsetFromHeader, parseDateCell, parseNumberCell, stableHash } from './values'
 import { autoMap, normalizeHeader } from './mapping'
-import { FIELDS, FUZZY } from './fields'
+import { FIELDS, FUZZY, fillSign } from './fields'
 import { bybitParser, marketOf, normalizeSymbol, positionSide } from './bybit'
 import { planImport, prepareImport } from './plan'
 
@@ -251,5 +251,34 @@ describe('объём находится сам: новые названия ко
     expect(trades).toHaveLength(1)
     expect(trades[0]).toMatchObject({ symbol: 'BTCUSDT', side: 'long', size_usd: 600 })
     expect(trades[0].pnl).toBeCloseTo(10 - 0.6655, 6)
+  })
+})
+
+describe('направление в истории исполнений: разные написания и автоподбор колонки', () => {
+  it('словарь направлений', () => {
+    for (const v of ['Buy', 'BUY', 'Open Long', 'OpenLong', 'open_long', 'Close Short', 'BUY_OPEN', 'B', 'Покупка', '开多', '平空', '买入']) expect(fillSign(v), v).toBe(1)
+    for (const v of ['Sell', 'SELL', 'Open Short', 'Close Long', 'close-long', 'SELL_CLOSE', 'S', 'Продажа', '开空', '平多', '卖出']) expect(fillSign(v), v).toBe(-1)
+    for (const v of ['', 'Long', 'Short', 'Trade', 'Market']) expect(fillSign(v), v).toBeNull()
+  })
+  const tail = (dir1: string, dir2: string, extra1 = '', extra2 = '') => [
+    `BTCUSDT,${dir1},0.01,60000,${extra1}2026-11-01 10:00:00,o1`,
+    `BTCUSDT,${dir2},0.01,61000,${extra2}2026-11-01 12:00:00,o2`,
+  ]
+  it('«Long» + отдельная колонка «Open / Close» — складываются сами', () => {
+    const csv = ['Market,Direction,Filled Qty,Filled Price,Trade Type,Transaction Time(UTC+0),Order No.', ...tail('Long', 'Long', 'Open,', 'Close,')].join('\n')
+    const p = prepareImport(csv, bybitParser)
+    expect(p.rows.filter((r) => r.error)).toEqual([])
+    expect(p.rows[0].trade).toMatchObject({ side: 'long', size_usd: 600 })
+  })
+  it('в «Direction» непонятно, а Buy / Sell в другой колонке — она находится сама', () => {
+    const csv = ['Market,Direction,Filled Qty,Filled Price,Order Side,Transaction Time(UTC+0),Order No.', ...tail('X1', 'X2', 'Buy,', 'Sell,')].join('\n')
+    const p = prepareImport(csv, bybitParser)
+    expect(p.rows.filter((r) => r.error)).toEqual([])
+    expect(p.rows[0].trade).toMatchObject({ side: 'long' })
+  })
+  it('если направление так и не понять — в ошибке видно значение', () => {
+    const csv = ['Market,Direction,Filled Qty,Filled Price,Transaction Time(UTC+0),Order No.', ...tail('???', '???')].join('\n')
+    const p = prepareImport(csv, bybitParser)
+    expect(p.rows[0]).toMatchObject({ error: 'side', detail: '???' })
   })
 })

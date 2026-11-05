@@ -23,13 +23,13 @@ export function parsePositions(
     const line = i + 2
     const cell = (f: ImportField) => (has(f) ? row[mapping[f]] : undefined)
     const n = (f: ImportField) => parseNumberCell(cell(f))
-    const fail = (error: RowError): ParsedRow => ({ line, trade: null, error, warnings: [] })
+    const fail = (error: RowError, detail?: string): ParsedRow => ({ line, trade: null, error, detail, warnings: [] })
     const warnings: RowWarning[] = []
 
     const symbol = normalizeSymbol(cell('symbol'))
     if (!symbol) return fail('symbol')
     const side = positionSide(cell('side'), sideMeaning)
-    if (!side) return fail('side')
+    if (!side) return fail('side', cell('side'))
     const entryPrice = n('entryPrice')
     if (entryPrice === null || entryPrice <= 0) return fail('entryPrice')
     const exitPrice = n('exitPrice')

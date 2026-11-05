@@ -22,6 +22,8 @@ export const FIELDS = {
   fee: ['Trading Fee', 'Trading Fees', 'Exec Fee', 'Fee', 'Fees', 'Total Fee', 'Commission', 'Комиссия', 'Комиссии', 'Торговая комиссия'],
   feeCoin: ['Fee Coin', 'Fee Currency', 'Fee Asset', 'Fee Unit', 'Commission Asset', 'Валюта комиссии'],
   funding: ['Funding Fee', 'Funding', 'Funding Fees', 'Фандинг', 'Комиссия за финансирование', 'Ставка финансирования'],
+  // открытие / закрытие — если направление разнесено на две колонки («Long» + «Open»)
+  sideHint: ['Open/Close', 'Open Close', 'Trade Type', 'Exec Type', 'Execution Type', 'Position Effect', 'Effect', 'Action Type', 'Type', 'Тип сделки', 'Открытие/Закрытие'],
   leverage: ['Leverage', 'Плечо', 'Кредитное плечо'],
   openTime: ['Open Time', 'Opening Time', 'Opened Time', 'Time Opened', 'Opened', 'Entry Time', 'Время открытия', 'Время входа'],
   closeTime: ['Trade Time', 'Close Time', 'Closing Time', 'Closed Time', 'Time Closed', 'Closed', 'Exit Time', 'Exec Time', 'Date(UTC)', 'Time', 'Updated Time', 'Created Time', 'Transaction Time', 'Date', 'Время сделки', 'Время закрытия', 'Время исполнения', 'Время', 'Дата'],
@@ -88,17 +90,21 @@ export function sideMeaningFromHeader(header: string | undefined, fallback: Side
 
 /** Знак исполнения в истории сделок: +1 — покупка (растит лонг / закрывает шорт), −1 — продажа. */
 export function fillSign(raw: string | undefined): 1 | -1 | null {
-  const s = (raw ?? '').trim().toLowerCase().replace(/[_\s]+/g, ' ')
-  const long = /long|лонг/.test(s)
+  const s = (raw ?? '').trim().toLowerCase().replace(/[_\-/\s]+/g, ' ')
+  if (!s) return null
+  // китайский интерфейс: 开多 / 平空 — покупка, 开空 / 平多 — продажа, 买 / 卖
+  if (/开多|平空/.test(s)) return 1
+  if (/开空|平多/.test(s)) return -1
+  const long = /long|лонг|^l$/.test(s)
   const short = /short|шорт/.test(s)
-  const open = /open|откр/.test(s)
-  const close = /clos|закр/.test(s)
+  const open = /open|откр|^o\b|\bo$/.test(s)
+  const close = /clos|закр|^c\b|\bc$/.test(s)
   if (long && open) return 1
   if (long && close) return -1
   if (short && open) return -1
   if (short && close) return 1
-  if (/buy|покупк|купить|^b$/.test(s)) return 1
-  if (/sell|продаж|продать|^s$/.test(s)) return -1
+  if (/buy|bid|покупк|купить|куплено|^b$|^bo$|^bc$|买/.test(s)) return 1
+  if (/sell|ask|продаж|продать|продано|^s$|^so$|^sc$|卖/.test(s)) return -1
   return null
 }
 

@@ -63,12 +63,12 @@ export function parseFills(table: CsvTable, mapping: ColumnMapping<string>, { ut
     const line = i + 2
     const cell = (f: ImportField) => (has(f) ? row[mapping[f]] : undefined)
     const n = (f: ImportField) => parseNumberCell(cell(f))
-    const fail = (error: RowError) => out.push({ line, trade: null, error, warnings: [] })
+    const fail = (error: RowError, detail?: string) => out.push({ line, trade: null, error, detail, warnings: [] })
 
     const symbol = normalizeSymbol(cell('symbol'))
     if (!symbol) return fail('symbol')
-    const sign = fillSign(cell('side'))
-    if (!sign) return fail('side')
+    const sign = fillSign(cell('side')) ?? (has('sideHint') ? fillSign(`${cell('side') ?? ''} ${cell('sideHint') ?? ''}`) : null)
+    if (!sign) return fail('side', [cell('side'), has('sideHint') ? cell('sideHint') : undefined].filter(Boolean).join(' / '))
     const price = n('price')
     if (price === null || price <= 0) return fail('price')
     const market = marketChoice === 'auto' ? marketOf(symbol) : marketChoice
