@@ -318,9 +318,70 @@ select pg_temp.expect_error($$select is_admin()$$, 'permission denied');
 select pg_temp.check(true, 'аноним не может вызвать функции админки');
 reset role;
 
--- Удаление аккаунта чистит всё
+-- Подключения бирж (0006)
+set role authenticated;
+set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
+select pg_temp.check(add_exchange_connection('hyperliquid', '0x1111111111111111111111111111111111111111') is not null, 'A подключил кошелёк Hyperliquid');
+select pg_temp.check((select api_key from exchange_connections where exchange = 'hyperliquid') = '0x1111111111111111111111111111111111111111', 'адрес кошелька сохранён в нижнем регистре');
+select pg_temp.expect_error($$select add_exchange_connection('hyperliquid', '0x123')$$, 'BAD_WALLET');
+select pg_temp.check(true, 'неверный адрес кошелька отклоняется');
+select pg_temp.expect_error($$select add_exchange_connection('hyperliquid', '0x1111111111111111111111111111111111111111')$$, 'CONNECTION_EXISTS');
+select pg_temp.check(true, 'то же подключение дважды не добавить');
+select pg_temp.expect_error($$select add_exchange_connection('ftx', 'abcdefgh12', 'secretsecret')$$, 'EXCHANGE_NOT_SUPPORTED');
+select pg_temp.check(true, 'неизвестная биржа отклоняется');
+select pg_temp.expect_error($$select add_exchange_connection('bybit', 'KEY12345678', null)$$, 'BAD_API_KEY');
+select pg_temp.check(true, 'ключ Bybit без секрета не принимается');
+select pg_temp.check(add_exchange_connection('bybit', 'KEY12345678', 'SuperSecret123', 'Основной') is not null, 'A подключил Bybit по ключу');
 reset role;
+select pg_temp.check((select count(*) from vault.secrets) = 1, 'секрет Bybit ушёл в Vault');
+select pg_temp.check((select secret_id is not null from exchange_connections where exchange = 'bybit'), 'в подключении — только ссылка на секрет');
+set role authenticated;
+set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
+select pg_temp.expect_error($$select secret_id from exchange_connections$$, 'permission denied');
+select pg_temp.check(true, 'ссылку на секрет из браузера не прочитать');
+select pg_temp.expect_error($$select * from vault.secrets$$, 'permission denied');
+select pg_temp.check(true, 'Vault из браузера не прочитать');
+select pg_temp.expect_error($$select get_connection_secret((select id from exchange_connections where exchange = 'bybit'))$$, 'permission denied');
+select pg_temp.check(true, 'секрет не выдаётся даже владельцу ключа');
+select pg_temp.expect_error($$insert into exchange_connections (exchange, api_key) values ('bybit', 'HACKHACKHACK')$$, 'permission denied');
+select pg_temp.check(true, 'напрямую подключение не добавить (только через функцию)');
+select pg_temp.expect_error($$update exchange_connections set api_key = 'X1234567'$$, 'permission denied');
+select pg_temp.check(true, 'напрямую подключение не изменить');
+select touch_exchange_connection((select id from exchange_connections where exchange = 'hyperliquid'), '2026-11-01T00:00:00Z', null);
+select pg_temp.check((select cursor_at = '2026-11-01T00:00:00Z' and last_sync_at is not null from exchange_connections where exchange = 'hyperliquid'), 'отметка синхронизации сохраняется');
+
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
+select pg_temp.check((select count(*) from exchange_connections) = 0, 'B не видит подключения A');
+select delete_exchange_connection((select id from exchange_connections limit 1));
+select touch_exchange_connection('00000000-0000-0000-0000-000000000000', now(), 'x');
+reset role;
+select pg_temp.check((select count(*) from exchange_connections where user_id = 'aaaaaaaa-0000-0000-0000-000000000001') = 2, 'B не может удалить подключения A');
+
+select id as bybit_conn from exchange_connections where exchange = 'bybit' \gset
+set role service_role;
+select pg_temp.check(get_connection_secret(:'bybit_conn') = 'SuperSecret123', 'серверная функция (service_role) получает секрет');
+reset role;
+
+set role authenticated;
+set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
+select delete_exchange_connection((select id from exchange_connections where exchange = 'bybit'));
+reset role;
+select pg_temp.check((select count(*) from vault.secrets) = 0 and (select count(*) from exchange_connections where exchange = 'bybit') = 0, 'удаление подключения удаляет и секрет');
+
+set role anon;
+set request.jwt.claim.sub = '';
+select pg_temp.expect_error($$select add_exchange_connection('hyperliquid', '0x1111111111111111111111111111111111111111')$$, 'permission denied');
+select pg_temp.check(true, 'аноним не может добавить подключение');
+reset role;
+
+-- Удаление аккаунта чистит всё
+set role authenticated;
+set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
+select add_exchange_connection('bybit', 'KEY87654321', 'AnotherSecret9');
+reset role;
+select pg_temp.check((select count(*) from vault.secrets) = 1, 'перед удалением аккаунта в Vault есть секрет A');
 delete from auth.users where id = 'aaaaaaaa-0000-0000-0000-000000000001';
+select pg_temp.check((select count(*) from vault.secrets) = 0, 'удаление аккаунта удаляет и секреты API из Vault');
 select pg_temp.check((select count(*) from trades where user_id = 'aaaaaaaa-0000-0000-0000-000000000001') = 0
   and (select count(*) from profiles where id = 'aaaaaaaa-0000-0000-0000-000000000001') = 0, 'удаление аккаунта удаляет его данные');
 

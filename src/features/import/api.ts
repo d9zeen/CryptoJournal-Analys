@@ -56,6 +56,8 @@ export type RunImportArgs = {
   filename: string
   rowsTotal: number
   trades: ImportedTrade[]
+  /** 'api' — сделки пришли синхронизацией с биржей */
+  source?: 'import' | 'api'
 }
 
 export type RunImportResult = {
@@ -72,7 +74,7 @@ export type RunImportResult = {
  * Если пачка упёрлась в дубль (кто-то успел раньше) — досылаем её по одной, пропуская дубли.
  * Лимит Free дополнительно проверяет триггер в базе: на нём останавливаемся.
  */
-export async function runImport({ exchange, filename, rowsTotal, trades }: RunImportArgs): Promise<RunImportResult> {
+export async function runImport({ exchange, filename, rowsTotal, trades, source = 'import' }: RunImportArgs): Promise<RunImportResult> {
   const { data: rec, error: recErr } = await supabase
     .from('imports')
     .insert({ exchange, filename: filename.slice(0, 200), rows_total: rowsTotal })
@@ -81,7 +83,7 @@ export async function runImport({ exchange, filename, rowsTotal, trades }: RunIm
   if (recErr) throw recErr
   const importId = (rec as { id: string }).id
 
-  const toRow = (t: ImportedTrade) => ({ ...t, id: crypto.randomUUID(), source: 'import' as const, import_id: importId })
+  const toRow = (t: ImportedTrade) => ({ ...t, id: crypto.randomUUID(), source, import_id: importId })
   let inserted = 0
   let duplicates = 0
   let stopError: unknown = null

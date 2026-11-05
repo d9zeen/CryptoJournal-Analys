@@ -2,7 +2,7 @@
 import type { MarketType, Side } from '@/lib/calc/trade'
 
 export type Plan = 'free' | 'pro'
-export type TradeSource = 'manual' | 'import'
+export type TradeSource = 'manual' | 'import' | 'api'
 
 export type Profile = {
   id: string

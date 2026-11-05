@@ -44,6 +44,21 @@ $$;
 grant usage on schema storage to anon, authenticated;
 grant select, insert, update, delete on storage.objects to anon, authenticated;
 
+-- Supabase Vault (упрощённо: без шифрования — только для тестов прав)
+create schema vault;
+create table vault.secrets (
+  id uuid primary key default gen_random_uuid(),
+  name text unique,
+  description text,
+  secret text not null
+);
+create function vault.create_secret(new_secret text, new_name text default null, new_description text default '', new_key_id uuid default null)
+returns uuid language sql as $$
+  insert into vault.secrets (secret, name, description) values (new_secret, new_name, new_description) returning id
+$$;
+create view vault.decrypted_secrets as select id, name, description, secret, secret as decrypted_secret from vault.secrets;
+revoke all on schema vault from public;
+
 -- Как в Supabase: по умолчанию роли получают права на новые таблицы public (защищает RLS)
 grant usage on schema public to anon, authenticated;
 alter default privileges in schema public grant all on tables to anon, authenticated;
