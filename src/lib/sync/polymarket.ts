@@ -3,7 +3,8 @@
  * Источник — Data API v2: GET /v2/positions?user=…&status=CLOSED — закрытые позиции с итоговым PnL.
  * Сделка = закрытая позиция по исходу (Yes / No…): вход — средняя цена покупки, выход — средняя цена продажи / погашения
  * (из PnL: выход = вход + PnL / число долей; проигравший исход — 0).
- * Документация v2 описывает поля по-разному (camelCase / snake_case), поэтому читаем оба варианта.
+ * Настоящий ответ v2 (сверено 05.11.2026): snake_case — condition_id, avg_price, total_size (доли), realized_pnl, title, outcome,
+ * first_entry_at / last_event_at (секунды); { data: [...], pagination: { next_cursor, has_more } }. Старые camelCase-поля тоже понимаем.
  */
 import { round } from '@/lib/calc/trade'
 import type { ImportedTrade } from '@/lib/import/types'
@@ -28,10 +29,12 @@ const str = (o: Obj, ...keys: string[]) => {
   return typeof v === 'string' ? v.trim() : typeof v === 'number' ? String(v) : null
 }
 
-/** Время закрытия: timestamp (секунды или мс), иначе дата окончания рынка */
+const toIso = (ts: number | null) => (ts !== null && ts > 0 ? new Date(ts < 1e12 ? ts * 1000 : ts).toISOString() : null)
+
+/** Время закрытия: последнее событие позиции (секунды или мс), иначе дата окончания рынка */
 function closeTime(p: Obj): string | null {
-  const ts = num(p, 'timestamp', 'closedAt', 'closed_at', 'updatedAt', 'updated_at')
-  if (ts !== null && ts > 0) return new Date(ts < 1e12 ? ts * 1000 : ts).toISOString()
+  const iso = toIso(num(p, 'last_event_at', 'lastEventAt', 'timestamp', 'closedAt', 'closed_at', 'updatedAt', 'updated_at'))
+  if (iso) return iso
   const d = str(p, 'endDate', 'end_date', 'closedAt', 'closed_at')
   if (d && !Number.isNaN(Date.parse(d))) return new Date(Date.parse(d)).toISOString()
   return null
@@ -41,13 +44,16 @@ function closeTime(p: Obj): string | null {
 export function pmPositionToTrade(p: Obj): ImportedTrade | null {
   const cond = str(p, 'conditionId', 'condition_id', 'market')
   const avg = num(p, 'avgPrice', 'avg_price')
-  const shares = num(p, 'totalBought', 'total_bought', 'size')
+  const shares = num(p, 'total_size', 'totalSize', 'totalBought', 'total_bought', 'size')
   const pnl = num(p, 'realizedPnl', 'realized_pnl', 'cashPnl', 'cash_pnl')
   const at = closeTime(p)
   if (!cond || avg === null || avg <= 0 || !shares || shares <= 0 || pnl === null || !at) return null
   const outcome = str(p, 'outcome') ?? `#${num(p, 'outcomeIndex', 'outcome_index') ?? 0}`
   const title = str(p, 'title', 'question', 'market_title') ?? cond
   const exit = Math.min(1, Math.max(0, avg + pnl / shares))
+  // время первой покупки — если есть и не позже закрытия
+  const opened = toIso(num(p, 'first_entry_at', 'firstEntryAt'))
+  const entryAt = opened && opened <= at ? opened : at
   const code = outcome.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12) || 'O'
   return {
     exchange: 'polymarket',
@@ -55,7 +61,7 @@ export function pmPositionToTrade(p: Obj): ImportedTrade | null {
     symbol: `PM-${cond.replace(/^0x/i, '').slice(0, 8).toUpperCase()}-${code}`,
     title: `${title} — ${outcome}`.slice(0, 300),
     side: 'long',
-    entry_at: at, // время покупки API закрытых позиций не отдаёт
+    entry_at: entryAt,
     exit_at: at,
     entry_price: round(avg, 8),
     exit_price: round(exit, 8),

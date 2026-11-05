@@ -215,9 +215,9 @@ Cloudflare и Supabase (который тоже за Cloudflare) периоди�
 
 - Подключение по адресу аккаунта Polymarket (proxy wallet из профиля). Ключей нет: Data API публичный.
 - Источник — `GET data-api.polymarket.com/v2/positions?user=…&status=CLOSED` (v1 выключен 02.11.2026), страницы по курсору `pagination.next_cursor`.
-  Документация v2 расходится в написании полей — `lib/sync/polymarket.ts` читает и camelCase, и snake_case.
+  Настоящий ответ v2 сверен 05.11.2026 (запрос с сервера Supabase): snake_case — `condition_id`, `avg_price`, `total_size` (доли), `realized_pnl`,
+  `title`, `outcome`, `first_entry_at` / `last_event_at` (секунды); страницы — `pagination.next_cursor`. Старые camelCase-поля тоже понимаем.
 - Сделка = закрытая позиция по исходу: `market_type = 'prediction'`, `side = long`, вход = `avgPrice`, выход = `avgPrice + realizedPnl / totalBought`
-  (проигрыш — 0, база разрешает выход 0 только у предсказаний), размер = доли × цена входа, PnL = `realizedPnl`. Время покупки API не отдаёт —
-  вход = выход = `timestamp` (или дата окончания рынка). Код `PM-<8 знаков conditionId>-<исход>`, название — `trades.title` (видно в списках и «Разборе»).
+  (проигрыш — 0, база разрешает выход 0 только у предсказаний), размер = доли × цена входа, PnL = `realized_pnl`.
+  Вход — `first_entry_at`, выход — `last_event_at` (или дата окончания рынка). Код `PM-<8 знаков conditionId>-<исход>`, название — `trades.title` (видно в списках и «Разборе»).
 - Из браузера запросы идут через `exchange-proxy` (только закрытые позиции адреса из подключения), на сервере (Pro, каждые 3 ч) — напрямую.
-- Не проверено на настоящем кошельке: если поля v2 окажутся другими, сделки не появятся — прислать адрес / ошибку.
