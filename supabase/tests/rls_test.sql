@@ -333,7 +333,7 @@ select pg_temp.expect_error($$select add_exchange_connection('bybit', 'KEY123456
 select pg_temp.check(true, 'ключ Bybit без секрета не принимается');
 select pg_temp.check(add_exchange_connection('bybit', 'KEY12345678', 'SuperSecret123', 'Основной') is not null, 'A подключил Bybit по ключу');
 reset role;
-select pg_temp.check((select count(*) from vault.secrets) = 1, 'секрет Bybit ушёл в Vault');
+select pg_temp.check((select count(*) from vault.secrets where description like 'CryptoJournal: ключ API%') = 1, 'секрет Bybit ушёл в Vault');
 select pg_temp.check((select secret_id is not null from exchange_connections where exchange = 'bybit'), 'в подключении — только ссылка на секрет');
 set role authenticated;
 set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
@@ -362,11 +362,59 @@ set role service_role;
 select pg_temp.check(get_connection_secret(:'bybit_conn') = 'SuperSecret123', 'серверная функция (service_role) получает секрет');
 reset role;
 
+-- Синхронизация по расписанию (0007)
+select pg_temp.check((select count(*) from vault.secrets where name = 'cj_sync_secret' and length(secret) = 64) = 1, 'секрет вызова sync-worker создан');
+select pg_temp.check(dispatch_sync() = 0, 'без адреса проекта в Vault ничего не рассылается');
+select vault.create_secret('https://proj.example.co', 'cj_project_url', 'адрес проекта');
+update profiles set plan = 'pro', plan_until = null where id = 'aaaaaaaa-0000-0000-0000-000000000001';
+update exchange_connections set last_sync_at = now() - interval '4 hours' where exchange = 'hyperliquid';
+set role authenticated;
+set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
+select add_exchange_connection('hyperliquid', '0x3333333333333333333333333333333333333333', null, 'свежий');
+select add_exchange_connection('hyperliquid', '0x4444444444444444444444444444444444444444', null, 'сломан');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
+select add_exchange_connection('hyperliquid', '0x2222222222222222222222222222222222222222');
+reset role;
+update exchange_connections set last_sync_at = now() - interval '10 minutes' where label in ('свежий', 'Основной');
+update exchange_connections set last_error = 'KEY_INVALID | 10003' where label = 'сломан';
+select id as hl_due from exchange_connections where api_key = '0x1111111111111111111111111111111111111111' \gset
+select pg_temp.check(dispatch_sync() = 1, 'рассылка: только Pro, давно не обновлялось и без ошибки ключа');
+select pg_temp.check((select count(*) from net.calls) = 1
+  and (select url from net.calls) = 'https://proj.example.co/functions/v1/sync-worker'
+  and (select body ->> 'connectionId' from net.calls) = :'hl_due'
+  and (select headers ->> 'x-sync-secret' from net.calls) = (select secret from vault.secrets where name = 'cj_sync_secret'), 'задание ушло в sync-worker с секретом');
+
+set role authenticated;
+set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
+select pg_temp.expect_error($$select dispatch_sync()$$, 'permission denied');
+select pg_temp.check(true, 'рассылку из браузера не запустить');
+select pg_temp.expect_error($$select sync_secret_ok('x')$$, 'permission denied');
+select pg_temp.check(true, 'секрет вызова из браузера не проверить (не подобрать)');
+select set_connection_key_expiry(:'hl_due', '2027-01-01T00:00:00Z');
+select pg_temp.check((select key_expires_at = '2027-01-01T00:00:00Z' from exchange_connections where id = :'hl_due'), 'срок ключа сохраняется и виден владельцу');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
+select set_connection_key_expiry(:'hl_due', '2020-01-01T00:00:00Z');
+reset role;
+select pg_temp.check((select key_expires_at = '2027-01-01T00:00:00Z' from exchange_connections where id = :'hl_due'), 'B не может изменить срок ключа A');
+
+set role anon;
+set request.jwt.claim.sub = '';
+select pg_temp.expect_error($$select dispatch_sync()$$, 'permission denied');
+select pg_temp.check(true, 'аноним не может запустить рассылку');
+reset role;
+
+select decrypted_secret as sync_secret from vault.decrypted_secrets where name = 'cj_sync_secret' \gset
+set role service_role;
+select pg_temp.check(sync_secret_ok(:'sync_secret') and not sync_secret_ok('wrong') and not sync_secret_ok('') and not sync_secret_ok(null), 'sync-worker отличает верный секрет от неверного');
+select pg_temp.check(effective_plan('aaaaaaaa-0000-0000-0000-000000000001') = 'pro', 'sync-worker видит тариф владельца');
+reset role;
+update profiles set plan = 'free' where id = 'aaaaaaaa-0000-0000-0000-000000000001';
+
 set role authenticated;
 set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
 select delete_exchange_connection((select id from exchange_connections where exchange = 'bybit'));
 reset role;
-select pg_temp.check((select count(*) from vault.secrets) = 0 and (select count(*) from exchange_connections where exchange = 'bybit') = 0, 'удаление подключения удаляет и секрет');
+select pg_temp.check((select count(*) from vault.secrets where description like 'CryptoJournal: ключ API%') = 0 and (select count(*) from exchange_connections where exchange = 'bybit') = 0, 'удаление подключения удаляет и секрет');
 
 set role anon;
 set request.jwt.claim.sub = '';
@@ -379,9 +427,9 @@ set role authenticated;
 set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
 select add_exchange_connection('bybit', 'KEY87654321', 'AnotherSecret9');
 reset role;
-select pg_temp.check((select count(*) from vault.secrets) = 1, 'перед удалением аккаунта в Vault есть секрет A');
+select pg_temp.check((select count(*) from vault.secrets where description like 'CryptoJournal: ключ API%') = 1, 'перед удалением аккаунта в Vault есть секрет A');
 delete from auth.users where id = 'aaaaaaaa-0000-0000-0000-000000000001';
-select pg_temp.check((select count(*) from vault.secrets) = 0, 'удаление аккаунта удаляет и секреты API из Vault');
+select pg_temp.check((select count(*) from vault.secrets where description like 'CryptoJournal: ключ API%') = 0, 'удаление аккаунта удаляет и секреты API из Vault');
 select pg_temp.check((select count(*) from trades where user_id = 'aaaaaaaa-0000-0000-0000-000000000001') = 0
   and (select count(*) from profiles where id = 'aaaaaaaa-0000-0000-0000-000000000001') = 0, 'удаление аккаунта удаляет его данные');
 

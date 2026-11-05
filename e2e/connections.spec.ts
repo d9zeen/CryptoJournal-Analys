@@ -60,3 +60,22 @@ test('Bybit: ключ «только чтение» — закрытые поз�
   // секрет в браузер больше не попадает: в запросах к серверной функции его нет
   for (const c of db.connCalls!.filter((x) => x.fn === 'exchange-proxy')) expect(JSON.stringify(c.body)).not.toContain('SuperSecret')
 })
+
+test('Pro: синхронизация на сервере каждые 3 часа и предупреждение о сроке ключа Bybit', async ({ page, db }) => {
+  db.usage = { plan: 'pro', trades_created: 3, trade_limit: null }
+  const soon = new Date(Date.now() + 5 * 86_400_000).toISOString()
+  db.connections = [
+    { id: 'c1', exchange: 'bybit', label: 'основной', api_key: 'AbCdEf123456', last_sync_at: new Date().toISOString(), cursor_at: new Date().toISOString(), last_error: null, key_expires_at: soon, created_at: '' },
+  ]
+  await fakeSupabase(page, db)
+  await page.goto('import')
+  await expect(page.getByText(/Pro: сделки подтягиваются на сервере каждые 3 часа/)).toBeVisible()
+  await expect(page.getByText(/дальше — сам каждые 3 часа/)).toBeVisible()
+  await expect(page.getByText(/Ключ Bybit перестанет работать/)).toBeVisible()
+})
+
+test('Free: подсказка про Pro', async ({ page, db }) => {
+  await fakeSupabase(page, db)
+  await page.goto('import')
+  await expect(page.getByText(/На Pro — сами на сервере каждые 3 часа/)).toBeVisible()
+})

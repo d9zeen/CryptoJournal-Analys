@@ -12,6 +12,7 @@ import { SelectField, TextField } from '@/components/ui/Field'
 import { exchangeName } from '@/lib/exchanges'
 import { dbErrorMessage } from '@/lib/errors'
 import { formatDateTime } from '@/lib/format'
+import { useUsage } from '@/features/settings/api'
 import {
   CONNECTABLE,
   SyncError,
@@ -39,6 +40,8 @@ export function ConnectionsCard() {
   const t = useT()
   const c = t.connections
   const { data: conns = [], isLoading } = useConnections()
+  const { data: usage } = useUsage()
+  const pro = usage?.plan === 'pro'
   const [adding, setAdding] = useState(false)
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
 
@@ -53,7 +56,7 @@ export function ConnectionsCard() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="font-medium">{c.title}</h2>
-          <p className="mt-0.5 text-xs text-muted">{c.hint}</p>
+          <p className="mt-0.5 text-xs text-muted">{pro ? c.hintPro : c.hintFree}</p>
         </div>
         {!adding && (
           <Button variant="secondary" className="!px-3 !py-1.5 text-xs" onClick={() => setAdding(true)}>
@@ -81,7 +84,7 @@ export function ConnectionsCard() {
       ) : (
         <ul className="flex flex-col">
           {conns.map((conn) => (
-            <ConnectionRow key={conn.id} conn={conn} onSynced={onSynced} onError={(text) => setNotice({ tone: 'error', text })} />
+            <ConnectionRow key={conn.id} conn={conn} pro={pro} onSynced={onSynced} onError={(text) => setNotice({ tone: 'error', text })} />
           ))}
         </ul>
       )}
@@ -90,13 +93,26 @@ export function ConnectionsCard() {
   )
 }
 
-function ConnectionRow({ conn, onSynced, onError }: { conn: Connection; onSynced: (r: SyncResult) => void; onError: (text: string) => void }) {
+const DAY_MS = 86_400_000
+const dateOnly = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' })
+
+function ConnectionRow({ conn, pro, onSynced, onError }: { conn: Connection; pro: boolean; onSynced: (r: SyncResult) => void; onError: (text: string) => void }) {
   const t = useT()
   const c = t.connections
   const sync = useSyncConnection()
   const del = useDeleteConnection()
   const code = errorCodeOf(conn.last_error)
   const errText = code ? ((c.errors as Record<string, string>)[code] ?? c.errors.UNKNOWN) : null
+  // ключ Bybit без привязки к IP живёт 90 дней — предупреждаем за 14
+  const expiresMs = conn.key_expires_at ? Date.parse(conn.key_expires_at) : null
+  const expiry =
+    expiresMs === null
+      ? null
+      : expiresMs < Date.now()
+        ? { tone: 'text-loss', text: c.keyExpired }
+        : expiresMs - Date.now() < 14 * DAY_MS
+          ? { tone: 'text-warning', text: fmt(c.keyExpiresSoon, { date: dateOnly.format(new Date(expiresMs)) }) }
+          : null
 
   return (
     <li className="flex flex-col gap-2 border-t border-border py-3 first:border-t-0 first:pt-0">
@@ -109,6 +125,7 @@ function ConnectionRow({ conn, onSynced, onError }: { conn: Connection; onSynced
           </div>
           <div className="mt-0.5 text-xs text-muted">
             {sync.isPending ? c.syncing : conn.last_sync_at ? fmt(c.lastSync, { date: formatDateTime(conn.last_sync_at) }) : c.neverSynced}
+            {!sync.isPending && pro && !errText && <span> · {c.autoPro}</span>}
           </div>
         </div>
         <div className="flex shrink-0 gap-1">
@@ -133,6 +150,7 @@ function ConnectionRow({ conn, onSynced, onError }: { conn: Connection; onSynced
         </div>
       </div>
       {errText && !sync.isPending && <p className="text-xs text-loss">{errText}</p>}
+      {expiry && !errText && <p className={`text-xs ${expiry.tone}`}>{expiry.text}</p>}
     </li>
   )
 }
@@ -157,7 +175,7 @@ function AddForm({ onDone, onCancel }: { onDone: (name: string) => void; onCance
       setSecret('')
       onDone(exchangeName(exchange, ''))
       // сразу первая синхронизация (ошибку покажет строка подключения)
-      sync.mutate({ id, exchange, label: label.trim() || null, api_key: kind === 'wallet' ? apiKey.trim().toLowerCase() : apiKey.trim(), last_sync_at: null, cursor_at: null, last_error: null, created_at: '' })
+      sync.mutate({ id, exchange, label: label.trim() || null, api_key: kind === 'wallet' ? apiKey.trim().toLowerCase() : apiKey.trim(), last_sync_at: null, cursor_at: null, last_error: null, key_expires_at: null, created_at: '' })
     } catch (err) {
       setError(connectionError(err, t))
     }
