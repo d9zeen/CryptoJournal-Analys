@@ -290,6 +290,8 @@ export const ru = {
     cols: { email: 'Пользователь', created: 'Регистрация', lastSignIn: 'Последний вход', plan: 'Тариф', month: 'Месяц', total: 'Всего', actions: 'Действия' },
     you: 'это ты',
     adminBadge: 'админ',
+    unlimited: 'Без лимитов',
+    unlimitedHint: 'Админ — всегда Pro, без лимитов',
     proUntil: 'Pro до {d}',
     proForever: 'Pro навсегда',
     proExpired: 'Pro истёк {d}',
