@@ -353,3 +353,29 @@ describe('Bybit UTA Trade History: Long / Short — сторона позици�
     expect(p.rows.every((r) => !r.warnings.includes('sideGuessed'))).toBe(true)
   })
 })
+
+describe('Bybit AllPerp ClosedPNL (новый формат: Market, Trade Type, Realized P&L)', () => {
+  const head = 'Market,Trade Type,Order Quantity,Entry Price,Exit Price,Realized P&L,Opening Fee,Closing Fee,Funding Fee,Trade time'
+  it('направление в «Trade Type»', () => {
+    const csv = [head,
+      'BTCUSDT,Close Long,0.01,60000,61000,9.4,0.33,0.27,0,2026-11-01 12:00:00',
+      'ETHUSDT,Close Short,1,3000,2900,98.5,1.65,1.6,-1.75,2026-11-02 12:00:00',
+    ].join('\n')
+    const p = prepareImport(csv, bybitParser)
+    expect(p.missing).toEqual([])
+    const trades = p.rows.map((r) => r.trade!)
+    expect(trades.map((t) => t.side)).toEqual(['long', 'short'])
+    expect(trades[0]).toMatchObject({ symbol: 'BTCUSDT', entry_price: 60000, exit_price: 61000, size_usd: 600 })
+  })
+  it('направления нет нигде — понятно по ценам и PnL', () => {
+    const csv = [head,
+      'BTCUSDT,Trade,0.01,60000,61000,9.4,0.33,0.27,0,2026-11-01 12:00:00', // цена выросла, PnL +  → лонг
+      'ETHUSDT,Trade,1,3000,2900,98.5,1.65,1.6,0,2026-11-02 12:00:00', // цена упала, PnL +  → шорт
+      'SOLUSDT,Trade,10,150,149,-10.8,0.8,0.8,0,2026-11-03 12:00:00', // цена упала, PnL −  → лонг
+      'XRPUSDT,Trade,100,0.5,0.5001,-0.05,0.03,0.03,0,2026-11-04 12:00:00', // цена чуть выросла, но PnL < 0 только из-за комиссий → лонг
+    ].join('\n')
+    const p = prepareImport(csv, bybitParser)
+    expect(p.missing).toEqual([])
+    expect(p.rows.map((r) => r.trade?.side)).toEqual(['long', 'short', 'long', 'long'])
+  })
+})

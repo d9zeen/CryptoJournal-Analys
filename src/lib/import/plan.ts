@@ -30,6 +30,10 @@ export function prepareImport(
   const auto = !overrides.mapping
   let mapping = overrides.mapping ?? autoMap(table.headers, parser.fields, FUZZY)
   if (auto && parser.mode(mapping) === 'fills') mapping = repairSide(table, mapping)
+  // Закрытые позиции: отдельной колонки направления нет, а «Trade Type» есть (Bybit Closed P&L) — направление в ней
+  if (auto && parser.mode(mapping) === 'positions' && mapping.side < 0 && (mapping.sideHint ?? -1) >= 0) {
+    mapping = { ...mapping, side: mapping.sideHint, sideHint: -1 }
+  }
   const timeCol = mapping[parser.timeField]
   const fromHeader = timeCol >= 0 ? offsetFromHeader(table.headers[timeCol]) : null
   const utcOffsetMinutes = overrides.utcOffsetMinutes ?? fromHeader ?? 0
