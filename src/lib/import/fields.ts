@@ -88,6 +88,14 @@ export function sideMeaningFromHeader(header: string | undefined, fallback: Side
   return fallback
 }
 
+/** Просто «Long» / «Short» (без открытия / закрытия) → +1 / −1, иначе null */
+export function bareSide(raw: string | undefined): 1 | -1 | null {
+  const s = (raw ?? '').trim().toLowerCase()
+  if (/^(long|лонг|多)$/.test(s)) return 1
+  if (/^(short|шорт|空)$/.test(s)) return -1
+  return null
+}
+
 /** Знак исполнения в истории сделок: +1 — покупка (растит лонг / закрывает шорт), −1 — продажа. */
 export function fillSign(raw: string | undefined): 1 | -1 | null {
   const s = (raw ?? '').trim().toLowerCase().replace(/[_\-/\s]+/g, ' ')

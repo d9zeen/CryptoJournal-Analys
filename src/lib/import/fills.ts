@@ -9,7 +9,7 @@
  */
 import { grossPnl, round, type MarketType, type Side } from '@/lib/calc/trade'
 import { parseDateCell, parseNumberCell, stableHash } from './values'
-import { feeCoinOf, feeToUsd, fillSign, marketOf, normalizeSymbol, type ImportField } from './fields'
+import { bareSide, feeCoinOf, feeToUsd, fillSign, marketOf, normalizeSymbol, type ImportField } from './fields'
 import type { CsvTable } from './csv'
 import type { ColumnMapping } from './mapping'
 import type { ImportedTrade, ParsedRow, ParseOptions, RowError, RowWarning } from './types'
@@ -53,7 +53,7 @@ type Position = {
 
 const EPS = 1e-9
 
-export function parseFills(table: CsvTable, mapping: ColumnMapping<string>, { utcOffsetMinutes, market: marketChoice }: ParseOptions, exchange: string): ParsedRow[] {
+export function parseFills(table: CsvTable, mapping: ColumnMapping<string>, { utcOffsetMinutes, market: marketChoice, sideFallback }: ParseOptions, exchange: string): ParsedRow[] {
   const has = (f: ImportField) => mapping[f] >= 0
   const out: ParsedRow[] = []
   const fills: Fill[] = []
@@ -67,12 +67,14 @@ export function parseFills(table: CsvTable, mapping: ColumnMapping<string>, { ut
 
     const symbol = normalizeSymbol(cell('symbol'))
     if (!symbol) return fail('symbol')
-    const sign = fillSign(cell('side')) ?? (has('sideHint') ? fillSign(`${cell('side') ?? ''} ${cell('sideHint') ?? ''}`) : null)
+    const qtyRaw = n('qty')
+    const fallback =
+      sideFallback === 'qtySign' ? (qtyRaw ? (Math.sign(qtyRaw) as 1 | -1) : null) : sideFallback === 'longIsBuy' ? bareSide(cell('side')) : null
+    const sign = fillSign(cell('side')) ?? (has('sideHint') ? fillSign(`${cell('side') ?? ''} ${cell('sideHint') ?? ''}`) : null) ?? fallback
     if (!sign) return fail('side', [cell('side'), has('sideHint') ? cell('sideHint') : undefined].filter(Boolean).join(' / '))
     const price = n('price')
     if (price === null || price <= 0) return fail('price')
     const market = marketChoice === 'auto' ? marketOf(symbol) : marketChoice
-    const qtyRaw = n('qty')
     const value = n('value')
     const qty = Math.abs(qtyRaw ?? (value !== null ? (market === 'inverse' ? value : value / price) : 0))
     if (!(qty > 0)) return fail('size')

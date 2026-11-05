@@ -250,6 +250,7 @@ export function ImportPage() {
                   </div>
 
                   <p className="text-xs text-muted">{prepared.mode === 'fills' ? fmt(t.import.formatFills, { rows: prepared.table.rows.length }) : t.import.formatPositions}</p>
+                  {prepared.sideFallback && <p className="text-xs text-warning">{t.import.sideFallback[prepared.sideFallback]}</p>}
                   {plan.counts.overLimit > 0 && remaining !== null && <p className="text-sm text-warning">{fmt(t.import.overLimitNote, { n: remaining })}</p>}
                   {warnings.has('noEntryTime') && <p className="text-xs text-muted">{t.import.warnings.noEntryTime}</p>}
                   {warnings.has('feeDerived') && <p className="text-xs text-muted">{fmt(t.import.warnings.feeDerived, { n: warnings.get('feeDerived')! })}</p>}
