@@ -51,6 +51,8 @@ export type ParsedRow = {
   lineTo?: number
   trade: ImportedTrade | null
   error: RowError | null
+  /** что было в ячейке, из-за которой ошибка (показываем пользователю) */
+  detail?: string
   warnings: RowWarning[]
 }
 

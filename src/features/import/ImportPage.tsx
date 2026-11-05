@@ -287,6 +287,7 @@ export function ImportPage() {
                                 ) : (
                                   <span className="text-loss">
                                     {r.lineTo && r.lineTo !== r.line ? fmt(t.import.lines, { from: r.line, to: r.lineTo }) : `${t.import.col.line} ${r.line}`}: {t.import.rowError[r.error!]}
+                                    {r.detail ? `: «${r.detail}»` : ''}
                                   </span>
                                 )}
                               </td>
