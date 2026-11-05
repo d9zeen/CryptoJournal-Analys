@@ -4,6 +4,7 @@ import { test, expect, fakeSupabase } from './fixtures'
 const WALLET = '0xAbCdEf0123456789abcdef0123456789ABCDEF01'
 
 test('Hyperliquid: подключение кошелька и первая синхронизация', async ({ page, db }) => {
+  db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
   await fakeSupabase(page, db)
   const t0 = Date.UTC(2026, 10, 1, 10)
   const hlBodies: unknown[] = []
@@ -34,6 +35,7 @@ test('Hyperliquid: подключение кошелька и первая си�
 })
 
 test('Bybit: ключ с правом торговли не принимаем', async ({ page, db }) => {
+  db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
   db.bybitReadOnly = 0
   await fakeSupabase(page, db)
   await page.goto('import')
@@ -47,6 +49,7 @@ test('Bybit: ключ с правом торговли не принимаем',
 })
 
 test('Bybit: ключ «только чтение» — закрытые позиции загружаются', async ({ page, db }) => {
+  db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
   await fakeSupabase(page, db)
   await page.goto('import')
   await page.getByRole('button', { name: '+ Подключить' }).click()
@@ -61,26 +64,47 @@ test('Bybit: ключ «только чтение» — закрытые поз�
   for (const c of db.connCalls!.filter((x) => x.fn === 'exchange-proxy')) expect(JSON.stringify(c.body)).not.toContain('SuperSecret')
 })
 
-test('Pro: синхронизация на сервере каждые 3 часа и предупреждение о сроке ключа Bybit', async ({ page, db }) => {
-  db.usage = { plan: 'pro', trades_created: 3, trade_limit: null }
+test('Pro Plus: синхронизация на сервере каждые 3 часа и предупреждение о сроке ключа Bybit', async ({ page, db }) => {
+  db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
   const soon = new Date(Date.now() + 5 * 86_400_000).toISOString()
   db.connections = [
     { id: 'c1', exchange: 'bybit', label: 'основной', api_key: 'AbCdEf123456', last_sync_at: new Date().toISOString(), cursor_at: new Date().toISOString(), last_error: null, key_expires_at: soon, created_at: '' },
   ]
   await fakeSupabase(page, db)
   await page.goto('import')
-  await expect(page.getByText(/Pro: сделки подтягиваются на сервере каждые 3 часа/)).toBeVisible()
+  await expect(page.getByText(/Pro Plus: сделки подтягиваются на сервере каждые 3 часа/)).toBeVisible()
   await expect(page.getByText(/дальше — сам каждые 3 часа/)).toBeVisible()
   await expect(page.getByText(/Ключ Bybit перестанет работать/)).toBeVisible()
 })
 
-test('Free: подсказка про Pro', async ({ page, db }) => {
+test('Basic (Free): подключения закрыты, подсказка про тарифы, демо Polymarket работает', async ({ page, db }) => {
   await fakeSupabase(page, db)
   await page.goto('import')
-  await expect(page.getByText(/На Pro — сами на сервере каждые 3 часа/)).toBeVisible()
+  await expect(page.getByText(/На Pro Plus — сами на сервере каждые 3 часа/)).toBeVisible()
+  await expect(page.getByText(/Polymarket — с тарифа Pro, биржи по API — на Pro Plus/)).toBeVisible()
+  await page.getByRole('button', { name: '+ Подключить' }).click()
+  await expect(page.getByText('Доступно на тарифе Pro Plus.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Подключить', exact: true })).toBeDisabled()
+  await page.getByLabel('Биржа').first().selectOption('polymarket')
+  await expect(page.getByText('Доступно на тарифе Pro.')).toBeVisible()
+  await page.getByRole('button', { name: /Посмотреть пример/ }).click()
+  await expect(page.getByRole('dialog', { name: 'Пример: Polymarket в дневнике' })).toBeVisible()
+})
+
+test('Pro: Polymarket можно подключить, биржи — нет', async ({ page, db }) => {
+  db.usage = { plan: 'pro', trades_created: 3, trade_limit: 50 }
+  await fakeSupabase(page, db)
+  await page.goto('import')
+  await page.getByRole('button', { name: '+ Подключить' }).click()
+  // по умолчанию выбрано первое доступное — Polymarket
+  await expect(page.getByLabel('Биржа').first()).toHaveValue('polymarket')
+  await expect(page.getByLabel('Адрес кошелька')).toBeVisible()
+  await page.getByLabel('Биржа').first().selectOption('bybit')
+  await expect(page.getByText('Доступно на тарифе Pro Plus.')).toBeVisible()
 })
 
 test('Polymarket: подключение по адресу — закрытые позиции становятся сделками с названием рынка', async ({ page, db }) => {
+  db.usage = { plan: 'pro', trades_created: 3, trade_limit: 50 }
   await fakeSupabase(page, db)
   await page.goto('import')
   await page.getByRole('button', { name: '+ Подключить' }).click()

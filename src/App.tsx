@@ -43,6 +43,7 @@ const AnalysisPage = lazyPage(() => import('@/features/analysis/AnalysisPage'), 
 const AdminPage = lazyPage(() => import('@/features/admin/AdminPage'), 'AdminPage')
 const ImportPage = lazyPage(() => import('@/features/import/ImportPage'), 'ImportPage')
 const SettingsPage = lazyPage(() => import('@/features/settings/SettingsPage'), 'SettingsPage')
+const PlansPage = lazyPage(() => import('@/features/plans/PlansPage'), 'PlansPage')
 
 const router = createBrowserRouter([
   // Только для незалогиненных
@@ -72,6 +73,7 @@ const router = createBrowserRouter([
           { path: '/import', element: <ImportPage /> },
           { path: '/settings', element: <SettingsPage /> },
           { path: '/admin', element: <AdminPage /> },
+          { path: '/plans', element: <PlansPage /> },
         ],
       },
     ],

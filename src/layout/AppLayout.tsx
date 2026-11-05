@@ -5,6 +5,7 @@ import { Logo, LogoMark } from '@/components/Logo'
 import { setTheme, useTheme } from '@/lib/theme'
 import { useIsAdmin } from '@/features/admin/api'
 import { useAutoSync } from '@/features/connections/api'
+import { useUsage } from '@/features/settings/api'
 
 function useNavItems() {
   const t = useT()
@@ -82,6 +83,7 @@ export function AppLayout() {
           </span>
           <span className="hidden font-display text-[15px] font-semibold tracking-tight md:inline">{t.app.name}</span>
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
+            <PlanBadge />
             <ThemeToggle />
             <span className="hidden max-w-48 truncate text-sm text-muted sm:inline">{user?.email}</span>
             <button onClick={signOut} className="rounded-lg px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-text">
@@ -110,6 +112,22 @@ export function AppLayout() {
         ))}
       </nav>
     </div>
+  )
+}
+
+/** Тариф в шапке — ссылка на страницу тарифов */
+function PlanBadge() {
+  const t = useT()
+  const { data: usage } = useUsage()
+  if (!usage) return null
+  const paid = usage.plan !== 'free'
+  return (
+    <NavLink
+      to="/plans"
+      className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${paid ? 'bg-primary/15 text-primary hover:bg-primary/25' : 'bg-surface-2 text-muted hover:text-text'}`}
+    >
+      {t.plans.names[usage.plan]}
+    </NavLink>
   )
 }
 

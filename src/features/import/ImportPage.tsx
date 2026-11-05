@@ -147,7 +147,7 @@ export function ImportPage() {
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h1 className="text-xl font-semibold">{t.import.title}</h1>
         {usage && usage.trade_limit !== null && (
-          <p className={`text-sm ${remaining === 0 ? 'text-loss' : 'text-muted'}`}>{fmt(t.tradeForm.usage, { used: usage.trades_created, limit: usage.trade_limit })}</p>
+          <p className={`text-sm ${remaining === 0 ? 'text-loss' : 'text-muted'}`}>{fmt(t.tradeForm.usage, { used: usage.trades_created, limit: usage.trade_limit, plan: t.plans.names[usage.plan] })}</p>
         )}
       </div>
 

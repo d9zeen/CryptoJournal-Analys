@@ -13,6 +13,8 @@ import { exchangeName } from '@/lib/exchanges'
 import { dbErrorMessage } from '@/lib/errors'
 import { formatDateTime } from '@/lib/format'
 import { useUsage } from '@/features/settings/api'
+import { Link } from 'react-router'
+import { canConnect, planFor, planInfo } from '@/lib/plans'
 import { PolymarketDemoDialog } from './PolymarketDemoDialog'
 import {
   CONNECTABLE,
@@ -33,7 +35,7 @@ export function connectionError(e: unknown, t: Dict): string {
   const c = t.connections.errors as Record<string, string>
   if (e instanceof SyncError) return c[e.code] ?? c.UNKNOWN
   const msg = e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : ''
-  for (const code of ['BAD_WALLET', 'BAD_API_KEY', 'TOO_MANY_CONNECTIONS', 'CONNECTION_EXISTS', 'EXCHANGE_NOT_SUPPORTED']) if (msg.includes(code)) return c[code]
+  for (const code of ['BAD_WALLET', 'BAD_API_KEY', 'TOO_MANY_CONNECTIONS', 'CONNECTION_EXISTS', 'EXCHANGE_NOT_SUPPORTED', 'PLAN_REQUIRED']) if (msg.includes(code)) return c[code]
   return dbErrorMessage(e, t)
 }
 
@@ -42,7 +44,7 @@ export function ConnectionsCard() {
   const c = t.connections
   const { data: conns = [], isLoading } = useConnections()
   const { data: usage } = useUsage()
-  const pro = usage?.plan === 'pro'
+  const pro = planInfo(usage?.plan).serverSync // Pro Plus: синхронизация на сервере каждые 3 часа
   const [adding, setAdding] = useState(false)
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
 
@@ -81,7 +83,19 @@ export function ConnectionsCard() {
       {isLoading ? (
         <p className="text-sm text-muted">{t.common.loading}</p>
       ) : conns.length === 0 ? (
-        !adding && <p className="text-sm text-muted">{c.empty}</p>
+        !adding && (
+          <>
+            <p className="text-sm text-muted">{c.empty}</p>
+            {!planInfo(usage?.plan).polymarket && (
+              <p className="text-xs text-muted">
+                {c.lockedHint}{' '}
+                <Link to="/plans" className="text-primary hover:underline">
+                  {t.plans.compare}
+                </Link>
+              </p>
+            )}
+          </>
+        )
       ) : (
         <ul className="flex flex-col">
           {conns.map((conn) => (
@@ -161,7 +175,11 @@ function AddForm({ onDone, onCancel }: { onDone: (name: string) => void; onCance
   const c = t.connections
   const add = useAddConnection()
   const sync = useSyncConnection()
-  const [exchange, setExchange] = useState<ConnectableId>('bybit')
+  const { data: usage } = useUsage()
+  const plan = usage?.plan
+  // по умолчанию — первое подключение, доступное на тарифе
+  const [exchange, setExchange] = useState<ConnectableId>(() => CONNECTABLE.find((x) => canConnect(x.id, plan))?.id ?? 'bybit')
+  const allowed = canConnect(exchange, plan)
   const [apiKey, setApiKey] = useState('')
   const [secret, setSecret] = useState('')
   const [label, setLabel] = useState('')
@@ -189,6 +207,7 @@ function AddForm({ onDone, onCancel }: { onDone: (name: string) => void; onCance
         {CONNECTABLE.map((x) => (
           <option key={x.id} value={x.id}>
             {exchangeName(x.id, '')} · {c.kind[x.kind]}
+            {canConnect(x.id, plan) ? '' : ` · ${t.plans.names[planFor(x.id)]}`}
           </option>
         ))}
       </SelectField>
@@ -211,22 +230,33 @@ function AddForm({ onDone, onCancel }: { onDone: (name: string) => void; onCance
         </>
       )}
 
-      {kind === 'cex' ? (
-        <>
-          <TextField label={c.apiKey} value={apiKey} onChange={(e) => setApiKey(e.target.value)} autoComplete="off" spellCheck={false} required />
-          <TextField label={c.secret} value={secret} onChange={(e) => setSecret(e.target.value)} type="password" autoComplete="new-password" required hint={c.secretHint} />
-        </>
+      {!allowed ? (
+        <Alert tone="info">
+          {fmt(t.plans.needPlan, { plan: t.plans.names[planFor(exchange)] })}{' '}
+          <Link to="/plans" className="text-primary underline">
+            {t.plans.compare}
+          </Link>
+        </Alert>
       ) : (
-        <TextField label={c.wallet} value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="0x…" autoComplete="off" spellCheck={false} required hint={exchange === 'polymarket' ? c.walletHintPolymarket : c.walletHint} />
+        <>
+          {kind === 'cex' ? (
+            <>
+              <TextField label={c.apiKey} value={apiKey} onChange={(e) => setApiKey(e.target.value)} autoComplete="off" spellCheck={false} required />
+              <TextField label={c.secret} value={secret} onChange={(e) => setSecret(e.target.value)} type="password" autoComplete="new-password" required hint={c.secretHint} />
+            </>
+          ) : (
+            <TextField label={c.wallet} value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="0x…" autoComplete="off" spellCheck={false} required hint={exchange === 'polymarket' ? c.walletHintPolymarket : c.walletHint} />
+          )}
+          <TextField label={c.label} value={label} onChange={(e) => setLabel(e.target.value)} maxLength={60} placeholder={c.labelPlaceholder} />
+        </>
       )}
-      <TextField label={c.label} value={label} onChange={(e) => setLabel(e.target.value)} maxLength={60} placeholder={c.labelPlaceholder} />
 
       {error && <Alert tone="error">{error}</Alert>}
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" onClick={onCancel}>
           {t.common.cancel}
         </Button>
-        <Button type="submit" loading={add.isPending}>
+        <Button type="submit" loading={add.isPending} disabled={!allowed}>
           {add.isPending ? c.checking : c.connect}
         </Button>
       </div>
