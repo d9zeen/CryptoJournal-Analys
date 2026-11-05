@@ -12,15 +12,18 @@ import { dbErrorMessage } from '@/lib/errors'
 import { useNavigate } from 'react-router'
 import { deleteMyAccount, downloadTradesCsv } from './dataApi'
 import { SecurityCard } from './SecurityCard'
+import { Segmented } from '@/components/ui/Segmented'
+import { setTheme, useTheme, type Theme } from '@/lib/theme'
 
 export function SettingsPage() {
   const t = useT()
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-xl font-semibold">{t.settings.title}</h1>
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
         <ProfileCard />
         <PlanCard />
+        <AppearanceCard />
       </div>
       <SecurityCard />
       <div className="grid gap-4 lg:grid-cols-3">
@@ -30,6 +33,27 @@ export function SettingsPage() {
       </div>
       <DataCard />
     </div>
+  )
+}
+
+function AppearanceCard() {
+  const t = useT()
+  const a = t.settings.appearance
+  const theme = useTheme()
+  return (
+    <Card>
+      <h2 className="mb-1 font-medium">{a.title}</h2>
+      <p className="mb-4 text-sm text-muted">{a.hint}</p>
+      <Segmented<Theme>
+        label={a.theme}
+        value={theme}
+        onChange={setTheme}
+        options={[
+          { value: 'dark', label: a.dark },
+          { value: 'light', label: a.light },
+        ]}
+      />
+    </Card>
   )
 }
 

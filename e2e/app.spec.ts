@@ -107,3 +107,19 @@ test.describe('настройки', () => {
     await expect(page.getByText('JBSWY3DPEHPK3PXP')).toBeVisible()
   })
 })
+
+test.describe('оформление', () => {
+  test('тема переключается в шапке и запоминается после перезагрузки', async ({ page, db }) => {
+    await fakeSupabase(page, db)
+    await page.goto('dashboard')
+    const html = page.locator('html')
+    await expect(html).not.toHaveAttribute('data-theme', 'light') // тёмная по умолчанию
+    await page.getByRole('button', { name: 'Светлая тема' }).click()
+    await expect(html).toHaveAttribute('data-theme', 'light')
+    await page.reload()
+    await expect(html).toHaveAttribute('data-theme', 'light')
+    await page.goto('settings')
+    await page.getByRole('radio', { name: 'Тёмная' }).click()
+    await expect(html).not.toHaveAttribute('data-theme', 'light')
+  })
+})

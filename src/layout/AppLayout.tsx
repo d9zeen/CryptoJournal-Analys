@@ -1,6 +1,8 @@
 import { NavLink, Outlet } from 'react-router'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { useT } from '@/i18n'
+import { Logo } from '@/components/Logo'
+import { setTheme, useTheme } from '@/lib/theme'
 
 function useNavItems() {
   const t = useT()
@@ -30,21 +32,23 @@ export function AppLayout() {
       {/* Верхняя панель */}
       <header className="sticky top-0 z-10 border-b border-border bg-bg/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-[1800px] items-center gap-6 px-4 lg:px-8">
-          <span className="font-semibold tracking-tight">{t.app.name}</span>
+          <Logo />
           <nav className="hidden gap-1 md:flex">
             {items.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
+                viewTransition
                 className={({ isActive }) =>
-                  `rounded-lg px-3 py-1.5 text-sm transition-colors ${isActive ? 'bg-surface-2 text-text' : 'text-muted hover:text-text'}`
+                  `rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${isActive ? 'bg-surface-2 text-text shadow-[inset_0_-2px_0_var(--color-primary)]' : 'text-muted hover:text-text'}`
                 }
               >
                 {item.label}
               </NavLink>
             ))}
           </nav>
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex items-center gap-2 sm:gap-3">
+            <ThemeToggle />
             <span className="hidden max-w-48 truncate text-sm text-muted sm:inline">{user?.email}</span>
             <button onClick={signOut} className="rounded-lg px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-text">
               {t.nav.logout}
@@ -63,7 +67,8 @@ export function AppLayout() {
           <NavLink
             key={item.to}
             to={item.to}
-            className={({ isActive }) => `flex flex-col items-center gap-1 py-2 text-[11px] ${isActive ? 'text-primary' : 'text-muted'}`}
+            viewTransition
+            className={({ isActive }) => `flex flex-col items-center gap-1 py-2 text-[11px] transition-colors ${isActive ? 'text-primary' : 'text-muted'}`}
           >
             <Icon d={item.icon} />
             {item.label}
@@ -71,5 +76,29 @@ export function AppLayout() {
         ))}
       </nav>
     </div>
+  )
+}
+
+function ThemeToggle() {
+  const t = useT()
+  const theme = useTheme()
+  const next = theme === 'dark' ? 'light' : 'dark'
+  const label = next === 'light' ? t.nav.toLight : t.nav.toDark
+  return (
+    <button
+      type="button"
+      onClick={() => setTheme(next)}
+      aria-label={label}
+      title={label}
+      className="rounded-lg p-2 text-muted transition-colors hover:bg-surface-2 hover:text-text"
+    >
+      {next === 'light' ? (
+        // солнце
+        <Icon d="M12 4V2m0 20v-2m8-8h2M2 12h2m13.66-5.66l1.41-1.41M4.93 19.07l1.41-1.41m0-11.32L4.93 4.93m14.14 14.14l-1.41-1.41M12 17a5 5 0 100-10 5 5 0 000 10z" />
+      ) : (
+        // луна
+        <Icon d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z" />
+      )}
+    </button>
   )
 }

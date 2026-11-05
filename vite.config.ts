@@ -50,6 +50,8 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       sourcemap: false, // исходники не выкладываем
+      // шрифты — всегда отдельными файлами: встроенные data:-шрифты блокирует CSP (font-src 'self')
+      assetsInlineLimit: (file) => (file.endsWith('.woff2') || file.endsWith('.woff') ? false : undefined),
     },
     test: {
       // тесты логики — только в src; сквозные (e2e/) запускает Playwright: npm run test:e2e

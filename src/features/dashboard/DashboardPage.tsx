@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 import { fmt, useT } from '@/i18n'
 import { useTrades } from '@/features/trades/api'
@@ -28,6 +28,7 @@ import {
   type StatTrade,
 } from '@/lib/calc/stats'
 import { GroupTable, type Row } from './GroupTable'
+import { useCountUp } from '@/lib/motion'
 
 // Recharts тяжёлый — грузим графики отдельным файлом
 const EquityChart = lazy(() => import('./charts').then((m) => ({ default: m.EquityChart })))
@@ -103,26 +104,27 @@ export function DashboardPage() {
         <>
           {/* Ключевые цифры */}
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4 2xl:grid-cols-8">
-            <Kpi label={k.totalPnl} value={formatPnl(s.totalPnl)} tone={s.totalPnl} hint={fmt(k.trades, { n: s.closed })} />
-            <Kpi label={k.winrate} value={formatPercent(s.winrate)} hint={fmt(k.winLoss, { w: s.wins, l: s.losses })} />
-            <Kpi label={k.profitFactor} value={formatRatio(s.profitFactor)} hint={k.profitFactorHint} />
-            <Kpi label={k.avgR} value={formatR(s.avgR)} tone={s.avgR} hint={s.rCount ? fmt(k.avgRHint, { n: s.rCount }) : k.avgRNone} />
-            <Kpi label={k.expectancy} value={formatPnl(s.expectancy)} tone={s.expectancy} hint={k.expectancyHint} />
+            <Kpi i={0} label={k.totalPnl} value={<CountPnl value={s.totalPnl} />} tone={s.totalPnl} hint={fmt(k.trades, { n: s.closed })} hero />
+            <Kpi i={1} label={k.winrate} value={formatPercent(s.winrate)} hint={fmt(k.winLoss, { w: s.wins, l: s.losses })} />
+            <Kpi i={2} label={k.profitFactor} value={formatRatio(s.profitFactor)} hint={k.profitFactorHint} />
+            <Kpi i={3} label={k.avgR} value={formatR(s.avgR)} tone={s.avgR} hint={s.rCount ? fmt(k.avgRHint, { n: s.rCount }) : k.avgRNone} />
+            <Kpi i={4} label={k.expectancy} value={formatPnl(s.expectancy)} tone={s.expectancy} hint={k.expectancyHint} />
             <Kpi
+              i={5}
               label={k.maxDrawdown}
               value={s.maxDrawdown > 0 ? `−${formatUsd(s.maxDrawdown)}` : formatUsd(0)}
               tone={s.maxDrawdown > 0 ? -1 : 0}
               hint={s.maxDrawdownPct !== null ? `−${formatPercent(s.maxDrawdownPct)}` : k.maxDrawdownNoBalance}
             />
-            <Kpi label={k.avgWinLoss} value={<Pair a={s.avgWin} b={s.avgLoss} />} />
-            <Kpi label={k.bestWorst} value={<Pair a={s.best} b={s.worst} />} />
+            <Kpi i={6} label={k.avgWinLoss} value={<Pair a={s.avgWin} b={s.avgLoss} />} />
+            <Kpi i={7} label={k.bestWorst} value={<Pair a={s.best} b={s.worst} />} />
           </div>
 
           <div className="grid gap-3 xl:grid-cols-2">
-            <ChartCard title={t.dashboard.charts.equity} hint={t.dashboard.charts.equityHint}>
+            <ChartCard i={8} title={t.dashboard.charts.equity} hint={t.dashboard.charts.equityHint}>
               <EquityChart points={stats.equity} />
             </ChartCard>
-            <ChartCard title={stats.bars.unit === 'month' ? t.dashboard.charts.monthly : stats.bars.unit === 'week' ? t.dashboard.charts.weekly : t.dashboard.charts.daily}>
+            <ChartCard i={9} title={stats.bars.unit === 'month' ? t.dashboard.charts.monthly : stats.bars.unit === 'week' ? t.dashboard.charts.weekly : t.dashboard.charts.daily}>
               <DailyPnlChart days={stats.bars.bars} unit={stats.bars.unit} />
             </ChartCard>
           </div>
@@ -157,30 +159,37 @@ export function DashboardPage() {
   )
 }
 
-function Kpi({ label, value, hint, tone }: { label: string; value: ReactNode; hint?: string; tone?: number | null }) {
+function Kpi({ label, value, hint, tone, i = 0, hero }: { label: string; value: ReactNode; hint?: string; tone?: number | null; i?: number; hero?: boolean }) {
+  // главная цифра (PnL) — крупнее и со свечением своего цвета (только в тёмной теме)
+  const glow = hero && tone ? (tone > 0 ? 'glow-profit' : 'glow-loss') : ''
   return (
-    <Card className="!p-4">
+    <Card className="rise card-lift !p-4" style={{ '--i': i } as CSSProperties}>
       <div className="text-xs text-muted">{label}</div>
-      <div className={`mt-1 truncate text-lg font-semibold ${tone === undefined ? '' : pnlClass(tone)}`}>{value}</div>
+      <div className={`num mt-1 truncate font-semibold ${hero ? 'text-xl sm:text-2xl' : 'text-lg'} ${tone === undefined ? '' : pnlClass(tone)} ${glow}`}>{value}</div>
       {hint && <div className="mt-0.5 truncate text-xs text-muted">{hint}</div>}
     </Card>
   )
 }
 
+/** PnL «докручивается» при открытии дашборда */
+function CountPnl({ value }: { value: number }) {
+  return <>{formatPnl(useCountUp(value))}</>
+}
+
 function Pair({ a, b }: { a: number | null; b: number | null }) {
   return (
-    <span className="flex flex-col text-base leading-tight">
+    <span className="flex flex-col text-[15px] leading-tight">
       <span className={pnlClass(a)}>{formatPnl(a)}</span>
       <span className={pnlClass(b)}>{formatPnl(b)}</span>
     </span>
   )
 }
 
-function ChartCard({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
+function ChartCard({ title, hint, i = 0, children }: { title: string; hint?: string; i?: number; children: ReactNode }) {
   const t = useT()
   return (
-    <Card className="!p-4">
-      <h2 className="font-medium">{title}</h2>
+    <Card className="rise !p-4" style={{ '--i': i } as CSSProperties}>
+      <h2 className="font-semibold">{title}</h2>
       {hint && <p className="mt-0.5 text-xs text-muted">{hint}</p>}
       <div className="mt-3 -ml-2">
         <Suspense fallback={<div className="flex h-[180px] items-center justify-center text-sm text-muted">{t.common.loading}</div>}>{children}</Suspense>

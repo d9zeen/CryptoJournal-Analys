@@ -13,6 +13,8 @@ export const ru = {
     import: 'Импорт',
     settings: 'Настройки',
     logout: 'Выйти',
+    toLight: 'Светлая тема',
+    toDark: 'Тёмная тема',
   },
   auth: {
     email: 'Email',
@@ -261,6 +263,13 @@ export const ru = {
   },
   settings: {
     title: 'Настройки',
+    appearance: {
+      title: 'Оформление',
+      hint: 'Запоминается в этом браузере. На телефоне и компьютере можно выбрать разное.',
+      theme: 'Тема',
+      dark: 'Тёмная',
+      light: 'Светлая',
+    },
     data: {
       title: 'Данные',
       exportHint: 'Все твои сделки одним CSV-файлом: резервная копия и разбор в Excel / Google Таблицах.',

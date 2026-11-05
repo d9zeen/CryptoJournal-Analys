@@ -1,41 +1,159 @@
 /*
- * ЕДИНОЕ МЕСТО ДЛЯ ЦВЕТОВ И ШРИФТОВ.
+ * ЕДИНОЕ МЕСТО ДЛЯ ЦВЕТОВ, ШРИФТОВ И АНИМАЦИЙ. Стиль «Аврора» (выбран 05.11.2026).
  * Меняешь значение здесь — меняется во всём приложении.
  * В коде используются классы вида bg-bg, bg-surface, text-muted, text-profit, border-border и т.д.
+ *
+ * Роли акцентов: primary (фиолетовый) — кнопки, ссылки, навигация;
+ * accent (мятный) — данные и графики; profit / loss — только прибыль и убыток.
+ *
+ * Тема: тёмная по умолчанию, светлая — атрибут data-theme="light" на <html> (src/lib/theme.ts).
  */
 @import 'tailwindcss';
 
-@theme {
-  /* Шрифты */
-  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+/* Шрифты лежат в проекте (npm @fontsource-variable): внешние адреса запрещены CSP */
+@import '@fontsource-variable/unbounded';
+@import '@fontsource-variable/manrope';
+@import '@fontsource-variable/jetbrains-mono';
 
-  /* Фон и поверхности */
-  --color-bg: #0b0e14;          /* фон страницы */
-  --color-surface: #131823;     /* карточки, панели */
-  --color-surface-2: #1b2130;   /* поля ввода, ховеры */
-  --color-border: #262e3f;
+@theme static {
+  /* Шрифты: font-sans — текст, font-display — заголовки, font-mono — цифры (класс num) */
+  --font-sans: 'Manrope Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  --font-display: 'Unbounded Variable', 'Manrope Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Фон и поверхности (тёмная тема) */
+  --color-bg: #0a0c12;          /* фон страницы */
+  --color-surface: #11141c;     /* карточки, панели */
+  --color-surface-2: #181c27;   /* поля ввода, ховеры */
+  --color-border: #252a39;
 
   /* Текст */
-  --color-text: #e6e9ef;
-  --color-muted: #8b93a7;
+  --color-text: #e8eaf3;
+  --color-muted: #8b91a7;
 
   /* Акценты */
-  --color-primary: #3b82f6;
-  --color-primary-hover: #2563eb;
+  --color-primary: #8d78ff;       /* фиолетовый: кнопки, ссылки */
+  --color-primary-hover: #a291ff;
   --color-on-primary: #ffffff;
+  --color-accent: #4ee6c2;        /* мятный: данные, графики */
 
-  /* Торговые цвета */
-  --color-profit: #22c55e;      /* прибыль, long */
-  --color-loss: #ef4444;        /* убыток, short */
-  --color-warning: #f59e0b;
+  /* Торговые цвета («мята / малина») */
+  --color-profit: #4dffb0;      /* прибыль, long */
+  --color-loss: #ff4d8d;        /* убыток, short */
+  --color-warning: #f4b64a;
+
+  /* Неоновое свечение (в светлой теме почти гаснет) */
+  --color-glow: rgb(141 120 255 / 0.4);
+  --shadow-glow: 0 0 24px -2px var(--color-glow);
+  --shadow-lift: 0 12px 32px -16px var(--color-glow);
+
+  /* Анимации */
+  --animate-rise: rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-flash: flash 1.6s ease-out;
+
+  @keyframes rise {
+    from { opacity: 0.15; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes flash {
+    from { background-color: color-mix(in srgb, var(--color-accent) 22%, transparent); }
+    to { background-color: transparent; }
+  }
+}
+
+/* Сила неонового свечения цифр: в тёмной теме есть, в светлой — нет (иначе мутное пятно) */
+:root {
+  --glow-mix: 45%;
+}
+
+/* Светлая тема: переопределяем те же переменные */
+:root[data-theme='light'] {
+  --glow-mix: 0%;
+  --color-bg: #f5f6fa;
+  --color-surface: #ffffff;
+  --color-surface-2: #edeff6;
+  --color-border: #dce0eb;
+  --color-text: #12141c;
+  --color-muted: #646b80;
+  --color-primary: #6650ee;
+  --color-primary-hover: #5640e0;
+  --color-on-primary: #ffffff;
+  --color-accent: #0b9f84;
+  --color-profit: #0b9e62;
+  --color-loss: #d6266b;
+  --color-warning: #b0700a;
+  --color-glow: rgb(102 80 238 / 0.18);
+}
+
+/* Цифры: моноширинные и одной ширины, чтобы столбцы ровно стояли */
+@utility num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+}
+
+/* Свечение главной цифры цветом прибыли / убытка */
+@utility glow-profit {
+  filter: drop-shadow(0 0 14px color-mix(in srgb, var(--color-profit) var(--glow-mix), transparent));
+}
+@utility glow-loss {
+  filter: drop-shadow(0 0 14px color-mix(in srgb, var(--color-loss) var(--glow-mix), transparent));
+}
+
+/* Карточка, которая «оживает» при наведении (дашборд) */
+@utility card-lift {
+  transition: transform 0.2s, box-shadow 0.25s, border-color 0.25s;
+  &:hover {
+    transform: translateY(-2px);
+    border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+    box-shadow: var(--shadow-lift);
+  }
+}
+
+/* Лесенка появления: style={{ '--i': номер }} задаёт задержку */
+@utility rise {
+  animation: var(--animate-rise);
+  animation-delay: calc(var(--i, 0) * 60ms);
 }
 
 @layer base {
   html {
     color-scheme: dark;
   }
+  html[data-theme='light'] {
+    color-scheme: light;
+  }
   body {
     @apply bg-bg text-text font-sans antialiased;
+  }
+  h1 {
+    @apply font-display tracking-tight;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--color-primary) 35%, transparent);
+  }
+}
+
+/* Плавная смена страниц (View Transitions API в браузере, без библиотек) */
+::view-transition-old(root) {
+  animation: 160ms ease-in both vt-out;
+}
+::view-transition-new(root) {
+  animation: 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both vt-in;
+}
+@keyframes vt-out {
+  to { opacity: 0; }
+}
+@keyframes vt-in {
+  from { opacity: 0; transform: translateY(6px); }
+}
+
+/* Кто попросил систему «уменьшить движение» — всё статично */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
+    transition: none !important;
   }
 }

@@ -7,11 +7,13 @@ import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ReferenceLine, Res
 import { fmt, useT } from '@/i18n'
 import { formatDateTime, formatDay, formatDayShort, formatPnl, formatUsdShort, pnlClass } from '@/lib/format'
 import type { BarUnit, DayPnl, EquityPoint } from '@/lib/calc/stats'
+import { prefersReducedMotion } from '@/lib/motion'
 
 const C = {
   profit: 'var(--color-profit)',
   loss: 'var(--color-loss)',
   primary: 'var(--color-primary)',
+  accent: 'var(--color-accent)',
   muted: 'var(--color-muted)',
   grid: 'var(--color-border)',
 }
@@ -24,9 +26,12 @@ const axisProps = {
 
 const HEIGHT = 220
 
+// графики «прорисовываются» при открытии (кроме режима «уменьшить движение»)
+const anim = () => (prefersReducedMotion() ? { isAnimationActive: false } : { isAnimationActive: true, animationDuration: 900, animationEasing: 'ease-out' as const })
+
 /** Всплывающая подсказка в стиле приложения */
 function Tip({ children }: { children: ReactNode }) {
-  return <div className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs shadow-lg">{children}</div>
+  return <div className="num rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs shadow-lg">{children}</div>
 }
 
 // Recharts передаёт в content объект с payload; данные точки — в payload[0].payload
@@ -36,14 +41,21 @@ const pointOf = <T,>(p: TipProps<T>): T | undefined => (p.active ? p.payload?.[0
 export function EquityChart({ points }: { points: EquityPoint[] }) {
   const t = useT()
   const last = points[points.length - 1]?.cum ?? 0
-  const color = last >= 0 ? C.profit : C.loss
+  // в плюсе — фирменный переход фиолетовый → мятный; в минусе — цвет убытка
+  const up = last >= 0
+  const stroke = up ? 'url(#equityStroke)' : C.loss
+  const fill = up ? C.accent : C.loss
   return (
     <ResponsiveContainer width="100%" height={HEIGHT}>
       <AreaChart data={points} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
         <defs>
           <linearGradient id="equityFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity={0.3} />
-            <stop offset="100%" stopColor={color} stopOpacity={0} />
+            <stop offset="0%" style={{ stopColor: fill, stopOpacity: 0.25 }} />
+            <stop offset="100%" style={{ stopColor: fill, stopOpacity: 0 }} />
+          </linearGradient>
+          <linearGradient id="equityStroke" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" style={{ stopColor: C.primary }} />
+            <stop offset="100%" style={{ stopColor: C.accent }} />
           </linearGradient>
         </defs>
         <CartesianGrid stroke={C.grid} strokeDasharray="3 3" vertical={false} />
@@ -64,7 +76,17 @@ export function EquityChart({ points }: { points: EquityPoint[] }) {
             )
           }}
         />
-        <Area type="monotone" dataKey="cum" stroke={color} strokeWidth={2} fill="url(#equityFill)" dot={false} isAnimationActive={false} />
+        <Area
+          type="monotone"
+          dataKey="cum"
+          stroke={stroke}
+          strokeWidth={2.5}
+          fill="url(#equityFill)"
+          dot={false}
+          activeDot={{ r: 4, fill: up ? C.accent : C.loss, stroke: 'var(--color-surface)', strokeWidth: 2 }}
+          style={{ filter: 'drop-shadow(0 0 6px var(--color-glow))' }}
+          {...anim()}
+        />
       </AreaChart>
     </ResponsiveContainer>
   )
@@ -102,7 +124,7 @@ export function DailyPnlChart({ days, unit = 'day' }: { days: DayPnl[]; unit?: B
             )
           }}
         />
-        <Bar dataKey="pnl" radius={[3, 3, 0, 0]} maxBarSize={28} isAnimationActive={false}>
+        <Bar dataKey="pnl" radius={[4, 4, 0, 0]} maxBarSize={28} {...anim()}>
           {days.map((d) => (
             <Cell key={d.date} fill={d.pnl >= 0 ? C.profit : C.loss} />
           ))}
@@ -138,7 +160,7 @@ export function BucketChart({ data }: { data: Bucket[] }) {
             )
           }}
         />
-        <Bar dataKey="pnl" radius={[3, 3, 0, 0]} maxBarSize={28} isAnimationActive={false}>
+        <Bar dataKey="pnl" radius={[4, 4, 0, 0]} maxBarSize={28} {...anim()}>
           {data.map((b) => (
             <Cell key={b.label} fill={b.pnl >= 0 ? C.profit : C.loss} fillOpacity={b.count ? 1 : 0} />
           ))}
