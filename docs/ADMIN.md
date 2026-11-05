@@ -66,3 +66,35 @@ set trades_created = 0
 where month = date_trunc('month', now() at time zone 'utc')::date
   and user_id = (select id from auth.users where email = 'user@example.com');
 ```
+
+
+## Синхронизация по расписанию (Pro, каждые 3 часа)
+
+Задание в расписании:
+```sql
+select jobname, schedule, active from cron.job;
+```
+
+Последние запуски и ответы функции sync-worker:
+```sql
+select start_time, status, return_message from cron.job_run_details order by start_time desc limit 10;
+select created, status_code, left(content::text, 200) from net._http_response order by created desc limit 20;
+```
+
+Состояние подключений (когда обновлялись, ошибки, срок ключа):
+```sql
+select u.email, c.exchange, c.label, c.last_sync_at, c.last_error, c.key_expires_at
+from exchange_connections c join auth.users u on u.id = c.user_id
+order by c.last_sync_at desc nulls last;
+```
+
+Запустить рассылку прямо сейчас (не дожидаясь расписания):
+```sql
+select public.dispatch_sync();
+```
+
+Остановить / снова включить расписание:
+```sql
+select cron.alter_job((select jobid from cron.job where jobname = 'cj-sync'), active := false);
+select cron.alter_job((select jobid from cron.job where jobname = 'cj-sync'), active := true);
+```
