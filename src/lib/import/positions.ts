@@ -2,13 +2,22 @@
  * Закрытые позиции: одна строка = одна закрытая позиция
  * (Bybit Closed P&L, OKX / BingX / Bitget Position History и похожие).
  */
-import { grossPnl, round } from '@/lib/calc/trade'
+import { grossPnl, round, type Side } from '@/lib/calc/trade'
 import { parseDateCell, parseNumberCell, stableHash } from './values'
 import { feeCoinOf, feeToUsd, marketOf, normalizeSymbol, positionSide, type ImportField, type SideMeaning } from './fields'
 import type { CsvTable } from './csv'
 import type { ColumnMapping } from './mapping'
 import type { ImportedTrade, ParsedRow, ParseOptions, RowError, RowWarning } from './types'
 import { finalPnl } from './pnl'
+
+/**
+ * Направления в файле нет: какая версия — лонг или шорт — даёт PnL, ближе всего к PnL из файла.
+ * grossLong — валовый PnL, если бы это был лонг (у шорта — тот же с минусом).
+ */
+export function sideFromPnl(grossLong: number, pnl: number | null, fees: number): Side | null {
+  if (pnl === null || grossLong === 0) return null
+  return Math.abs(grossLong - fees - pnl) <= Math.abs(-grossLong - fees - pnl) ? 'long' : 'short'
+}
 
 export function parsePositions(
   table: CsvTable,
@@ -28,15 +37,12 @@ export function parsePositions(
 
     const symbol = normalizeSymbol(cell('symbol'))
     if (!symbol) return fail('symbol')
-    const side = positionSide(cell('side'), sideMeaning)
-    if (!side) return fail('side', cell('side'))
     const entryPrice = n('entryPrice')
     if (entryPrice === null || entryPrice <= 0) return fail('entryPrice')
     const exitPrice = n('exitPrice')
     if (exitPrice === null || exitPrice <= 0) return fail('exitPrice')
 
     const market = marketChoice === 'auto' ? marketOf(symbol) : marketChoice
-    if (market === 'spot' && side === 'short') return fail('side')
     // Инверсные: объём — в контрактах по 1 $, PnL и комиссии — в монете (переводим в $ по цене выхода)
     const coinToUsd = market === 'inverse' ? exitPrice : 1
     const qty = n('qty')
@@ -48,6 +54,15 @@ export function parsePositions(
           ? Math.abs(entryValue)
           : Math.abs(qty ?? 0) * entryPrice
     if (!(sizeUsd > 0)) return fail('size')
+
+    // направление из файла, а если его нет — по ценам и PnL (какая версия даёт PnL из файла)
+    const feesRaw = Math.abs(n('openFee') ?? 0) + Math.abs(n('closeFee') ?? 0) + (has('openFee') || has('closeFee') ? 0 : Math.abs(n('fee') ?? 0))
+    const pnlForSide = n('pnl')
+    const side =
+      positionSide(cell('side'), sideMeaning) ??
+      sideFromPnl(grossPnl({ marketType: market, side: 'long', entryPrice, exitPrice, sizeUsd })!, pnlForSide === null ? null : pnlForSide * coinToUsd, feesRaw * coinToUsd)
+    if (!side) return fail('side', cell('side'))
+    if (market === 'spot' && side === 'short') return fail('side')
 
     const exitAt = parseDateCell(cell('closeTime'), utcOffsetMinutes)
     if (!exitAt) return fail('time')

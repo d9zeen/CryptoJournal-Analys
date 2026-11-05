@@ -22,8 +22,12 @@ export const FIELDS = {
   fee: ['Trading Fee', 'Trading Fees', 'Exec Fee', 'Fee', 'Fees', 'Total Fee', 'Commission', 'Комиссия', 'Комиссии', 'Торговая комиссия'],
   feeCoin: ['Fee Coin', 'Fee Currency', 'Fee Asset', 'Fee Unit', 'Commission Asset', 'Валюта комиссии'],
   funding: ['Funding Fee', 'Funding', 'Funding Fees', 'Фандинг', 'Комиссия за финансирование', 'Ставка финансирования'],
+  // вид строки истории исполнений: сделка или фандинг (Bybit UTA: Filled Type = Trade / Funding)
+  rowType: ['Filled Type', 'Fill Type', 'Exec Type', 'Execution Type', 'Transaction Type', 'Тип исполнения'],
+  // цена ордера: у покупки она не ниже цены исполнения, у продажи — не выше (так видно направление)
+  orderPrice: ['Order Price', 'Цена ордера'],
   // открытие / закрытие — если направление разнесено на две колонки («Long» + «Open»)
-  sideHint: ['Open/Close', 'Open Close', 'Trade Type', 'Exec Type', 'Execution Type', 'Position Effect', 'Effect', 'Action Type', 'Type', 'Тип сделки', 'Открытие/Закрытие'],
+  sideHint: ['Open/Close', 'Open Close', 'Trade Type', 'Position Effect', 'Effect', 'Action Type', 'Type', 'Тип сделки', 'Открытие/Закрытие'],
   leverage: ['Leverage', 'Плечо', 'Кредитное плечо'],
   openTime: ['Open Time', 'Opening Time', 'Opened Time', 'Time Opened', 'Opened', 'Entry Time', 'Время открытия', 'Время входа'],
   closeTime: ['Trade Time', 'Close Time', 'Closing Time', 'Closed Time', 'Time Closed', 'Closed', 'Exit Time', 'Exec Time', 'Date(UTC)', 'Time', 'Updated Time', 'Created Time', 'Transaction Time', 'Date', 'Время сделки', 'Время закрытия', 'Время исполнения', 'Время', 'Дата'],

@@ -27,6 +27,8 @@ export function makeParser(exchange: string, sideMeaning: SideMeaning): ImportPa
     missing(mapping) {
       const mode = detectMode(mapping) ?? 'positions'
       return REQUIRED[mode]
+        // закрытые позиции: без направления обойдёмся — его видно по ценам входа / выхода и PnL
+        .filter((r) => !(mode === 'positions' && r === 'side' && mapping.pnl >= 0))
         .filter((r) => (Array.isArray(r) ? r.every((f) => mapping[f] < 0) : mapping[r] < 0))
         .map((r) => (Array.isArray(r) ? r[0] : r))
     },
