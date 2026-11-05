@@ -77,6 +77,14 @@ export function ImportPage() {
     [prepared, existingIds, remaining],
   )
 
+  // все строки с одной и той же ошибкой — объясняем один раз сверху, а не 6000 раз в таблице
+  const sameError = useMemo(() => {
+    const rows = prepared?.rows ?? []
+    if (!rows.length || rows.some((r) => r.trade)) return null
+    const first = rows[0].error
+    return first && rows.every((r) => r.error === first) ? { error: first, detail: rows[0].detail } : null
+  }, [prepared])
+
   const warnings = useMemo(() => {
     const count = new Map<RowWarning, number>()
     for (const r of prepared?.rows ?? []) for (const w of r.warnings) count.set(w, (count.get(w) ?? 0) + 1)
@@ -233,6 +241,16 @@ export function ImportPage() {
               {existing.isLoading && <p className="text-sm text-muted">{t.import.checking}</p>}
               {existing.error && <Alert tone="error">{dbErrorMessage(existing.error, t)}</Alert>}
 
+              {sameError && (
+                <Alert tone="error">
+                  <p>
+                    {fmt(t.import.allFailed, { n: prepared.rows.length })}: {t.import.rowError[sameError.error]}
+                    {sameError.detail ? ` «${sameError.detail}»` : ''}.
+                  </p>
+                  <p className="mt-1">{t.import.allFailedHint}</p>
+                </Alert>
+              )}
+
               {plan && (
                 <Card className="flex flex-col gap-3 !p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
@@ -258,6 +276,7 @@ export function ImportPage() {
                   {warnings.has('feeDerived') && <p className="text-xs text-muted">{fmt(t.import.warnings.feeDerived, { n: warnings.get('feeDerived')! })}</p>}
                   {warnings.has('pnlFromFile') && <p className="text-xs text-muted">{fmt(t.import.warnings.pnlFromFile, { n: warnings.get('pnlFromFile')! })}</p>}
                   {warnings.has('feeNotUsd') && <p className="text-xs text-warning">{fmt(t.import.warnings.feeNotUsd, { n: warnings.get('feeNotUsd')! })}</p>}
+                  {warnings.has('sideGuessed') && <p className="text-xs text-warning">{fmt(t.import.warnings.sideGuessed, { n: warnings.get('sideGuessed')! })}</p>}
 
                   <div className="-mx-4 overflow-x-auto">
                     <table className="w-full text-sm">

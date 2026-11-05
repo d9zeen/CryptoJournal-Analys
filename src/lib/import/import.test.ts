@@ -308,13 +308,48 @@ describe('направление — только «Long» / «Short» (Bybit UT
     expect(p.sideFallback).toBe('qtySign')
     expect(p.rows.filter((r) => r.trade)).toHaveLength(1)
   })
-  it('если ни так, ни так позиции не сходятся — ничего не выдумываем', () => {
+  it('Long, Long без PnL: сторона позиции, закрытие угадано по объёму (с предупреждением)', () => {
     const csv = [head,
       'BTCUSDT,Long,0.01,60000,0.33,USDT,2026-11-01 10:00:00,o1',
       'BTCUSDT,Long,0.01,61000,0.3355,USDT,2026-11-01 12:00:00,o2',
     ].join('\n')
     const p = prepareImport(csv, bybitParser)
+    expect(p.sideFallback).toBe('positionSide')
+    const t = p.rows.find((r) => r.trade)!
+    expect(t.trade).toMatchObject({ side: 'long', entry_price: 60000, exit_price: 61000 })
+    expect(t.warnings).toContain('sideGuessed')
+  })
+  it('если ничего не сходится — ничего не выдумываем', () => {
+    const csv = [head, 'BTCUSDT,???,0.01,60000,0.33,USDT,2026-11-01 10:00:00,o1'].join('\n')
+    const p = prepareImport(csv, bybitParser)
     expect(p.sideFallback).toBeNull()
     expect(p.rows.every((r) => r.error === 'side')).toBe(true)
+  })
+})
+
+describe('Bybit UTA Trade History: Long / Short — сторона позиции, открытие / закрытие по Closed P&L', () => {
+  const head = 'Contracts,Direction,Filled Qty,Filled Price,Filled Value,Trading Fee,Closed P&L,Order No.,Transaction Time(UTC+0)'
+  it('открытие, доливка, частичное и полное закрытие; лонг и шорт по одной паре', () => {
+    const csv = [head,
+      'BTCUSDT,Long,0.1,60000,6000,3.3,0,o1,2026-11-01 10:00:00',
+      'BTCUSDT,Short,0.2,60500,12100,6.655,0,o2,2026-11-01 10:30:00', // шорт в хедж-режиме, пока лонг открыт
+      'BTCUSDT,Long,0.1,58000,5800,3.19,-3.19,o3,2026-11-01 11:00:00', // доливка: в PnL только комиссия
+      'BTCUSDT,Long,0.1,61000,6100,3.355,196.645,o4,2026-11-01 12:00:00', // частичное закрытие
+      'BTCUSDT,Long,0.1,62000,6200,3.41,296.59,o5,2026-11-01 13:00:00', // закрытие лонга (тот же объём, что и доливка)
+      'BTCUSDT,Short,0.2,59500,11900,6.545,193.455,o6,2026-11-01 14:00:00',
+      'ETHUSDT,Short,1,3000,3000,1.65,-20,o7,2026-11-01 15:00:00', // закрытие шорта, открытого до начала файла
+    ].join('\n')
+    const p = prepareImport(csv, bybitParser)
+    expect(p.sideFallback).toBe('positionSide')
+    const trades = p.rows.filter((r) => r.trade).map((r) => r.trade!)
+    expect(trades).toHaveLength(2)
+    const long = trades.find((t) => t.side === 'long')!
+    expect(long.entry_price).toBeCloseTo(59000)
+    expect(long.exit_price).toBeCloseTo(61500)
+    expect(long.size_usd).toBeCloseTo(11800)
+    const short = trades.find((t) => t.side === 'short')!
+    expect(short).toMatchObject({ entry_price: 60500, exit_price: 59500 })
+    expect(p.rows.find((r) => r.line === 8)).toMatchObject({ error: 'closeNoOpen' })
+    expect(p.rows.every((r) => !r.warnings.includes('sideGuessed'))).toBe(true)
   })
 })

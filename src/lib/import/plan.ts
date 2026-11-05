@@ -2,7 +2,7 @@
 import { parseCsv, type CsvTable } from './csv'
 import { autoMap, type ColumnMapping } from './mapping'
 import { FUZZY, fillSign } from './fields'
-import type { ImportedTrade, ImportMode, ImportParser, MarketChoice, ParsedRow } from './types'
+import type { ImportedTrade, ImportMode, ImportParser, MarketChoice, ParsedRow, SideFallback } from './types'
 import { offsetFromHeader } from './values'
 
 export type Prepared = {
@@ -17,7 +17,7 @@ export type Prepared = {
   mode: ImportMode | null
   rows: ParsedRow[]
   /** как понято направление, если в файле только «Long» / «Short» (null — как обычно) */
-  sideFallback: 'longIsBuy' | 'qtySign' | null
+  sideFallback: SideFallback | null
 }
 
 /** Разобрать текст файла. mapping / offset — ручные поправки пользователя (иначе автоопределение). */
@@ -44,7 +44,11 @@ export function prepareImport(
     const sideErrors = rows.filter((r) => r.error === 'side').length
     if (sideErrors > rows.length / 2) {
       let best = { trades: 0, open: Infinity }
-      for (const fb of ['qtySign', 'longIsBuy'] as const) {
+      // Long / Short как сторона позиции + закрытый PnL у каждого исполнения — самый надёжный вариант (Bybit UTA)
+      const order: SideFallback[] = mapping.pnl >= 0 ? ['positionSide', 'qtySign', 'longIsBuy'] : ['qtySign', 'longIsBuy', 'positionSide']
+      for (const fb of order) {
+        // без PnL сторона позиции угадывается — берём, только если другие способы не сработали
+        if (fb === 'positionSide' && mapping.pnl < 0 && sideFallback) continue
         const tryRows = parser.parse(table, mapping, { ...base, sideFallback: fb })
         if (tryRows.filter((r) => r.error === 'side').length > tryRows.length * 0.1) continue
         const trades = tryRows.filter((r) => r.trade).length
@@ -54,6 +58,7 @@ export function prepareImport(
           best = { trades, open }
           rows = tryRows
           sideFallback = fb
+          if (fb === 'positionSide') break // по PnL открытие / закрытие известно точно — дальше не ищем
         }
       }
     }
