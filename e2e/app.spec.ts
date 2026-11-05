@@ -210,6 +210,11 @@ test.describe('админка', () => {
     expect(db.adminCalls?.[1]).toMatchObject({ fn: 'admin_set_plan', body: { p_user: 'u1', p_plan: 'pro_plus', p_until: null } })
     await page.getByRole('button', { name: 'Сбросить лимит' }).first().click()
     await expect(page.getByText('лимит friend@example.com в этом месяце сброшен')).toBeVisible()
+    // выдать админку (с подтверждением)
+    page.once('dialog', (d) => d.accept())
+    await page.getByRole('button', { name: 'Сделать админом' }).first().click()
+    await expect(page.getByText('Готово: friend@example.com теперь админ.')).toBeVisible()
+    expect(db.adminCalls?.find((c) => c.fn === 'admin_set_admin')).toMatchObject({ body: { p_user: 'u1', p_admin: true } })
   })
 })
 

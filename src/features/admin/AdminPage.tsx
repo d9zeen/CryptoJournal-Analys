@@ -15,7 +15,7 @@ import { useMediaQuery } from '@/lib/useMediaQuery'
 import type { AdminUser, Plan } from '@/types/db'
 import { planInfo } from '@/lib/plans'
 import { SelectField } from '@/components/ui/Field'
-import { useAdminResetUsage, useAdminSetPlan, useAdminUsers, useIsAdmin } from './api'
+import { useAdminResetUsage, useAdminSetAdmin, useAdminSetPlan, useAdminUsers, useIsAdmin } from './api'
 
 const dateOnly = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
 
@@ -27,6 +27,7 @@ export function AdminPage() {
   const { data: users = [], isLoading, error } = useAdminUsers(isAdmin === true)
   const setPlan = useAdminSetPlan()
   const resetUsage = useAdminResetUsage()
+  const setAdmin = useAdminSetAdmin()
   const desktop = useMediaQuery('(min-width: 1024px)')
   const [query, setQuery] = useState('')
   const [giveTo, setGiveTo] = useState<Plan>('pro_plus')
@@ -53,15 +54,33 @@ export function AdminPage() {
       await action()
       setStatus({ tone: 'success', text: ok })
     } catch (e) {
-      setStatus({ tone: 'error', text: dbErrorMessage(e, t) })
+      const msg = e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : ''
+      const known = (['CANNOT_REMOVE_SELF', 'LAST_ADMIN'] as const).find((c) => msg.includes(c))
+      setStatus({ tone: 'error', text: known ? a.errors[known] : dbErrorMessage(e, t) })
     }
   }
 
   const actions = (u: AdminUser) => {
-    // админ всегда работает без лимитов — выдавать / снимать тариф ему не нужно
-    if (u.is_admin) return <span className="text-xs text-muted">{a.unlimitedHint}</span>
     const email = u.email ?? u.id
-    const busy = setPlan.isPending || resetUsage.isPending
+    const busy = setPlan.isPending || resetUsage.isPending || setAdmin.isPending
+    const small0 = '!px-2.5 !py-1.5 text-xs'
+    // админ всегда работает без лимитов — выдавать / снимать тариф ему не нужно; админку можно снять (кроме себя)
+    if (u.is_admin)
+      return (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-muted">{a.unlimitedHint}</span>
+          {u.id !== user?.id && (
+            <Button
+              variant="ghost"
+              className={small0}
+              disabled={busy}
+              onClick={() => window.confirm(fmt(a.removeAdminConfirm, { email })) && run(() => setAdmin.mutateAsync({ userId: u.id, admin: false }), fmt(a.done.adminRemoved, { email }))}
+            >
+              {a.removeAdmin}
+            </Button>
+          )}
+        </div>
+      )
     const small = '!px-2.5 !py-1.5 text-xs'
     const in30 = new Date(Date.now() + 30 * 86_400_000).toISOString()
     const give = (until: string | null) =>
@@ -81,6 +100,14 @@ export function AdminPage() {
         )}
         <Button variant="ghost" className={small} disabled={busy || u.trades_month === 0} onClick={() => run(() => resetUsage.mutateAsync(u.id), fmt(a.done.reset, { email }))}>
           {a.resetLimit}
+        </Button>
+        <Button
+          variant="ghost"
+          className={small}
+          disabled={busy}
+          onClick={() => window.confirm(fmt(a.makeAdminConfirm, { email })) && run(() => setAdmin.mutateAsync({ userId: u.id, admin: true }), fmt(a.done.adminGiven, { email }))}
+        >
+          {a.makeAdmin}
         </Button>
       </div>
     )

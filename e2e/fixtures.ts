@@ -68,7 +68,7 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
     if (path.endsWith('/rpc/get_my_usage')) return json({ ...db.usage, month: '2026-11-01' })
     if (path.endsWith('/rpc/is_admin')) return json(Boolean(db.isAdmin))
     if (path.endsWith('/rpc/admin_list_users')) return db.isAdmin ? json(db.adminUsers ?? []) : json({ message: 'NOT_ADMIN', code: '42501' }, 403)
-    if (path.endsWith('/rpc/admin_set_plan') || path.endsWith('/rpc/admin_reset_usage')) {
+    if (path.endsWith('/rpc/admin_set_plan') || path.endsWith('/rpc/admin_reset_usage') || path.endsWith('/rpc/admin_set_admin')) {
       ;(db.adminCalls ??= []).push({ fn: path.split('/').pop()!, body: body() })
       return route.fulfill({ status: 204 })
     }

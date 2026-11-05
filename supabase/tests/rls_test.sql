@@ -311,6 +311,36 @@ select admin_reset_usage('bbbbbbbb-0000-0000-0000-000000000002');
 reset role;
 select pg_temp.check((select trades_created from usage_counters where user_id = 'bbbbbbbb-0000-0000-0000-000000000002' and month = (date_trunc('month', now() at time zone 'utc'))::date) = 0, 'админ сбросил лимит B');
 
+-- Выдача админки на сайте (0014)
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
+select pg_temp.expect_error($$select admin_set_admin('bbbbbbbb-0000-0000-0000-000000000002', true)$$, 'NOT_ADMIN');
+select pg_temp.check(true, 'не-админ не может сделать себя админом');
+set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
+select pg_temp.expect_error($$select admin_set_admin('aaaaaaaa-0000-0000-0000-000000000001', false)$$, 'CANNOT_REMOVE_SELF');
+select pg_temp.check(true, 'админ не может снять админку с себя');
+select admin_set_admin('bbbbbbbb-0000-0000-0000-000000000002', true);
+select pg_temp.check((select is_admin from admin_list_users() where id = 'bbbbbbbb-0000-0000-0000-000000000002'), 'админ выдал админку B');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
+select pg_temp.check(is_admin(), 'B теперь админ');
+select admin_set_admin('aaaaaaaa-0000-0000-0000-000000000001', false);
+select pg_temp.check((select count(*) from admins) = 1, 'B снял админку с A');
+select pg_temp.expect_error($$select admin_set_admin('bbbbbbbb-0000-0000-0000-000000000002', false)$$, 'CANNOT_REMOVE_SELF');
+select pg_temp.check(true, 'последний админ не остаётся без доступа');
+select admin_set_admin('aaaaaaaa-0000-0000-0000-000000000001', true);
+select admin_set_admin('bbbbbbbb-0000-0000-0000-000000000002', true);
+select pg_temp.expect_error($$select admin_set_admin('00000000-0000-0000-0000-000000000000', true)$$, 'USER_NOT_FOUND');
+select pg_temp.check(true, 'несуществующего пользователя админом не сделать');
+set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
+select admin_set_admin('bbbbbbbb-0000-0000-0000-000000000002', false);
+select pg_temp.check((select count(*) from admin_list_users() where is_admin) = 1, 'A снял админку с B — снова один админ');
+reset role;
+set role anon;
+set request.jwt.claim.sub = '';
+select pg_temp.expect_error($$select admin_set_admin('bbbbbbbb-0000-0000-0000-000000000002', true)$$, 'permission denied');
+select pg_temp.check(true, 'аноним не может выдавать админку');
+reset role;
+
 -- Админ без лимитов (0009)
 update profiles set plan = 'free', plan_until = null where id = 'aaaaaaaa-0000-0000-0000-000000000001';
 set role authenticated;
