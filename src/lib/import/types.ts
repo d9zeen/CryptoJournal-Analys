@@ -36,6 +36,7 @@ export type RowError =
   | 'pnl'
   | 'stillOpen' // в истории сделок позиция так и не закрылась к концу файла
   | 'spotNoBuy' // спот: продажа монет, купленных до начала файла
+  | 'closeNoOpen' // закрытие позиции, открытой раньше периода файла
 
 /** Предупреждения — строку импортируем, но пользователю стоит знать */
 export type RowWarning =
@@ -43,6 +44,7 @@ export type RowWarning =
   | 'feeDerived' // комиссий в файле нет — посчитали как разницу между валовым PnL и PnL из файла
   | 'pnlFromFile' // PnL из файла не сходится с формулой — оставили биржевой
   | 'feeNotUsd' // комиссия в посторонней монете (BNB и т.п.) — не учли
+  | 'sideGuessed' // открытие / закрытие угадано по объёму позиции (в файле нет ни открытия / закрытия, ни PnL)
 
 export type ParsedRow = {
   /** номер строки в файле (заголовок = 1); для истории сделок — первая строка позиции */
@@ -62,16 +64,20 @@ export type ImportMode = 'positions' | 'fills'
 /** Рынок: auto — по названию пары (BTCUSD — coin-M, остальное — USDT-фьючерсы) */
 export type MarketChoice = 'auto' | 'linear' | 'inverse' | 'spot'
 
+export type SideFallback = 'longIsBuy' | 'qtySign' | 'positionSide'
+
 export type ParseOptions = {
   /** в каком поясе записано время без явного смещения, минуты (UTC+3 → 180) */
   utcOffsetMinutes: number
   market: MarketChoice
   /**
    * История исполнений, где направление — просто «Long» / «Short» без открытия / закрытия:
-   * 'longIsBuy' — Long = покупка, Short = продажа; 'qtySign' — по знаку объёма (продажа с минусом).
+   * 'longIsBuy' — Long = покупка, Short = продажа; 'qtySign' — по знаку объёма (продажа с минусом);
+   * 'positionSide' — Long / Short это сторона позиции (Bybit UTA Trade History): открытие или закрытие
+   * понимаем по закрытому PnL исполнения (не ноль — закрытие), а без колонки PnL — по объёму позиции.
    * Подбирается само (plan.ts), если обычное направление не читается.
    */
-  sideFallback?: 'longIsBuy' | 'qtySign'
+  sideFallback?: SideFallback
 }
 
 /** Парсер файлов одной биржи. Все биржи используют общий движок (universal.ts) со своими настройками. */
