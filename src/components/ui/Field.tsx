@@ -1,7 +1,7 @@
 import { useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react'
 
 export const controlClass =
-  'w-full rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-base text-text outline-none transition-colors placeholder:text-muted/60 focus:border-primary disabled:opacity-60 sm:text-sm'
+  'w-full rounded-lg border border-border bg-surface-2 px-3 py-2.5 text-base text-text outline-none transition-[border-color,box-shadow] placeholder:text-muted/60 focus:border-primary focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-primary)_22%,transparent)] disabled:opacity-60 sm:text-sm'
 
 type WrapProps = { label?: string; hint?: ReactNode; error?: string; children: (id: string) => ReactNode; className?: string }
 

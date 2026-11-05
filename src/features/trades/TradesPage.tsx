@@ -144,13 +144,13 @@ export function TradesPage() {
               {openCount > 0 && ` · ${fmt(t.trades.openCount, { n: openCount })}`}
             </span>
             <span>
-              {t.trades.totalPnl}: <span className={`font-medium ${pnlClass(totalPnl)}`}>{formatPnl(totalPnl)}</span>
+              {t.trades.totalPnl}: <span className={`num font-semibold ${pnlClass(totalPnl)}`}>{formatPnl(totalPnl)}</span>
             </span>
           </div>
 
           {/* Таблица на десктопе, карточки на телефоне — рисуем только одно из двух */}
           {desktop ? (
-            <div className="overflow-x-auto rounded-xl border border-border">
+            <div className="rise overflow-x-auto rounded-xl border border-border">
               <table className="w-full text-sm">
                 <thead className="bg-surface text-left text-muted">
                   <tr>
@@ -165,9 +165,9 @@ export function TradesPage() {
                 </thead>
                 <tbody>
                   {visible.map((tr) => (
-                    <tr key={tr.id} onClick={() => navigate(`/trades/${tr.id}`)} className="cursor-pointer border-t border-border hover:bg-surface">
-                      <td className="whitespace-nowrap px-4 py-3 text-muted">{formatDateTime(tr.entry_at)}</td>
-                      <td className="px-4 py-3 font-medium">
+                    <tr key={tr.id} onClick={() => navigate(`/trades/${tr.id}`)} className="cursor-pointer border-t border-border transition-colors hover:bg-surface-2/60">
+                      <td className="num whitespace-nowrap px-4 py-3 text-xs text-muted">{formatDateTime(tr.entry_at)}</td>
+                      <td className="num px-4 py-3 font-semibold">
                         <Link to={`/trades/${tr.id}`} onClick={(e) => e.stopPropagation()} className="hover:underline">
                           {tr.symbol}
                         </Link>
@@ -177,13 +177,13 @@ export function TradesPage() {
                       <td className="px-4 py-3">
                         <SideBadge side={tr.side} />
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3">{formatUsd(tr.size_usd)}</td>
-                      <td className="whitespace-nowrap px-4 py-3 text-muted">
+                      <td className="num whitespace-nowrap px-4 py-3">{formatUsd(tr.size_usd)}</td>
+                      <td className="num whitespace-nowrap px-4 py-3 text-muted">
                         {formatPrice(tr.entry_price)} → {tr.exit_price !== null ? formatPrice(tr.exit_price) : <OpenBadge />}
                       </td>
                       <td className="px-4 py-3 text-muted">{tr.setup_id ? setupName.get(tr.setup_id) : '—'}</td>
-                      <td className={`whitespace-nowrap px-4 py-3 text-right font-medium ${pnlClass(tr.pnl)}`}>{formatPnl(tr.pnl)}</td>
-                      <td className={`whitespace-nowrap px-4 py-3 text-right ${pnlClass(tr.r_multiple)}`}>{formatR(tr.r_multiple)}</td>
+                      <td className={`num whitespace-nowrap px-4 py-3 text-right font-semibold ${pnlClass(tr.pnl)}`}>{formatPnl(tr.pnl)}</td>
+                      <td className={`num whitespace-nowrap px-4 py-3 text-right ${pnlClass(tr.r_multiple)}`}>{formatR(tr.r_multiple)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -211,7 +211,7 @@ export function TradesPage() {
 function SideBadge({ side }: { side: 'long' | 'short' }) {
   const t = useT()
   return (
-    <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${side === 'long' ? 'bg-profit/15 text-profit' : 'bg-loss/15 text-loss'}`}>
+    <span className={`rounded px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide ${side === 'long' ? 'bg-profit/15 text-profit' : 'bg-loss/15 text-loss'}`}>
       {t.side[side]}
     </span>
   )
@@ -242,22 +242,22 @@ function TradeCard({ trade: tr, setupName }: { trade: TradeWithTags; setupName?:
   const t = useT()
   return (
     <li>
-      <Link to={`/trades/${tr.id}`} className="block rounded-xl border border-border bg-surface p-4 active:bg-surface-2">
+      <Link to={`/trades/${tr.id}`} className="block rounded-xl border border-border bg-surface p-4 transition-colors active:bg-surface-2">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="font-medium">{tr.symbol}</span>
+            <span className="num font-semibold">{tr.symbol}</span>
             <SideBadge side={tr.side} />
             <ShotsBadge trade={tr} />
             {tr.exit_at === null && <OpenBadge />}
           </div>
-          <span className={`font-medium ${pnlClass(tr.pnl)}`}>{formatPnl(tr.pnl)}</span>
+          <span className={`num font-semibold ${pnlClass(tr.pnl)}`}>{formatPnl(tr.pnl)}</span>
         </div>
         <div className="mt-1.5 flex items-center justify-between gap-2 text-xs text-muted">
           <span>
             {formatDateTime(tr.entry_at)} · {exchangeName(tr.exchange, t.exchange.other)}
             {setupName && ` · ${setupName}`}
           </span>
-          <span className={pnlClass(tr.r_multiple)}>{formatR(tr.r_multiple)}</span>
+          <span className={`num ${pnlClass(tr.r_multiple)}`}>{formatR(tr.r_multiple)}</span>
         </div>
       </Link>
     </li>

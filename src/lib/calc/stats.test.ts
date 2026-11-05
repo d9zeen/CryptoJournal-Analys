@@ -6,7 +6,9 @@ import {
   byWeekday,
   closedTrades,
   drawdown,
+  drawdownPeriod,
   equityCurve,
+  rWinLoss,
   pnlByDay,
   summarize,
   topMistakes,
@@ -108,6 +110,43 @@ describe('equityCurve', () => {
     const curve = equityCurve(closedTrades([tr({ pnl: 10, exit_at: '2026-11-01T00:00:00Z' }), tr({ pnl: -4, exit_at: '2026-11-02T00:00:00Z' })]))
     expect(curve.map((p) => p.cum)).toEqual([0, 10, 6])
     expect(curve.map((p) => p.n)).toEqual([0, 1, 2])
+  })
+})
+
+describe('drawdownPeriod', () => {
+  const seqPnl = (pnls: number[]) => closedTrades(pnls.map((pnl, i) => tr({ pnl, exit_at: `2026-11-01T0${i}:00:00Z` })))
+  const curve = (pnls: number[]) => equityCurve(seqPnl(pnls))
+  it('пик, дно и восстановление; глубина как у drawdown()', () => {
+    // накопленно: 0, 10, 6, 3, 11, 16
+    const pnls = [10, -4, -3, 8, 5]
+    expect(drawdownPeriod(curve(pnls))).toEqual({ peak: 1, trough: 3, recovery: 4, depth: 7 })
+    expect(drawdownPeriod(curve(pnls))!.depth).toBe(drawdown(seqPnl(pnls)).usd)
+  })
+  it('ещё не восстановился — recovery null', () => {
+    expect(drawdownPeriod(curve([10, -5]))).toEqual({ peak: 1, trough: 2, recovery: null, depth: 5 })
+  })
+  it('убыток с первой сделки — пик на старте (n = 0)', () => {
+    expect(drawdownPeriod(curve([-3, -2, 9]))).toEqual({ peak: 0, trough: 2, recovery: 3, depth: 5 })
+  })
+  it('без просадки — null', () => {
+    expect(drawdownPeriod(curve([5, 5, 0]))).toBeNull()
+    expect(drawdownPeriod(curve([]))).toBeNull()
+  })
+})
+
+describe('rWinLoss', () => {
+  it('средний выигрыш и проигрыш в R только по сделкам со стопом', () => {
+    const closed = closedTrades([
+      tr({ pnl: 20, r_multiple: 2 }),
+      tr({ pnl: 10, r_multiple: 1 }),
+      tr({ pnl: -10, r_multiple: -1 }),
+      tr({ pnl: -5, r_multiple: -0.5 }),
+      tr({ pnl: 50, r_multiple: null }),
+    ])
+    expect(rWinLoss(closed)).toEqual({ avgWinR: 1.5, avgLossR: -0.75 })
+  })
+  it('нет сделок со стопом — null', () => {
+    expect(rWinLoss(closedTrades([tr({ pnl: 5 })]))).toEqual({ avgWinR: null, avgLossR: null })
   })
 })
 

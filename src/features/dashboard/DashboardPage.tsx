@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 import { fmt, useT } from '@/i18n'
 import { useTrades } from '@/features/trades/api'
@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import { rangeFor, type CustomRange, type PeriodPreset } from '@/lib/period'
 import { browserTimeZone } from '@/lib/tz'
-import { formatPercent, formatPnl, formatR, formatRatio, formatUsd, pnlClass } from '@/lib/format'
+import { formatUsd } from '@/lib/format'
 import {
   byEmotion,
   byHour,
@@ -19,15 +19,21 @@ import {
   byWeekday,
   closedTrades,
   downsampleEquity,
+  drawdownPeriod,
   equityCurve,
   pnlBars,
   pnlByDay,
+  rWinLoss,
   summarize,
   topMistakes,
   type Group,
   type StatTrade,
 } from '@/lib/calc/stats'
 import { GroupTable, type Row } from './GroupTable'
+import { SummaryStrip } from './SummaryStrip'
+import { EquityTableDialog } from './EquityTableDialog'
+import type { EquityUnit } from './equityTime'
+import { Segmented } from '@/components/ui/Segmented'
 
 // Recharts тяжёлый — грузим графики отдельным файлом
 const EquityChart = lazy(() => import('./charts').then((m) => ({ default: m.EquityChart })))
@@ -51,12 +57,16 @@ export function DashboardPage() {
   const stats = useMemo(() => {
     const all: StatTrade[] = (trades ?? []).map((tr) => ({ ...tr, tagIds: tr.trade_mistakes.map((m) => m.tag_id) }))
     const closed = closedTrades(all)
+    const curve = equityCurve(closed)
     return {
       openCount: all.filter((tr) => tr.exit_at === null).length,
       closed,
       summary: summarize(closed, profile?.starting_balance),
+      curve,
       // для графиков — не больше нескольких сотен точек: иначе браузер тормозит на тысячах сделок
-      equity: downsampleEquity(equityCurve(closed)),
+      equity: downsampleEquity(curve),
+      period: drawdownPeriod(curve),
+      rwl: rWinLoss(closed),
       bars: pnlBars(pnlByDay(closed, tz)),
       side: bySide(closed),
       setups: bySetup(closed),
@@ -68,13 +78,17 @@ export function DashboardPage() {
     }
   }, [trades, profile?.starting_balance, tz])
 
+  const balance = profile?.starting_balance && profile.starting_balance > 0 ? profile.starting_balance : null
+  const ch = t.dashboard.charts
+  const [eqUnitRaw, setEqUnit] = useState<EquityUnit>('usd')
+  const eqUnit: EquityUnit = balance ? eqUnitRaw : 'usd' // % без депозита не посчитать
+  const [tableOpen, setTableOpen] = useState(false)
   const c = t.dashboard.tables
   const names = (list: { id: string; name: string }[]) => new Map(list.map((x) => [x.id, x.name]))
   const toRows = (groups: Group<string | null>[], nameMap: Map<string, string>, noneLabel: string): Row[] =>
     groups.map((g) => ({ id: g.key ?? '—', label: g.key === null ? noneLabel : (nameMap.get(g.key) ?? c.deleted), group: g }))
 
   const s = stats.summary
-  const k = t.dashboard.kpi
 
   return (
     <div className="flex flex-col gap-4">
@@ -101,28 +115,39 @@ export function DashboardPage() {
         </Card>
       ) : (
         <>
-          {/* Ключевые цифры */}
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 2xl:grid-cols-8">
-            <Kpi label={k.totalPnl} value={formatPnl(s.totalPnl)} tone={s.totalPnl} hint={fmt(k.trades, { n: s.closed })} />
-            <Kpi label={k.winrate} value={formatPercent(s.winrate)} hint={fmt(k.winLoss, { w: s.wins, l: s.losses })} />
-            <Kpi label={k.profitFactor} value={formatRatio(s.profitFactor)} hint={k.profitFactorHint} />
-            <Kpi label={k.avgR} value={formatR(s.avgR)} tone={s.avgR} hint={s.rCount ? fmt(k.avgRHint, { n: s.rCount }) : k.avgRNone} />
-            <Kpi label={k.expectancy} value={formatPnl(s.expectancy)} tone={s.expectancy} hint={k.expectancyHint} />
-            <Kpi
-              label={k.maxDrawdown}
-              value={s.maxDrawdown > 0 ? `−${formatUsd(s.maxDrawdown)}` : formatUsd(0)}
-              tone={s.maxDrawdown > 0 ? -1 : 0}
-              hint={s.maxDrawdownPct !== null ? `−${formatPercent(s.maxDrawdownPct)}` : k.maxDrawdownNoBalance}
-            />
-            <Kpi label={k.avgWinLoss} value={<Pair a={s.avgWin} b={s.avgLoss} />} />
-            <Kpi label={k.bestWorst} value={<Pair a={s.best} b={s.worst} />} />
-          </div>
+          {/* «Лента»: PnL с мини-кривой, винрейт, profit factor, средний R */}
+          <SummaryStrip summary={s} curve={stats.curve} period={stats.period} startingBalance={balance} rwl={stats.rwl} />
 
           <div className="grid gap-3 xl:grid-cols-2">
-            <ChartCard title={t.dashboard.charts.equity} hint={t.dashboard.charts.equityHint}>
-              <EquityChart points={stats.equity} />
-            </ChartCard>
-            <ChartCard title={stats.bars.unit === 'month' ? t.dashboard.charts.monthly : stats.bars.unit === 'week' ? t.dashboard.charts.weekly : t.dashboard.charts.daily}>
+            <Card className="rise !p-4 [--i:1]">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="font-semibold">{ch.equity}</h2>
+                  <p className="mt-0.5 text-xs text-muted">{eqUnit === 'pct' && balance ? fmt(ch.equityHintPct, { b: formatUsd(balance) }) : ch.equityHintUsd}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {balance && (
+                    <Segmented<EquityUnit>
+                      value={eqUnit}
+                      onChange={setEqUnit}
+                      options={[
+                        { value: 'usd', label: ch.unitUsd },
+                        { value: 'pct', label: ch.unitPct },
+                      ]}
+                    />
+                  )}
+                  <Button variant="secondary" onClick={() => setTableOpen(true)}>
+                    {ch.table}
+                  </Button>
+                </div>
+              </div>
+              <div className="mt-3 -ml-2">
+                <Suspense fallback={<div className="flex h-[260px] items-center justify-center text-sm text-muted">{t.common.loading}</div>}>
+                  <EquityChart points={stats.equity} unit={eqUnit} balance={balance} />
+                </Suspense>
+              </div>
+            </Card>
+            <ChartCard i={2} title={stats.bars.unit === 'month' ? t.dashboard.charts.monthly : stats.bars.unit === 'week' ? t.dashboard.charts.weekly : t.dashboard.charts.daily}>
               <DailyPnlChart days={stats.bars.bars} unit={stats.bars.unit} />
             </ChartCard>
           </div>
@@ -151,36 +176,18 @@ export function DashboardPage() {
           </div>
 
           <p className="text-xs text-muted">{fmt(t.dashboard.timezoneNote, { tz })}</p>
+          <EquityTableDialog open={tableOpen} onClose={() => setTableOpen(false)} curve={stats.curve} unit={eqUnit} balance={balance} />
         </>
       )}
     </div>
   )
 }
 
-function Kpi({ label, value, hint, tone }: { label: string; value: ReactNode; hint?: string; tone?: number | null }) {
-  return (
-    <Card className="!p-4">
-      <div className="text-xs text-muted">{label}</div>
-      <div className={`mt-1 truncate text-lg font-semibold ${tone === undefined ? '' : pnlClass(tone)}`}>{value}</div>
-      {hint && <div className="mt-0.5 truncate text-xs text-muted">{hint}</div>}
-    </Card>
-  )
-}
-
-function Pair({ a, b }: { a: number | null; b: number | null }) {
-  return (
-    <span className="flex flex-col text-base leading-tight">
-      <span className={pnlClass(a)}>{formatPnl(a)}</span>
-      <span className={pnlClass(b)}>{formatPnl(b)}</span>
-    </span>
-  )
-}
-
-function ChartCard({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
+function ChartCard({ title, hint, i = 0, children }: { title: string; hint?: string; i?: number; children: ReactNode }) {
   const t = useT()
   return (
-    <Card className="!p-4">
-      <h2 className="font-medium">{title}</h2>
+    <Card className="rise !p-4" style={{ '--i': i } as CSSProperties}>
+      <h2 className="font-semibold">{title}</h2>
       {hint && <p className="mt-0.5 text-xs text-muted">{hint}</p>}
       <div className="mt-3 -ml-2">
         <Suspense fallback={<div className="flex h-[180px] items-center justify-center text-sm text-muted">{t.common.loading}</div>}>{children}</Suspense>

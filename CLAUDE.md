@@ -36,8 +36,12 @@ Node 22 (см. `.node-version`).
 
 ```
 src/
-  styles/theme.css     ВСЕ цвета и шрифты (Tailwind @theme). Классы: bg-bg, bg-surface, bg-surface-2,
-                       border-border, text-text, text-muted, text-primary, text-profit, text-loss
+  styles/theme.css     ВСЕ цвета, шрифты и анимации (Tailwind @theme), стиль «Аврора». Классы: bg-bg, bg-surface, bg-surface-2,
+                       border-border, text-text, text-muted, text-primary (фиолет: кнопки), text-accent (мята: данные),
+                       text-profit, text-loss, font-display (заголовки), num (цифры моно), rise (появление, --i), card-lift,
+                       shadow-glow, glow-profit/glow-loss. Светлая тема — :root[data-theme='light'] в том же файле
+  lib/theme.ts         тёмная / светлая тема (localStorage, ставится до отрисовки в main.tsx), useTheme / setTheme
+  lib/motion.ts        prefersReducedMotion, useCountUp — анимации уважают «уменьшить движение»
   i18n/ru.ts           ВСЕ тексты интерфейса. Новый язык = файл с той же структурой (тип Dict)
   i18n/index.ts        useT(), fmt()
   lib/supabase.ts      клиент Supabase (только публичный ключ)
@@ -55,6 +59,8 @@ src/
   components/ui/       базовые компоненты (Button, Input, Card, Alert, Spinner)
   layout/AppLayout.tsx шапка + нижнее меню на телефоне
   features/<раздел>/   auth, dashboard, trades, import, settings
+                       dashboard: SummaryStrip («Лента» + мини-кривая на SVG), charts.tsx (Recharts, лениво),
+                       EquityTableDialog (таблица сделок в <dialog>), equityTime.ts (время точек, $ / %)
 supabase/migrations/   SQL-миграции, нумерация 0001_..., 0002_...
 supabase/tests/        заглушка Supabase для чистого Postgres + тесты RLS (rls_test.sql);
                        live_check.sql — проверка защиты на НАСТОЯЩЕЙ базе (всё откатывает)
@@ -106,7 +112,8 @@ docs/SECURITY.md       вся защита (база, сайт, сборка) + 
 - [x] Этап 4 — импорт Bybit CSV (сверить с реальным файлом Bybit)
 - [ ] Этап 5 — лимиты, полировка, деплой
 
-Разработка сейчас идёт на localhost (`npm run dev`), деплой и домен — позже (этап 5).
+Сайт уже выкладывается на GitHub Pages: проверка изменений — на https://d9zeen.github.io/CryptoJournal-Analys/ после слияния PR
+(владелец localhost не использует; в отчёте «как проверить» — ссылка на сайт). Домен — позже (этап 5).
 Данные: TanStack Query, ключи `['trades', ...]`, `['trade', id]`, `['list', kind]`, `['profile']`, `['usage']`.
 Ошибка лимита из БД приходит как `FREE_LIMIT_REACHED` → `lib/errors.ts`.
 
@@ -118,3 +125,5 @@ docs/SECURITY.md       вся защита (база, сайт, сборка) + 
 Основная ветка: `claude/amazing-bohr-gt7ta9`. Новые этапы приходят в неё через Pull Request.
 Страницы приложения грузятся лениво (`lazyPage` в `App.tsx`), графики (`features/dashboard/charts.tsx`) — тоже: Recharts — отдельный файл сборки.
 Цвета в графиках — `var(--color-…)` из theme.css.
+Шрифты — npm `@fontsource-variable/*` (файлы в сборке); `assetsInlineLimit` в vite.config.ts не даёт встраивать их как data: (CSP).
+Новые цвета — в ОБЕ темы theme.css (тёмная в @theme, светлая в :root[data-theme='light']).

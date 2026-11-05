@@ -45,6 +45,22 @@ test.describe('дашборд и сделки', () => {
     await expect(page.locator('.recharts-surface').first()).toBeVisible()
   })
 
+  test('кривая капитала: $ / % и таблица сделок в отдельном окне', async ({ page, db }) => {
+    db.trades = Array.from({ length: 12 }, (_, i) => makeTrade(i))
+    await fakeSupabase(page, db)
+    await page.goto('dashboard')
+    await expect(page.getByRole('heading', { name: 'Кривая капитала' })).toBeVisible()
+    await page.getByRole('radio', { name: '%' }).click()
+    await expect(page.getByText('Накопленный PnL в % от депозита')).toBeVisible()
+    await page.getByRole('button', { name: 'Таблица сделок' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Таблица сделок' })
+    await expect(dialog).toBeVisible()
+    await expect(dialog.locator('tbody tr')).toHaveCount(12)
+    await expect(dialog.locator('tbody tr').first()).toContainText('%')
+    await dialog.getByRole('button', { name: 'Закрыть' }).click()
+    await expect(dialog).toBeHidden()
+  })
+
   test('список сделок по умолчанию за всё время (старые сделки видны)', async ({ page, db }) => {
     db.trades = [makeTrade(0, { symbol: 'OLDUSDT', entry_at: '2025-01-05T10:00:00Z', exit_at: '2025-01-05T12:00:00Z' })]
     await fakeSupabase(page, db)
@@ -105,5 +121,21 @@ test.describe('настройки', () => {
     await expect(qr).toBeVisible()
     expect(await qr.evaluate((i: HTMLImageElement) => i.naturalWidth)).toBeGreaterThan(0)
     await expect(page.getByText('JBSWY3DPEHPK3PXP')).toBeVisible()
+  })
+})
+
+test.describe('оформление', () => {
+  test('тема переключается в шапке и запоминается после перезагрузки', async ({ page, db }) => {
+    await fakeSupabase(page, db)
+    await page.goto('dashboard')
+    const html = page.locator('html')
+    await expect(html).not.toHaveAttribute('data-theme', 'light') // тёмная по умолчанию
+    await page.getByRole('button', { name: 'Светлая тема' }).click()
+    await expect(html).toHaveAttribute('data-theme', 'light')
+    await page.reload()
+    await expect(html).toHaveAttribute('data-theme', 'light')
+    await page.goto('settings')
+    await page.getByRole('radio', { name: 'Тёмная' }).click()
+    await expect(html).not.toHaveAttribute('data-theme', 'light')
   })
 })

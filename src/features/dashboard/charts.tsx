@@ -2,16 +2,20 @@
  * Графики дашборда (Recharts). Файл грузится отдельно (lazy), чтобы не утяжелять первый экран.
  * Цвета — только CSS-переменные из theme.css.
  */
-import type { ReactNode } from 'react'
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { useMemo, type ReactNode } from 'react'
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { fmt, useT } from '@/i18n'
-import { formatDateTime, formatDay, formatDayShort, formatPnl, formatUsdShort, pnlClass } from '@/lib/format'
+import { formatDateTime, formatDay, formatDayShort, formatNumber, formatPnl, formatUsdShort, pnlClass } from '@/lib/format'
+import { useMediaQuery } from '@/lib/useMediaQuery'
+import { formatUnit, inUnit, shortDate, withTime, type EquityUnit, type TimedPoint } from './equityTime'
 import type { BarUnit, DayPnl, EquityPoint } from '@/lib/calc/stats'
+import { prefersReducedMotion } from '@/lib/motion'
 
 const C = {
   profit: 'var(--color-profit)',
   loss: 'var(--color-loss)',
   primary: 'var(--color-primary)',
+  accent: 'var(--color-accent)',
   muted: 'var(--color-muted)',
   grid: 'var(--color-border)',
 }
@@ -24,49 +28,102 @@ const axisProps = {
 
 const HEIGHT = 220
 
+// графики «прорисовываются» при открытии (кроме режима «уменьшить движение»)
+const anim = () => (prefersReducedMotion() ? { isAnimationActive: false } : { isAnimationActive: true, animationDuration: 900, animationEasing: 'ease-out' as const })
+
 /** Всплывающая подсказка в стиле приложения */
 function Tip({ children }: { children: ReactNode }) {
-  return <div className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs shadow-lg">{children}</div>
+  return <div className="num rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs shadow-lg">{children}</div>
 }
 
 // Recharts передаёт в content объект с payload; данные точки — в payload[0].payload
 type TipProps<T> = { active?: boolean; payload?: ReadonlyArray<{ payload?: T }> }
 const pointOf = <T,>(p: TipProps<T>): T | undefined => (p.active ? p.payload?.[0]?.payload : undefined)
 
-export function EquityChart({ points }: { points: EquityPoint[] }) {
+type EqRow = TimedPoint & { v: number; trade: number; fromPeak: number }
+
+/**
+ * Кривая капитала: белая гладкая линия с мягким неоном (класс equity-neon в theme.css), без заливки.
+ * Ось X — даты (расстояние между точками = реальное время), подпись итога у последней точки.
+ */
+export function EquityChart({ points, unit, balance }: { points: EquityPoint[]; unit: EquityUnit; balance: number | null }) {
   const t = useT()
-  const last = points[points.length - 1]?.cum ?? 0
-  const color = last >= 0 ? C.profit : C.loss
+  const wide = useMediaQuery('(min-width: 640px)')
+  const data = useMemo<EqRow[]>(() => {
+    let peak = -Infinity
+    return withTime(points).map((p) => {
+      const v = inUnit(p.cum, unit, balance)
+      peak = Math.max(peak, v)
+      return { ...p, v, trade: inUnit(p.pnl, unit, balance), fromPeak: v - peak }
+    })
+  }, [points, unit, balance])
+  const last = data[data.length - 1]
+  const yTick = (v: number) => (unit === 'usd' ? formatUsdShort(v) : `${formatNumber(v, 0)} %`)
   return (
-    <ResponsiveContainer width="100%" height={HEIGHT}>
-      <AreaChart data={points} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-        <defs>
-          <linearGradient id="equityFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity={0.3} />
-            <stop offset="100%" stopColor={color} stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid stroke={C.grid} strokeDasharray="3 3" vertical={false} />
-        <XAxis dataKey="n" {...axisProps} minTickGap={24} />
-        <YAxis {...axisProps} width={56} tickFormatter={formatUsdShort} />
-        <ReferenceLine y={0} stroke={C.muted} strokeOpacity={0.5} />
-        <Tooltip
-          cursor={{ stroke: C.muted, strokeOpacity: 0.4 }}
-          content={(props) => {
-            const p = pointOf<EquityPoint>(props as TipProps<EquityPoint>)
-            if (!p) return null
-            return (
-              <Tip>
-                <div className="text-muted">{p.n === 0 ? t.dashboard.charts.start : `${fmt(t.dashboard.charts.tradeN, { n: p.n })} · ${formatDateTime(p.at)}`}</div>
-                <div className={`mt-0.5 font-medium ${pnlClass(p.cum)}`}>{formatPnl(p.cum)}</div>
-                {p.n > 0 && <div className={pnlClass(p.pnl)}>{formatPnl(p.pnl)}</div>}
-              </Tip>
-            )
-          }}
-        />
-        <Area type="monotone" dataKey="cum" stroke={color} strokeWidth={2} fill="url(#equityFill)" dot={false} isAnimationActive={false} />
-      </AreaChart>
-    </ResponsiveContainer>
+    <div className="equity-neon">
+      <ResponsiveContainer width="100%" height={HEIGHT + 40}>
+        <LineChart data={data} margin={{ top: 22, right: wide ? 104 : 16, bottom: 0, left: 0 }}>
+          <CartesianGrid stroke={C.grid} vertical={false} />
+          <XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} {...axisProps} tickFormatter={shortDate} minTickGap={40} />
+          <YAxis {...axisProps} width={60} tickFormatter={yTick} />
+          <ReferenceLine y={0} stroke={C.muted} strokeOpacity={0.5} />
+          <Tooltip
+            cursor={{ stroke: C.muted, strokeOpacity: 0.4 }}
+            content={(props) => {
+              const p = pointOf<EqRow>(props as TipProps<EqRow>)
+              if (!p) return null
+              return (
+                <Tip>
+                  <div className="text-muted">{p.n === 0 ? t.dashboard.charts.start : formatDateTime(p.at)}</div>
+                  <div className={`mt-0.5 text-sm font-semibold ${pnlClass(p.v)}`}>{formatUnit(p.v, unit)}</div>
+                  {p.n > 0 && (
+                    <>
+                      <div className="mt-1 flex justify-between gap-4">
+                        <span className="text-muted">{p.symbol ?? t.dashboard.charts.trade}</span>
+                        <span className={pnlClass(p.trade)}>{formatUnit(p.trade, unit)}</span>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <span className="text-muted">{t.dashboard.charts.fromPeak}</span>
+                        <span>{p.fromPeak < -1e-9 ? formatUnit(p.fromPeak, unit) : t.dashboard.charts.atPeak}</span>
+                      </div>
+                    </>
+                  )}
+                </Tip>
+              )
+            }}
+          />
+          <Line
+            type="monotone"
+            dataKey="v"
+            stroke="var(--color-text)"
+            strokeWidth={2}
+            dot={false}
+            activeDot={{ r: 5, fill: 'var(--color-text)', stroke: 'var(--color-surface)', strokeWidth: 2 }}
+            {...anim()}
+          />
+          {last && (
+            <ReferenceDot
+              x={last.t}
+              y={last.v}
+              r={4.5}
+              fill="var(--color-text)"
+              stroke="var(--color-surface)"
+              strokeWidth={2}
+              label={{
+                value: formatUnit(last.v, unit),
+                position: wide ? 'right' : 'top',
+                offset: 10,
+                fill: 'var(--color-text)',
+                fontSize: 12,
+                fontWeight: 600,
+                fontFamily: 'var(--font-mono)',
+                ...(wide ? {} : { textAnchor: 'end' }),
+              }}
+            />
+          )}
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
   )
 }
 
@@ -102,7 +159,7 @@ export function DailyPnlChart({ days, unit = 'day' }: { days: DayPnl[]; unit?: B
             )
           }}
         />
-        <Bar dataKey="pnl" radius={[3, 3, 0, 0]} maxBarSize={28} isAnimationActive={false}>
+        <Bar dataKey="pnl" radius={[4, 4, 0, 0]} maxBarSize={28} {...anim()}>
           {days.map((d) => (
             <Cell key={d.date} fill={d.pnl >= 0 ? C.profit : C.loss} />
           ))}
@@ -138,7 +195,7 @@ export function BucketChart({ data }: { data: Bucket[] }) {
             )
           }}
         />
-        <Bar dataKey="pnl" radius={[3, 3, 0, 0]} maxBarSize={28} isAnimationActive={false}>
+        <Bar dataKey="pnl" radius={[4, 4, 0, 0]} maxBarSize={28} {...anim()}>
           {data.map((b) => (
             <Cell key={b.label} fill={b.pnl >= 0 ? C.profit : C.loss} fillOpacity={b.count ? 1 : 0} />
           ))}

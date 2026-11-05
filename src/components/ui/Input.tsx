@@ -13,7 +13,7 @@ export function Input({ label, error, className = '', ...rest }: Props) {
         id={id}
         {...rest}
         aria-invalid={Boolean(error)}
-        className={`rounded-lg border bg-surface-2 px-3 py-2.5 text-base text-text outline-none transition-colors placeholder:text-muted/60 focus:border-primary sm:text-sm ${error ? 'border-loss' : 'border-border'} ${className}`}
+        className={`rounded-lg border bg-surface-2 px-3 py-2.5 text-base text-text outline-none transition-[border-color,box-shadow] placeholder:text-muted/60 focus:border-primary focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-primary)_22%,transparent)] sm:text-sm ${error ? 'border-loss' : 'border-border'} ${className}`}
       />
       {error && <p className="text-xs text-loss">{error}</p>}
     </div>
