@@ -61,6 +61,23 @@ test.describe('дашборд и сделки', () => {
     await expect(dialog).toBeHidden()
   })
 
+  test('вкладка «Разбор»: таблицы ушли с дашборда сюда, меню — иконки с подписью', async ({ page, db }, info) => {
+    db.trades = Array.from({ length: 6 }, (_, i) => makeTrade(i))
+    await fakeSupabase(page, db)
+    await page.goto('dashboard')
+    await expect(page.getByText('Реализованный PnL')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Сетапы' })).toHaveCount(0)
+    const link = page.getByRole('link', { name: 'Разбор' })
+    if (info.project.name === 'desktop') {
+      await link.hover()
+      await expect(page.getByRole('tooltip', { name: 'Разбор' })).toBeVisible()
+    }
+    await link.click()
+    await expect(page).toHaveURL(/\/analysis$/)
+    await expect(page.getByRole('heading', { name: 'Разбор сделок' })).toBeVisible()
+    for (const name of ['Сетапы', 'Топ ошибок', 'Пары', 'Эмоции', 'Long / Short']) await expect(page.getByRole('heading', { name })).toBeVisible()
+  })
+
   test('список сделок по умолчанию за всё время (старые сделки видны)', async ({ page, db }) => {
     db.trades = [makeTrade(0, { symbol: 'OLDUSDT', entry_at: '2025-01-05T10:00:00Z', exit_at: '2025-01-05T12:00:00Z' })]
     await fakeSupabase(page, db)
