@@ -56,6 +56,8 @@ export function AdminPage() {
   }
 
   const actions = (u: AdminUser) => {
+    // админ всегда работает без лимитов — выдавать / снимать Pro ему не нужно
+    if (u.is_admin) return <span className="text-xs text-muted">{a.unlimitedHint}</span>
     const email = u.email ?? u.id
     const busy = setPlan.isPending || resetUsage.isPending
     const small = '!px-2.5 !py-1.5 text-xs'
@@ -84,6 +86,7 @@ export function AdminPage() {
   }
 
   const planBadge = (u: AdminUser) => {
+    if (u.is_admin) return <span className="rounded-md bg-primary/15 px-2 py-0.5 text-xs font-semibold whitespace-nowrap text-primary">{a.unlimited}</span>
     const pro = u.effective_plan === 'pro'
     const text = pro
       ? u.plan_until

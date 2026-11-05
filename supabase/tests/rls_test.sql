@@ -299,6 +299,20 @@ select admin_reset_usage('bbbbbbbb-0000-0000-0000-000000000002');
 reset role;
 select pg_temp.check((select trades_created from usage_counters where user_id = 'bbbbbbbb-0000-0000-0000-000000000002' and month = (date_trunc('month', now() at time zone 'utc'))::date) = 0, 'админ сбросил лимит B');
 
+-- Админ без лимитов (0009)
+update profiles set plan = 'free', plan_until = null where id = 'aaaaaaaa-0000-0000-0000-000000000001';
+set role authenticated;
+set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
+select pg_temp.check((select plan = 'pro' and trade_limit is null from get_my_usage()), 'админ — всегда Pro без лимита, даже если в профиле Free');
+insert into trades (exchange, symbol, side, entry_at, entry_price, size_usd)
+  select 'bybit', 'BTCUSDT', 'long', now(), 100, 10 from generate_series(1, 35);
+select pg_temp.check(true, 'админ добавляет сделки сверх лимита Free');
+insert into setups (name) select 'Сетап ' || g from generate_series(1, 100) g;
+select pg_temp.check((select count(*) from setups) > 100, 'у админа нет потолка на число сетапов');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
+select pg_temp.check((select plan = 'free' and trade_limit = 30 from get_my_usage()), 'у обычного пользователя лимит Free остаётся');
+reset role;
+
 -- Админ с включённой 2FA — только после ввода кода (aal2)
 insert into auth.mfa_factors (user_id, status) values ('aaaaaaaa-0000-0000-0000-000000000001', 'verified');
 set role authenticated;
