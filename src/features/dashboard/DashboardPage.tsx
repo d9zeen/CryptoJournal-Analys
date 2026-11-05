@@ -2,7 +2,7 @@ import { lazy, Suspense, useMemo, useState, type CSSProperties, type ReactNode }
 import { useNavigate } from 'react-router'
 import { fmt, useT } from '@/i18n'
 import { useTrades } from '@/features/trades/api'
-import { useList, useProfile } from '@/features/settings/api'
+import { useProfile } from '@/features/settings/api'
 import { PeriodFilter } from '@/components/PeriodFilter'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -11,11 +11,7 @@ import { rangeFor, type CustomRange, type PeriodPreset } from '@/lib/period'
 import { browserTimeZone } from '@/lib/tz'
 import { formatUsd } from '@/lib/format'
 import {
-  byEmotion,
   byHour,
-  bySetup,
-  bySide,
-  bySymbol,
   byWeekday,
   closedTrades,
   downsampleEquity,
@@ -25,11 +21,8 @@ import {
   pnlByDay,
   rWinLoss,
   summarize,
-  topMistakes,
-  type Group,
   type StatTrade,
 } from '@/lib/calc/stats'
-import { GroupTable, type Row } from './GroupTable'
 import { SummaryStrip } from './SummaryStrip'
 import { EquityTableDialog } from './EquityTableDialog'
 import type { EquityUnit } from './equityTime'
@@ -49,9 +42,6 @@ export function DashboardPage() {
 
   const { data: trades, isLoading, error } = useTrades(range)
   const { data: profile } = useProfile()
-  const { data: setups = [] } = useList('setups')
-  const { data: emotions = [] } = useList('emotions')
-  const { data: tags = [] } = useList('mistake_tags')
 
   const tz = profile?.timezone || browserTimeZone()
   const stats = useMemo(() => {
@@ -68,11 +58,6 @@ export function DashboardPage() {
       period: drawdownPeriod(curve),
       rwl: rWinLoss(closed),
       bars: pnlBars(pnlByDay(closed, tz)),
-      side: bySide(closed),
-      setups: bySetup(closed),
-      emotions: byEmotion(closed),
-      mistakes: topMistakes(closed),
-      symbols: bySymbol(closed),
       weekday: byWeekday(closed, tz),
       hour: byHour(closed, tz),
     }
@@ -83,10 +68,6 @@ export function DashboardPage() {
   const [eqUnitRaw, setEqUnit] = useState<EquityUnit>('usd')
   const eqUnit: EquityUnit = balance ? eqUnitRaw : 'usd' // % без депозита не посчитать
   const [tableOpen, setTableOpen] = useState(false)
-  const c = t.dashboard.tables
-  const names = (list: { id: string; name: string }[]) => new Map(list.map((x) => [x.id, x.name]))
-  const toRows = (groups: Group<string | null>[], nameMap: Map<string, string>, noneLabel: string): Row[] =>
-    groups.map((g) => ({ id: g.key ?? '—', label: g.key === null ? noneLabel : (nameMap.get(g.key) ?? c.deleted), group: g }))
 
   const s = stats.summary
 
@@ -150,20 +131,6 @@ export function DashboardPage() {
             <ChartCard i={2} title={stats.bars.unit === 'month' ? t.dashboard.charts.monthly : stats.bars.unit === 'week' ? t.dashboard.charts.weekly : t.dashboard.charts.daily}>
               <DailyPnlChart days={stats.bars.bars} unit={stats.bars.unit} />
             </ChartCard>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            <GroupTable title={c.side} rows={stats.side.map((g) => ({ id: g.key, label: t.side[g.key], group: g }))} />
-            <GroupTable title={c.setups} rows={toRows(stats.setups, names(setups), c.noSetup)} />
-            <GroupTable
-              title={c.mistakes}
-              hint={c.mistakesHint}
-              mode="mistakes"
-              empty={c.mistakesEmpty}
-              rows={stats.mistakes.map((g) => ({ id: g.key, label: names(tags).get(g.key) ?? c.deleted, group: g }))}
-            />
-            <GroupTable title={c.emotions} rows={toRows(stats.emotions, names(emotions), c.noEmotion)} />
-            <GroupTable title={c.symbols} rows={stats.symbols.map((g) => ({ id: g.key, label: g.key, group: g }))} />
           </div>
 
           <div className="grid gap-3 md:grid-cols-2">

@@ -57,8 +57,8 @@ src/
                        pnl.ts, plan.ts (новые/дубли/лимит), registry.ts (список бирж) + тесты
   lib/export/          выгрузка сделок в CSV (+ тесты); features/settings/dataApi.ts — выгрузка и удаление аккаунта
   components/ui/       базовые компоненты (Button, Input, Card, Alert, Spinner)
-  layout/AppLayout.tsx шапка + нижнее меню на телефоне
-  features/<раздел>/   auth, dashboard, trades, import, settings
+  layout/AppLayout.tsx левая панель-меню (иконки, подпись при наведении) + шапка; на телефоне — нижнее меню с подписями
+  features/<раздел>/   auth, dashboard, analysis (вкладка «Разбор»: таблицы по сетапам, ошибкам, парам, эмоциям, Long/Short), trades, import, settings
                        dashboard: SummaryStrip («Лента» + мини-кривая на SVG), charts.tsx (Recharts, лениво),
                        EquityTableDialog (таблица сделок в <dialog>), equityTime.ts (время точек, $ / %)
 supabase/migrations/   SQL-миграции, нумерация 0001_..., 0002_...

@@ -1,7 +1,7 @@
 import { NavLink, Outlet } from 'react-router'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { useT } from '@/i18n'
-import { Logo } from '@/components/Logo'
+import { Logo, LogoMark } from '@/components/Logo'
 import { setTheme, useTheme } from '@/lib/theme'
 
 function useNavItems() {
@@ -9,6 +9,7 @@ function useNavItems() {
   return [
     { to: '/dashboard', label: t.nav.dashboard, icon: 'M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z' },
     { to: '/trades', label: t.nav.trades, icon: 'M4 6h16M4 12h16M4 18h10' },
+    { to: '/analysis', label: t.nav.analysis, icon: 'M4 20V11m6 9V5m6 15v-6m5 6H3' },
     { to: '/import', label: t.nav.import, icon: 'M12 3v12m0 0l-4-4m4 4l4-4M4 17v3h16v-3' },
     { to: '/settings', label: t.nav.settings, icon: 'M12 15a3 3 0 100-6 3 3 0 000 6zm7.4-3a7.4 7.4 0 00-.1-1.3l2-1.6-2-3.4-2.4 1a7.6 7.6 0 00-2.2-1.3L14.3 2h-4l-.4 2.4a7.6 7.6 0 00-2.2 1.3l-2.4-1-2 3.4 2 1.6a7.4 7.4 0 000 2.6l-2 1.6 2 3.4 2.4-1c.7.5 1.4 1 2.2 1.3l.4 2.4h4l.4-2.4c.8-.3 1.5-.8 2.2-1.3l2.4 1 2-3.4-2-1.6c.1-.4.1-.9.1-1.3z' },
   ]
@@ -28,25 +29,51 @@ export function AppLayout() {
   const items = useNavItems()
 
   return (
-    <div className="min-h-dvh pb-20 md:pb-0">
+    <div className="min-h-dvh pb-20 md:pb-0 md:pl-[72px]">
+      {/* Левая панель (компьютер): только иконки, подпись — при наведении */}
+      <aside className="fixed inset-y-0 left-0 z-20 hidden w-[72px] flex-col items-center gap-1 border-r border-border bg-surface py-3 md:flex">
+        <NavLink to="/dashboard" viewTransition aria-label={t.app.name} className="mb-3 rounded-xl p-1.5">
+          <LogoMark className="size-8" />
+        </NavLink>
+        <nav className="flex flex-col items-center gap-1.5">
+          {items.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              viewTransition
+              aria-label={item.label}
+              className={({ isActive }) =>
+                `group relative flex size-11 items-center justify-center rounded-xl transition-colors ${
+                  isActive ? 'bg-surface-2 text-text shadow-glow' : 'text-muted hover:bg-surface-2/60 hover:text-text'
+                }`
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  {/* полоска у активного пункта */}
+                  {isActive && <span className="absolute top-1/2 -left-[14px] h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-primary" aria-hidden />}
+                  <Icon d={item.icon} />
+                  {/* подпись при наведении и при фокусе с клавиатуры */}
+                  <span
+                    role="tooltip"
+                    className="pointer-events-none absolute top-1/2 left-full ml-3 -translate-x-1 -translate-y-1/2 rounded-lg border border-border bg-surface-2 px-2.5 py-1 text-xs font-medium whitespace-nowrap text-text opacity-0 shadow-lg transition-[opacity,translate] duration-150 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100"
+                  >
+                    {item.label}
+                  </span>
+                </>
+              )}
+            </NavLink>
+          ))}
+        </nav>
+      </aside>
+
       {/* Верхняя панель */}
       <header className="sticky top-0 z-10 border-b border-border bg-bg/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-[1800px] items-center gap-6 px-4 lg:px-8">
-          <Logo />
-          <nav className="hidden gap-1 md:flex">
-            {items.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                viewTransition
-                className={({ isActive }) =>
-                  `rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${isActive ? 'bg-surface-2 text-text shadow-[inset_0_-2px_0_var(--color-primary)]' : 'text-muted hover:text-text'}`
-                }
-              >
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
+          <span className="md:hidden">
+            <Logo />
+          </span>
+          <span className="hidden font-display text-[15px] font-semibold tracking-tight md:inline">{t.app.name}</span>
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
             <ThemeToggle />
             <span className="hidden max-w-48 truncate text-sm text-muted sm:inline">{user?.email}</span>
@@ -61,8 +88,8 @@ export function AppLayout() {
         <Outlet />
       </main>
 
-      {/* Нижнее меню на телефоне */}
-      <nav className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-4 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
+      {/* Нижнее меню на телефоне: там нет наведения, поэтому подписи остаются */}
+      <nav className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-5 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
         {items.map((item) => (
           <NavLink
             key={item.to}
