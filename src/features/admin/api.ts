@@ -58,3 +58,11 @@ export function useAdminResetUsage() {
     if (error) throw error
   })
 }
+
+/** Выдать / снять админку (себя снять нельзя — проверяет база) */
+export function useAdminSetAdmin() {
+  return useAdminMutation(async ({ userId, admin }: { userId: string; admin: boolean }) => {
+    const { error } = await supabase.rpc('admin_set_admin', { p_user: userId, p_admin: admin })
+    if (error) throw error
+  })
+}
