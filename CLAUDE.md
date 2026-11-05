@@ -96,7 +96,7 @@ docs/SECURITY.md       вся защита (база, сайт, сборка) + 
 | `VITE_SUPABASE_ANON_KEY` | anon key или publishable key (публичный) |
 | `BASE_PATH` | только при сборке для GitHub Pages: `/CryptoJournal-Analys/` (ставит workflow) |
 
-Проект Supabase: `cryptojournal`, ref `dkjavndvuulnzflowdhj` (Frankfurt), миграции 0001–0004 применены; 0005 (админка) — см. статус в PLAN.md.
+Проект Supabase: `cryptojournal`, ref `dkjavndvuulnzflowdhj` (Frankfurt), миграции 0001–0005 применены (0005 — админка, 05.11.2026, владелец добавлен в `admins`).
 Админка: `/admin` (features/admin), таблица `admins` + функции `is_admin`, `admin_list_users`, `admin_set_plan`, `admin_reset_usage`; админов добавляют только в SQL Editor (docs/ADMIN.md).
 Скриншоты: таблица `trade_screenshots` (до 10 на сделку), файлы `{user_id}/{trade_id}/{uuid}.webp`; старое поле `trades.screenshot_path` не используется.
 Публичные URL и publishable key вписаны в `.env.example` и `.github/workflows/pages.yml` (секреты репозитория НЕ используются — старый секрет однажды перебил адрес).
