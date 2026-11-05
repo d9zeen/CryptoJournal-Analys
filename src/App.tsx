@@ -40,6 +40,7 @@ const DashboardPage = lazyPage(() => import('@/features/dashboard/DashboardPage'
 const TradesPage = lazyPage(() => import('@/features/trades/TradesPage'), 'TradesPage')
 const TradeFormPage = lazyPage(() => import('@/features/trades/TradeFormPage'), 'TradeFormPage')
 const AnalysisPage = lazyPage(() => import('@/features/analysis/AnalysisPage'), 'AnalysisPage')
+const AdminPage = lazyPage(() => import('@/features/admin/AdminPage'), 'AdminPage')
 const ImportPage = lazyPage(() => import('@/features/import/ImportPage'), 'ImportPage')
 const SettingsPage = lazyPage(() => import('@/features/settings/SettingsPage'), 'SettingsPage')
 
@@ -70,6 +71,7 @@ const router = createBrowserRouter([
           { path: '/analysis', element: <AnalysisPage /> },
           { path: '/import', element: <ImportPage /> },
           { path: '/settings', element: <SettingsPage /> },
+          { path: '/admin', element: <AdminPage /> },
         ],
       },
     ],

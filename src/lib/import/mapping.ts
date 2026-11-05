@@ -16,7 +16,11 @@ export type ColumnMapping<F extends string> = Record<F, number>
  * Автосопоставление: для каждого поля — первая колонка, чьё название совпадает с одним из синонимов.
  * Одна колонка не может достаться двум полям (приоритет — у поля, объявленного раньше).
  */
-export function autoMap<F extends string>(headers: string[], aliases: Record<F, readonly string[]>): ColumnMapping<F> {
+export function autoMap<F extends string>(
+  headers: string[],
+  aliases: Record<F, readonly string[]>,
+  fuzzy: Partial<Record<F, { words: string[]; prefer: string[]; avoid: string[] }>> = {},
+): ColumnMapping<F> {
   const norm = headers.map(normalizeHeader)
   const used = new Set<number>()
   const out = {} as ColumnMapping<F>
@@ -30,6 +34,25 @@ export function autoMap<F extends string>(headers: string[], aliases: Record<F, 
     }
     if (idx !== -1) used.add(idx)
     out[field] = idx
+  }
+  // запасной поиск по слову в названии — только для оставшихся полей и свободных колонок
+  for (const field of Object.keys(fuzzy) as F[]) {
+    const rule = fuzzy[field]
+    if (!rule || out[field] !== -1) continue
+    let best = -1
+    let bestScore = -Infinity
+    norm.forEach((h, i) => {
+      if (used.has(i) || !rule.words.some((w) => h.includes(w))) return
+      const score = (rule.prefer.some((w) => h.includes(w)) ? 1 : 0) - (rule.avoid.some((w) => h.includes(w)) ? 2 : 0)
+      if (score > bestScore) {
+        best = i
+        bestScore = score
+      }
+    })
+    if (best !== -1) {
+      used.add(best)
+      out[field] = best
+    }
   }
   return out
 }

@@ -17,6 +17,10 @@ export type FakeDb = {
   usage: { plan: string; trades_created: number; trade_limit: number | null }
   /** названия сетапов / эмоций / тегов (по умолчанию — один «Пробой уровня») */
   listNames?: string[]
+  /** админка: пользователь — админ; список пользователей; вызванные действия */
+  isAdmin?: boolean
+  adminUsers?: Row[]
+  adminCalls?: { fn: string; body: unknown }[]
 }
 
 export function makeTrade(i: number, over: Row = {}): Row {
@@ -57,6 +61,12 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
       return json({ id: 'f-new', type: 'totp', friendly_name: 'x', totp: { qr_code: '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8"/></svg>', secret: 'JBSWY3DPEHPK3PXP', uri: 'otpauth://totp/x' } })
     if (path === '/auth/v1/logout') return route.fulfill({ status: 204 })
     if (path.endsWith('/rpc/get_my_usage')) return json({ ...db.usage, month: '2026-11-01' })
+    if (path.endsWith('/rpc/is_admin')) return json(Boolean(db.isAdmin))
+    if (path.endsWith('/rpc/admin_list_users')) return db.isAdmin ? json(db.adminUsers ?? []) : json({ message: 'NOT_ADMIN', code: '42501' }, 403)
+    if (path.endsWith('/rpc/admin_set_plan') || path.endsWith('/rpc/admin_reset_usage')) {
+      ;(db.adminCalls ??= []).push({ fn: path.split('/').pop()!, body: body() })
+      return route.fulfill({ status: 204 })
+    }
     if (path === '/rest/v1/profiles') return json({ id: UID, display_name: null, plan: db.usage.plan, plan_until: null, timezone: 'Europe/Moscow', starting_balance: 5000, locale: 'ru' })
     if (['/rest/v1/setups', '/rest/v1/emotions', '/rest/v1/mistake_tags'].includes(path)) {
       const names = db.listNames ?? ['Пробой уровня']

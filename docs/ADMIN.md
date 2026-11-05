@@ -1,5 +1,29 @@
 # Администрирование (для владельца)
 
+## Админка на сайте (с ноября 2026)
+
+Страница **«Админка»** (иконка щита в левом меню, адрес `/admin`): все пользователи, их тариф,
+сделки в этом месяце и всего; кнопки «Pro 30 дней», «Pro навсегда», «Снять Pro», «Сбросить лимит».
+Пункт меню видят только админы. Доступ проверяет база (миграция `0005_admin.sql`): каждая функция
+админки сначала проверяет, что ты в таблице `admins`, а если у тебя включена 2FA — что вход подтверждён кодом.
+
+**Сделать человека админом** (только здесь, в SQL Editor — с сайта это невозможно):
+
+```sql
+insert into public.admins (user_id)
+select id from auth.users where email = 'user@example.com'
+on conflict do nothing;
+```
+
+Убрать из админов:
+
+```sql
+delete from public.admins
+where user_id = (select id from auth.users where email = 'user@example.com');
+```
+
+Ниже — те же действия вручную через SQL (если сайт недоступен).
+
 Всё делается в Supabase → **SQL Editor** → New query → вставить запрос → **Run**.
 Проект: `cryptojournal` (https://supabase.com/dashboard/project/dkjavndvuulnzflowdhj).
 Пользователь сам эти поля менять не может — защищено правами в базе.

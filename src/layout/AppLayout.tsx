@@ -3,16 +3,21 @@ import { useAuth } from '@/features/auth/AuthProvider'
 import { useT } from '@/i18n'
 import { Logo, LogoMark } from '@/components/Logo'
 import { setTheme, useTheme } from '@/lib/theme'
+import { useIsAdmin } from '@/features/admin/api'
 
 function useNavItems() {
   const t = useT()
-  return [
+  const { data: isAdmin } = useIsAdmin()
+  const items = [
     { to: '/dashboard', label: t.nav.dashboard, icon: 'M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z' },
     { to: '/trades', label: t.nav.trades, icon: 'M4 6h16M4 12h16M4 18h10' },
     { to: '/analysis', label: t.nav.analysis, icon: 'M4 20V11m6 9V5m6 15v-6m5 6H3' },
     { to: '/import', label: t.nav.import, icon: 'M12 3v12m0 0l-4-4m4 4l4-4M4 17v3h16v-3' },
     { to: '/settings', label: t.nav.settings, icon: 'M12 15a3 3 0 100-6 3 3 0 000 6zm7.4-3a7.4 7.4 0 00-.1-1.3l2-1.6-2-3.4-2.4 1a7.6 7.6 0 00-2.2-1.3L14.3 2h-4l-.4 2.4a7.6 7.6 0 00-2.2 1.3l-2.4-1-2 3.4 2 1.6a7.4 7.4 0 000 2.6l-2 1.6 2 3.4 2.4-1c.7.5 1.4 1 2.2 1.3l.4 2.4h4l.4-2.4c.8-.3 1.5-.8 2.2-1.3l2.4 1 2-3.4-2-1.6c.1-.4.1-.9.1-1.3z' },
   ]
+  // «Админка» — только у админа (доступ всё равно проверяет база)
+  if (isAdmin) items.push({ to: '/admin', label: t.nav.admin, icon: 'M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3zm-3 9l2 2 4-4' })
+  return items
 }
 
 function Icon({ d }: { d: string }) {
@@ -89,7 +94,7 @@ export function AppLayout() {
       </main>
 
       {/* Нижнее меню на телефоне: там нет наведения, поэтому подписи остаются */}
-      <nav className="fixed inset-x-0 bottom-0 z-10 grid grid-cols-5 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
+      <nav className={`fixed inset-x-0 bottom-0 z-10 grid ${items.length > 5 ? 'grid-cols-6' : 'grid-cols-5'} border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden`}>
         {items.map((item) => (
           <NavLink
             key={item.to}
