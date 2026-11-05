@@ -168,8 +168,8 @@ export function TradesPage() {
                     <tr key={tr.id} onClick={() => navigate(`/trades/${tr.id}`)} className="cursor-pointer border-t border-border transition-colors hover:bg-surface-2/60">
                       <td className="num whitespace-nowrap px-4 py-3 text-xs text-muted">{formatDateTime(tr.entry_at)}</td>
                       <td className="num px-4 py-3 font-semibold">
-                        <Link to={`/trades/${tr.id}`} onClick={(e) => e.stopPropagation()} className="hover:underline">
-                          {tr.symbol}
+                        <Link to={`/trades/${tr.id}`} onClick={(e) => e.stopPropagation()} className="hover:underline" title={tr.title ?? undefined}>
+                          {tr.title ? <span className="line-clamp-2 max-w-80 font-sans">{tr.title}</span> : tr.symbol}
                         </Link>
                         <ShotsBadge trade={tr} />
                       </td>
@@ -245,7 +245,7 @@ function TradeCard({ trade: tr, setupName }: { trade: TradeWithTags; setupName?:
       <Link to={`/trades/${tr.id}`} className="block rounded-xl border border-border bg-surface p-4 transition-colors active:bg-surface-2">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="num font-semibold">{tr.symbol}</span>
+            <span className={tr.title ? 'line-clamp-2 font-semibold' : 'num font-semibold'}>{tr.title ?? tr.symbol}</span>
             <SideBadge side={tr.side} />
             <ShotsBadge trade={tr} />
             {tr.exit_at === null && <OpenBadge />}

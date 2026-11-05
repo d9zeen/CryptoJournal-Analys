@@ -302,7 +302,7 @@ export function ImportPage() {
                               <td className="px-2 py-2">
                                 {r.trade ? (
                                   <>
-                                    <span className="font-medium">{r.trade.symbol}</span>{' '}
+                                    <span className="font-medium">{r.trade.title ?? r.trade.symbol}</span>{' '}
                                     <span className={r.trade.side === 'long' ? 'text-profit' : 'text-loss'}>{t.side[r.trade.side]}</span>
                                     <div className="text-xs text-muted md:hidden">{formatDateTime(r.trade.exit_at)}</div>
                                   </>

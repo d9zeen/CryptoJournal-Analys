@@ -771,10 +771,12 @@ function inversePnlCoin(t) {
 }
 /** Валовый PnL до комиссий и фандинга, USD. null — если сделка не закрыта или не хватает данных. */
 function grossPnl(t) {
-	if (!valid(t.entryPrice) || !valid(t.exitPrice) || !valid(t.sizeUsd)) return null;
-	if (t.marketType === "inverse") return inversePnlCoin(t) * t.exitPrice;
+	const exit = t.exitPrice;
+	const exitOk = typeof exit === "number" && Number.isFinite(exit) && (exit > 0 || t.marketType === "prediction" && exit === 0);
+	if (!valid(t.entryPrice) || !exitOk || !valid(t.sizeUsd)) return null;
+	if (t.marketType === "inverse") return inversePnlCoin(t) * exit;
 	const qty = t.sizeUsd / t.entryPrice;
-	return dir(t.side) * (t.exitPrice - t.entryPrice) * qty;
+	return dir(t.side) * (exit - t.entryPrice) * qty;
 }
 /** Округление для сохранения в базу. */
 function round(n, digits = 8) {
@@ -788,18 +790,18 @@ function round(n, digits = 8) {
 * одна запись = одна закрытая позиция с ценами входа / выхода и PnL от биржи (уже за вычетом комиссий и фандинга).
 * Запросы подписывает серверная функция exchange-proxy (секрет в браузер не попадает).
 */
-const num = (s) => s === void 0 || s === "" ? null : Number(s);
+const num$1 = (s) => s === void 0 || s === "" ? null : Number(s);
 /** Одна закрытая позиция Bybit → сделка для дневника (null — если данные неполные) */
 function bybitClosedToTrade(item, category) {
 	const symbol = normalizeSymbol(item.symbol);
-	const entry = num(item.avgEntryPrice);
-	const exit = num(item.avgExitPrice);
-	const pnlRaw = num(item.closedPnl);
-	const time = num(item.updatedTime) ?? num(item.createdTime);
+	const entry = num$1(item.avgEntryPrice);
+	const exit = num$1(item.avgExitPrice);
+	const pnlRaw = num$1(item.closedPnl);
+	const time = num$1(item.updatedTime) ?? num$1(item.createdTime);
 	if (!symbol || !entry || !exit || entry <= 0 || exit <= 0 || pnlRaw === null || !time) return null;
 	const side = item.side === "Sell" ? "long" : "short";
 	const market = category;
-	const size = market === "inverse" ? num(item.closedSize) : num(item.cumEntryValue);
+	const size = market === "inverse" ? num$1(item.closedSize) : num$1(item.cumEntryValue);
 	if (!size || size <= 0) return null;
 	const toUsd = (v) => market === "inverse" ? v * exit : v;
 	const pnl = round(toUsd(pnlRaw), 8);
@@ -812,8 +814,8 @@ function bybitClosedToTrade(item, category) {
 	}) ?? 0;
 	let fee;
 	let funding;
-	const openFee = num(item.openFee);
-	const closeFee = num(item.closeFee);
+	const openFee = num$1(item.openFee);
+	const closeFee = num$1(item.closeFee);
 	if (openFee !== null && closeFee !== null) {
 		fee = round(toUsd(Math.abs(openFee) + Math.abs(closeFee)), 8);
 		funding = round(pnl - (gross - fee), 8);
@@ -823,7 +825,7 @@ function bybitClosedToTrade(item, category) {
 		funding = diff > 0 ? 0 : -diff;
 	}
 	const at = new Date(time).toISOString();
-	const lev = num(item.leverage) ?? 1;
+	const lev = num$1(item.leverage) ?? 1;
 	return {
 		exchange: "bybit",
 		market_type: market,
@@ -1507,6 +1509,97 @@ function hlFillsToTrades(fills) {
 	};
 }
 
+// src/lib/sync/polymarket.ts
+/**
+* Polymarket → сделки. Нужен только адрес кошелька аккаунта Polymarket (proxy / deposit wallet из профиля, не адрес подписи).
+* Источник — Data API v2: GET /v2/positions?user=…&status=CLOSED — закрытые позиции с итоговым PnL.
+* Сделка = закрытая позиция по исходу (Yes / No…): вход — средняя цена покупки, выход — средняя цена продажи / погашения
+* (из PnL: выход = вход + PnL / число долей; проигравший исход — 0).
+* Документация v2 описывает поля по-разному (camelCase / snake_case), поэтому читаем оба варианта.
+*/
+const PM_API = "https://data-api.polymarket.com";
+const pick = (o, ...keys) => {
+	for (const k of keys) if (o[k] !== void 0 && o[k] !== null && o[k] !== "") return o[k];
+};
+const num = (o, ...keys) => {
+	const v = pick(o, ...keys);
+	const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
+	return Number.isFinite(n) ? n : null;
+};
+const str = (o, ...keys) => {
+	const v = pick(o, ...keys);
+	return typeof v === "string" ? v.trim() : typeof v === "number" ? String(v) : null;
+};
+/** Время закрытия: timestamp (секунды или мс), иначе дата окончания рынка */
+function closeTime(p) {
+	const ts = num(p, "timestamp", "closedAt", "closed_at", "updatedAt", "updated_at");
+	if (ts !== null && ts > 0) return new Date(ts < 0xe8d4a51000 ? ts * 1e3 : ts).toISOString();
+	const d = str(p, "endDate", "end_date", "closedAt", "closed_at");
+	if (d && !Number.isNaN(Date.parse(d))) return new Date(Date.parse(d)).toISOString();
+	return null;
+}
+/** Одна закрытая позиция → сделка (null — данных не хватает) */
+function pmPositionToTrade(p) {
+	const cond = str(p, "conditionId", "condition_id", "market");
+	const avg = num(p, "avgPrice", "avg_price");
+	const shares = num(p, "totalBought", "total_bought", "size");
+	const pnl = num(p, "realizedPnl", "realized_pnl", "cashPnl", "cash_pnl");
+	const at = closeTime(p);
+	if (!cond || avg === null || avg <= 0 || !shares || shares <= 0 || pnl === null || !at) return null;
+	const outcome = str(p, "outcome") ?? `#${num(p, "outcomeIndex", "outcome_index") ?? 0}`;
+	const title = str(p, "title", "question", "market_title") ?? cond;
+	const exit = Math.min(1, Math.max(0, avg + pnl / shares));
+	const code = outcome.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12) || "O";
+	return {
+		exchange: "polymarket",
+		market_type: "prediction",
+		symbol: `PM-${cond.replace(/^0x/i, "").slice(0, 8).toUpperCase()}-${code}`,
+		title: `${title} — ${outcome}`.slice(0, 300),
+		side: "long",
+		entry_at: at,
+		exit_at: at,
+		entry_price: round(avg, 8),
+		exit_price: round(exit, 8),
+		size_usd: round(shares * avg, 8),
+		leverage: 1,
+		fee: 0,
+		funding: 0,
+		pnl: round(pnl, 8),
+		pnl_manual: false,
+		external_id: `pm:${cond}:${outcome}`.slice(0, 200)
+	};
+}
+/** Все закрытые позиции кошелька: страницы по 50, курсор pagination.next_cursor (в v2 нет offset) */
+async function fetchPmClosed(get, user) {
+	const out = [];
+	let cursor = "";
+	for (let page = 0; page < 200; page++) {
+		const res = await get("/v2/positions", {
+			user,
+			status: "CLOSED",
+			limit: 50,
+			...cursor ? { cursor } : {}
+		});
+		const r = res ?? {};
+		const items = Array.isArray(res) ? res : pick(r, "data", "positions", "results") ?? [];
+		out.push(...items);
+		const pag = r.pagination ?? {};
+		const next = Array.isArray(res) ? "" : str(pag, "next_cursor", "nextCursor") ?? str(r, "next_cursor", "nextCursor") ?? "";
+		if (!next || !items.length) break;
+		cursor = next;
+	}
+	return out;
+}
+/** Прямой запрос к Data API (сервер; из браузера — через exchange-proxy) */
+function pmDirectGet(fetchFn = fetch) {
+	return async (path, params) => {
+		const q = new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]));
+		const res = await fetchFn(`${PM_API}${path}?${q}`);
+		if (!res.ok) throw new Error(`PM_HTTP_${res.status} network`);
+		return res.json();
+	};
+}
+
 // src/lib/sync/run.ts
 /**
 * Синхронизация одного подключения — общий движок для браузера и сервера (sync-worker по расписанию).
@@ -1540,7 +1633,7 @@ function toSyncError(e) {
 	if (e instanceof BybitError) return new SyncError(bybitErrorCode(e), `${e.code}: ${e.message}`);
 	const msg = e && typeof e === "object" && "message" in e ? String(e.message) : String(e);
 	if (msg.includes("FREE_LIMIT_REACHED")) return new SyncError("FREE_LIMIT");
-	if (/HL_HTTP|fetch|network/i.test(msg)) return new SyncError("EXCHANGE_DOWN", msg);
+	if (/HL_HTTP|PM_HTTP|fetch|network/i.test(msg)) return new SyncError("EXCHANGE_DOWN", msg);
 	return new SyncError("UNKNOWN", msg);
 }
 /** 0x1234…abcd / ключ: первые и последние символы */
@@ -1563,6 +1656,12 @@ async function runSync(conn, deps) {
 			const res = hlFillsToTrades(await fetchHlFills(conn.api_key, from, deps.fetchFn));
 			trades = res.trades;
 			nextCursor = res.cursor;
+		} else if (conn.exchange === "polymarket") {
+			trades = (await fetchPmClosed(deps.polymarketGet ?? pmDirectGet(deps.fetchFn), conn.api_key)).flatMap((p) => {
+				const t = pmPositionToTrade(p);
+				return t ? [t] : [];
+			});
+			nextCursor = now;
 		} else throw new SyncError("UNSUPPORTED");
 		trades = [...new Map(trades.map((t) => [t.external_id, t])).values()];
 		const existing = await deps.existingIds(conn.exchange, trades.map((t) => t.external_id));

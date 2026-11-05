@@ -37,6 +37,8 @@ export function AnalysisPage() {
       emotions: byEmotion(closed),
       mistakes: topMistakes(closed),
       symbols: bySymbol(closed),
+      // у рынков Polymarket вместо кода — название рынка
+      titles: new Map((trades ?? []).flatMap((tr) => (tr.title ? [[tr.symbol, tr.title] as const] : []))),
     }
   }, [trades])
 
@@ -79,7 +81,7 @@ export function AnalysisPage() {
             empty={c.mistakesEmpty}
             rows={stats.mistakes.map((g) => ({ id: g.key, label: names(tags).get(g.key) ?? c.deleted, group: g }))}
           />
-          <GroupTable title={c.symbols} rows={stats.symbols.map((g) => ({ id: g.key, label: g.key, group: g }))} />
+          <GroupTable title={c.symbols} rows={stats.symbols.map((g) => ({ id: g.key, label: stats.titles.get(g.key) ?? g.key, group: g }))} />
           <GroupTable title={c.emotions} rows={toRows(stats.emotions, names(emotions), c.noEmotion)} />
           <GroupTable title={c.side} rows={stats.side.map((g) => ({ id: g.key, label: t.side[g.key], group: g }))} />
         </div>

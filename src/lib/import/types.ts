@@ -22,6 +22,8 @@ export type ImportedTrade = {
   pnl_manual: boolean
   /** id на бирже или отпечаток строки — защита от повторного импорта */
   external_id: string
+  /** название рынка (Polymarket) */
+  title?: string
 }
 
 /** Почему строку (или позицию) нельзя импортировать */

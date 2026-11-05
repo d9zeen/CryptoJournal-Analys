@@ -137,7 +137,7 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
           <Link to="/trades" className="text-muted hover:text-text" aria-label={t.common.back}>
             ←
           </Link>
-          <h1 className="text-xl font-semibold">{isNew ? t.tradeForm.titleNew : `${t.tradeForm.titleEdit} ${existing!.symbol}`}</h1>
+          <h1 className="text-xl font-semibold">{isNew ? t.tradeForm.titleNew : `${t.tradeForm.titleEdit} ${existing!.title ?? existing!.symbol}`}</h1>
         </div>
         {!isNew && (
           <Button type="button" variant="ghost" onClick={onDelete} loading={del.isPending} className="text-loss hover:text-loss">
@@ -163,6 +163,7 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
                 <option value="linear">{t.market.linear}</option>
                 <option value="inverse">{t.market.inverse}</option>
                 <option value="spot">{t.market.spot}</option>
+                {form.marketType === 'prediction' && <option value="prediction">{t.market.prediction}</option>}
               </SelectField>
               <TextField
                 label={t.tradeForm.symbol}
