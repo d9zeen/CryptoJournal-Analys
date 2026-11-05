@@ -79,3 +79,17 @@ export type Usage = {
   trades_created: number
   trade_limit: number | null
 }
+
+/** Строка админки (функция admin_list_users) */
+export type AdminUser = {
+  id: string
+  email: string | null
+  created_at: string
+  last_sign_in_at: string | null
+  plan: Plan
+  plan_until: string | null
+  effective_plan: Plan
+  trades_month: number
+  trades_total: number
+  is_admin: boolean
+}

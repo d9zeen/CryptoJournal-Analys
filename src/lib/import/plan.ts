@@ -1,6 +1,7 @@
 /** Подготовка импорта: файл → строки → что вставляем, что пропускаем и почему. */
 import { parseCsv, type CsvTable } from './csv'
 import { autoMap, type ColumnMapping } from './mapping'
+import { FUZZY } from './fields'
 import type { ImportedTrade, ImportMode, ImportParser, MarketChoice, ParsedRow } from './types'
 import { offsetFromHeader } from './values'
 
@@ -24,7 +25,7 @@ export function prepareImport(
   overrides: { mapping?: ColumnMapping<string>; utcOffsetMinutes?: number; market?: MarketChoice } = {},
 ): Prepared {
   const table = typeof source === 'string' ? parseCsv(source) : source
-  const mapping = overrides.mapping ?? autoMap(table.headers, parser.fields)
+  const mapping = overrides.mapping ?? autoMap(table.headers, parser.fields, FUZZY)
   const timeCol = mapping[parser.timeField]
   const fromHeader = timeCol >= 0 ? offsetFromHeader(table.headers[timeCol]) : null
   const utcOffsetMinutes = overrides.utcOffsetMinutes ?? fromHeader ?? 0

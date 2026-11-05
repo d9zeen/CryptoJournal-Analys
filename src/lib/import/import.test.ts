@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { detectDelimiter, parseCsv } from './csv'
 import { offsetFromHeader, parseDateCell, parseNumberCell, stableHash } from './values'
 import { autoMap, normalizeHeader } from './mapping'
+import { FIELDS, FUZZY } from './fields'
 import { bybitParser, marketOf, normalizeSymbol, positionSide } from './bybit'
 import { planImport, prepareImport } from './plan'
 
@@ -224,5 +225,31 @@ describe('planImport', () => {
     expect(plan.counts.overLimit).toBe(2)
     expect(plan.status.get(3)).toBe('overLimit') // 4-я запись = строка 5 файла
     expect(planImport(prep.rows, new Set(), 0).toInsert).toEqual([])
+  })
+})
+
+describe('объём находится сам: новые названия колонок Bybit UTA', () => {
+  it('запасной поиск по слову: исполненный объём важнее объёма ордера', () => {
+    const headers = ['Market', 'Direction', 'Order Qty', 'Exec. Qty / Contracts', 'Filled Price', 'Transaction Time(UTC+0)']
+    const m = autoMap(headers, FIELDS, FUZZY)
+    expect(m.qty).toBe(3)
+  })
+  it('без точного совпадения берётся даже объём ордера — лучше, чем просить руками', () => {
+    const m = autoMap(['Market', 'Direction', 'Order Quantity', 'Filled Price', 'Time'], FIELDS, FUZZY)
+    expect(m.qty).toBe(2)
+  })
+  it('история исполнений UTA: файл разбирается без ручной настройки', () => {
+    const UTA = [
+      'Market,Direction,Filled Quantity,Filled Price,Filled Value,Trading Fee,feeCoin,Transaction Time(UTC+0),Order No.',
+      'BTCUSDT,Sell,0.01,61000,610,0.3355,USDT,2026-11-01 12:00:00,o2',
+      'BTCUSDT,Buy,0.01,60000,600,0.33,USDT,2026-11-01 10:00:00,o1',
+    ].join('\n')
+    const prep = prepareImport(UTA, bybitParser)
+    expect(prep.missing).toEqual([])
+    expect(prep.mode).toBe('fills')
+    const trades = prep.rows.filter((r) => r.trade).map((r) => r.trade!)
+    expect(trades).toHaveLength(1)
+    expect(trades[0]).toMatchObject({ symbol: 'BTCUSDT', side: 'long', size_usd: 600 })
+    expect(trades[0].pnl).toBeCloseTo(10 - 0.6655, 6)
   })
 })

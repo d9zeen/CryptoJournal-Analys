@@ -58,7 +58,7 @@ src/
   lib/export/          выгрузка сделок в CSV (+ тесты); features/settings/dataApi.ts — выгрузка и удаление аккаунта
   components/ui/       базовые компоненты (Button, Input, Card, Alert, Spinner)
   layout/AppLayout.tsx левая панель-меню (иконки, подпись при наведении) + шапка; на телефоне — нижнее меню с подписями
-  features/<раздел>/   auth, dashboard, analysis (вкладка «Разбор»: таблицы по сетапам, ошибкам, парам, эмоциям, Long/Short), trades, import, settings
+  features/<раздел>/   auth, dashboard, admin (админка: пользователи, Pro, сброс лимита), analysis (вкладка «Разбор»: таблицы по сетапам, ошибкам, парам, эмоциям, Long/Short), trades, import, settings
                        dashboard: SummaryStrip («Лента» + мини-кривая на SVG), charts.tsx (Recharts, лениво),
                        EquityTableDialog (таблица сделок в <dialog>), equityTime.ts (время точек, $ / %)
 supabase/migrations/   SQL-миграции, нумерация 0001_..., 0002_...
@@ -96,7 +96,8 @@ docs/SECURITY.md       вся защита (база, сайт, сборка) + 
 | `VITE_SUPABASE_ANON_KEY` | anon key или publishable key (публичный) |
 | `BASE_PATH` | только при сборке для GitHub Pages: `/CryptoJournal-Analys/` (ставит workflow) |
 
-Проект Supabase: `cryptojournal`, ref `dkjavndvuulnzflowdhj` (Frankfurt), миграции 0001–0004 применены.
+Проект Supabase: `cryptojournal`, ref `dkjavndvuulnzflowdhj` (Frankfurt), миграции 0001–0005 применены (0005 — админка, 05.11.2026, владелец добавлен в `admins`).
+Админка: `/admin` (features/admin), таблица `admins` + функции `is_admin`, `admin_list_users`, `admin_set_plan`, `admin_reset_usage`; админов добавляют только в SQL Editor (docs/ADMIN.md).
 Скриншоты: таблица `trade_screenshots` (до 10 на сделку), файлы `{user_id}/{trade_id}/{uuid}.webp`; старое поле `trades.screenshot_path` не используется.
 Публичные URL и publishable key вписаны в `.env.example` и `.github/workflows/pages.yml` (секреты репозитория НЕ используются — старый секрет однажды перебил адрес).
 Новые миграции владелец применяет в SQL Editor (или Claude через коннектор Supabase, если он подключён).

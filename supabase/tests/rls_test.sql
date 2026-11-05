@@ -266,6 +266,58 @@ select pg_temp.expect_error($$select delete_my_account()$$, 'NOT_AUTHENTICATED')
 select pg_temp.check(true, 'без входа delete_my_account ничего не удаляет');
 reset role;
 
+-- Админка (0005)
+reset role;
+insert into admins (user_id) values ('aaaaaaaa-0000-0000-0000-000000000001');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
+select pg_temp.check(not is_admin(), 'B — не админ');
+select pg_temp.expect_error($$select * from admin_list_users()$$, 'NOT_ADMIN');
+select pg_temp.check(true, 'не-админ не видит список пользователей');
+select pg_temp.expect_error($$select admin_set_plan('bbbbbbbb-0000-0000-0000-000000000002', 'pro', null)$$, 'NOT_ADMIN');
+select pg_temp.check(true, 'не-админ не может выдать себе Pro через админку');
+select pg_temp.expect_error($$select admin_reset_usage('bbbbbbbb-0000-0000-0000-000000000002')$$, 'NOT_ADMIN');
+select pg_temp.check(true, 'не-админ не может сбросить лимит');
+select pg_temp.expect_error($$insert into admins (user_id) values ('bbbbbbbb-0000-0000-0000-000000000002')$$, 'permission denied');
+select pg_temp.check(true, 'добавить себя в админы из браузера нельзя');
+select pg_temp.check((select count(*) from admins) = 0, 'B не видит список админов');
+
+set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
+select pg_temp.check(is_admin(), 'A — админ');
+select pg_temp.check((select count(*) from admins) = 1, 'админ видит только свою строку в admins');
+select pg_temp.check((select count(*) from admin_list_users()) >= 2, 'админ видит всех пользователей');
+select pg_temp.check((select trades_total from admin_list_users() where id = 'bbbbbbbb-0000-0000-0000-000000000002') >= 1, 'в списке видно число сделок');
+select admin_set_plan('bbbbbbbb-0000-0000-0000-000000000002', 'pro', now() + interval '30 days');
+select pg_temp.check((select effective_plan from admin_list_users() where id = 'bbbbbbbb-0000-0000-0000-000000000002') = 'pro', 'админ выдал Pro на 30 дней');
+select admin_set_plan('bbbbbbbb-0000-0000-0000-000000000002', 'free', now());
+reset role;
+select pg_temp.check((select plan = 'free' and plan_until is null from profiles where id = 'bbbbbbbb-0000-0000-0000-000000000002'), 'админ снял Pro, дата очищена');
+select pg_temp.check((select trades_created from usage_counters where user_id = 'bbbbbbbb-0000-0000-0000-000000000002' and month = (date_trunc('month', now() at time zone 'utc'))::date) >= 1, 'у B есть счётчик лимита');
+set role authenticated;
+set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
+select admin_reset_usage('bbbbbbbb-0000-0000-0000-000000000002');
+reset role;
+select pg_temp.check((select trades_created from usage_counters where user_id = 'bbbbbbbb-0000-0000-0000-000000000002' and month = (date_trunc('month', now() at time zone 'utc'))::date) = 0, 'админ сбросил лимит B');
+
+-- Админ с включённой 2FA — только после ввода кода (aal2)
+insert into auth.mfa_factors (user_id, status) values ('aaaaaaaa-0000-0000-0000-000000000001', 'verified');
+set role authenticated;
+set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
+select pg_temp.check(not is_admin(), 'админ с 2FA без кода — не админ');
+select pg_temp.expect_error($$select * from admin_list_users()$$, 'NOT_ADMIN');
+select pg_temp.check(true, 'без кода 2FA список пользователей закрыт');
+set request.jwt.claims = '{"aal":"aal2"}';
+select pg_temp.check(is_admin(), 'после кода 2FA — снова админ');
+reset request.jwt.claims;
+reset role;
+delete from auth.mfa_factors where user_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+
+set role anon;
+set request.jwt.claim.sub = '';
+select pg_temp.expect_error($$select is_admin()$$, 'permission denied');
+select pg_temp.check(true, 'аноним не может вызвать функции админки');
+reset role;
+
 -- Удаление аккаунта чистит всё
 reset role;
 delete from auth.users where id = 'aaaaaaaa-0000-0000-0000-000000000001';

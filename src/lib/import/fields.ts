@@ -8,14 +8,14 @@ export const FIELDS = {
   orderId: ['Order ID', 'Order No', 'Order Number', 'OrderId', 'Trade ID', 'Exec ID', 'Transaction ID', 'ID ордера', 'Номер ордера', 'ID'],
   symbol: ['Contracts', 'Contract', 'Symbol', 'Futures', 'Instrument', 'Market', 'Trading Pair', 'Pair', 'Контракты', 'Контракт', 'Символ', 'Торговая пара', 'Пара', 'Инструмент'],
   side: ['Closing Direction', 'Close Direction', 'Position Side', 'Position Direction', 'Pos. Side', 'Direction', 'Side', 'Order Direction', 'Trade Side', 'Action', 'Направление закрытия', 'Направление', 'Сторона'],
-  qty: ['Closed Qty', 'Closed Size', 'Closed Amount', 'Closed Quantity', 'Close Amount', 'Qty', 'Quantity', 'Size', 'Position Size', 'Executed', 'Exec Qty', 'Filled', 'Filled Qty', 'Кол-во', 'Количество', 'Закрытое количество', 'Объем', 'Объём'],
+  qty: ['Closed Qty', 'Closed Size', 'Closed Amount', 'Closed Quantity', 'Close Amount', 'Filled Qty', 'Filled Quantity', 'Filled Size', 'Exec Qty', 'Exec Quantity', 'Executed Qty', 'Executed Quantity', 'Trade Qty', 'Trade Quantity', 'Deal Qty', 'Qty', 'Quantity', 'Size', 'Position Size', 'Executed', 'Filled', 'Кол-во', 'Количество', 'Закрытое количество', 'Исполненное количество', 'Объем', 'Объём'],
   entryValue: ['Entry Value', 'Cum Entry Value', 'Position Value', 'Open Value', 'Стоимость входа', 'Стоимость позиции'],
   entryPrice: ['Entry Price', 'Avg Entry Price', 'Average Entry Price', 'Avg. Open Price', 'Avg Open Price', 'Average Open Price', 'Average Opening Price', 'Opening Price', 'Open Price', 'Цена входа', 'Средняя цена входа', 'Цена открытия'],
   exitPrice: ['Exit Price', 'Avg Exit Price', 'Average Exit Price', 'Avg. Close Price', 'Avg Close Price', 'Average Close Price', 'Average Closing Price', 'Closing Price', 'Close Price', 'Цена выхода', 'Средняя цена выхода', 'Цена закрытия'],
   // цена одного исполнения — для истории сделок (fills)
   price: ['Price', 'Filled Price', 'Fill Price', 'Exec Price', 'Trade Price', 'Avg. Price', 'Avg Price', 'Average Price', 'Deal Price', 'Цена', 'Цена исполнения'],
   // сумма исполнения в валюте котировки — если нет количества монет
-  value: ['Amount', 'Exec Value', 'Value', 'Trade Value', 'Total', 'Turnover', 'Сумма'],
+  value: ['Exec Value', 'Filled Value', 'Executed Value', 'Trade Value', 'Deal Value', 'Amount', 'Value', 'Total', 'Turnover', 'Сумма', 'Сумма исполнения'],
   pnl: ['Closed P&L', 'Closed PnL', 'Realized Profit', 'Realized P&L', 'Realized PnL', 'Realised P&L', 'Realised PnL', 'Net PnL', 'P&L', 'PnL', 'Profit', 'Закрытый P&L', 'Закрытые P&L', 'Закрытый PnL', 'Реализованный P&L', 'Реализованный PnL', 'Прибыль/убыток'],
   openFee: ['Opening Fee', 'Open Fee', 'Opening Fees', 'Комиссия за открытие'],
   closeFee: ['Closing Fee', 'Close Fee', 'Closing Fees', 'Комиссия за закрытие'],
@@ -28,6 +28,16 @@ export const FIELDS = {
 } as const
 
 export type ImportField = keyof typeof FIELDS
+
+/**
+ * Запасной поиск, если точного названия нет: колонка, в названии которой есть такое слово
+ * (биржи часто меняют заголовки: «Filled Quantity», «Qty(BTC)», «Exec. Qty / Contracts»).
+ * prefer — слова, которые делают колонку предпочтительнее (исполненный объём, а не объём ордера), avoid — наоборот.
+ */
+export const FUZZY: Partial<Record<ImportField, { words: string[]; prefer: string[]; avoid: string[] }>> = {
+  qty: { words: ['qty', 'quantity', 'size', 'volume', 'количество', 'колво', 'объем'], prefer: ['fill', 'exec', 'trade', 'deal', 'closed', 'исполн'], avoid: ['order', 'leaves', 'remain', 'cancel', 'ордер'] },
+  value: { words: ['value', 'turnover', 'notional', 'стоимость', 'сумма'], prefer: ['fill', 'exec', 'trade', 'deal', 'исполн'], avoid: ['order', 'entry', 'position', 'ордер'] },
+}
 
 /** Валюты, комиссия в которых уже в долларах */
 export const USD_COINS = new Set(['USDT', 'USDC', 'USD', 'BUSD', 'FDUSD', 'TUSD', 'USDE', 'DAI'])

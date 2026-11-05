@@ -175,3 +175,35 @@ test.describe('оформление', () => {
     await expect(html).not.toHaveAttribute('data-theme', 'light')
   })
 })
+
+test.describe('админка', () => {
+  const user = (over: Record<string, unknown>) => ({
+    id: 'u1', email: 'friend@example.com', created_at: '2026-10-01T10:00:00Z', last_sign_in_at: '2026-11-04T10:00:00Z',
+    plan: 'free', plan_until: null, effective_plan: 'free', trades_month: 30, trades_total: 120, is_admin: false, ...over,
+  })
+
+  test('обычному пользователю пункт не виден, страница закрыта', async ({ page, db }) => {
+    await fakeSupabase(page, db)
+    await page.goto('dashboard')
+    await expect(page.getByRole('link', { name: 'Дашборд' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Админка' })).toHaveCount(0)
+    await page.goto('admin')
+    await expect(page.getByText('Нет доступа')).toBeVisible()
+  })
+
+  test('админ видит пользователей и выдаёт Pro', async ({ page, db }) => {
+    db.isAdmin = true
+    db.adminUsers = [user({}), user({ id: 'u2', email: 'pro@example.com', plan: 'pro', effective_plan: 'pro', trades_month: 3, trades_total: 9 })]
+    await fakeSupabase(page, db)
+    await page.goto('dashboard')
+    await page.getByRole('link', { name: 'Админка' }).click()
+    await expect(page.getByRole('heading', { name: 'Админка' })).toBeVisible()
+    await expect(page.getByText('friend@example.com')).toBeVisible()
+    await expect(page.getByText('Pro навсегда').first()).toBeVisible()
+    await page.getByRole('button', { name: 'Pro 30 дней' }).click()
+    await expect(page.getByText('Готово: friend@example.com теперь на Pro.')).toBeVisible()
+    expect(db.adminCalls?.[0]).toMatchObject({ fn: 'admin_set_plan', body: { p_user: 'u1', p_plan: 'pro' } })
+    await page.getByRole('button', { name: 'Сбросить лимит' }).first().click()
+    await expect(page.getByText('лимит friend@example.com в этом месяце сброшен')).toBeVisible()
+  })
+})

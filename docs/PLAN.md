@@ -150,3 +150,12 @@ Cloudflare и Supabase (который тоже за Cloudflare) периоди�
 - Подключить свой SMTP в Supabase (Resend / Brevo, бесплатные тарифы) — встроенная почта Supabase не шлёт письма обычным пользователям.
 - Включить подтверждение email.
 - Экспорт сделок в CSV (на бесплатном Supabase нет автобэкапов).
+
+## Админка (ноябрь 2026)
+
+- Страница `/admin`, пункт меню только у админов. Миграция `supabase/migrations/0005_admin.sql`:
+  таблица `admins` (запись — только в SQL Editor), функции `is_admin`, `admin_list_users`, `admin_set_plan`, `admin_reset_usage`
+  (security definer, каждая проверяет `is_admin()`; при включённой 2FA — только после кода). Тесты — `supabase/tests/rls_test.sql`.
+- Импорт: если колонка объёма называется по-новому, она находится по слову в названии (`FUZZY` в `lib/import/fields.ts`),
+  исполненный объём важнее объёма ордера.
+
