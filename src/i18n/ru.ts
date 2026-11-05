@@ -10,6 +10,7 @@ export const ru = {
   nav: {
     dashboard: 'Дашборд',
     trades: 'Сделки',
+    calendar: 'Календарь',
     analysis: 'Разбор',
     import: 'Импорт',
     settings: 'Настройки',
@@ -340,6 +341,10 @@ export const ru = {
       adminRemoved: 'Готово: {email} больше не админ.',
     },
     empty: 'Никого не нашлось.',
+  },
+  calendarPage: {
+    title: 'Календарь',
+    hint: 'Прибыль и убыток по дням: сколько сделок, винрейт, итог недели и месяца.',
   },
   analysis: {
     title: 'Разбор сделок',

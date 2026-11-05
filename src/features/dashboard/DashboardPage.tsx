@@ -22,7 +22,6 @@ import {
   type StatTrade,
 } from '@/lib/calc/stats'
 import { SummaryStrip } from './SummaryStrip'
-import { ProfitCalendar } from './ProfitCalendar'
 import { EquityTableDialog } from './EquityTableDialog'
 import type { EquityUnit } from './equityTime'
 import { Segmented } from '@/components/ui/Segmented'
@@ -128,8 +127,6 @@ export function DashboardPage() {
               <DailyPnlChart days={stats.bars.bars} unit={stats.bars.unit} />
             </ChartCard>
           </div>
-
-          <ProfitCalendar timeZone={tz} />
 
           <EquityTableDialog open={tableOpen} onClose={() => setTableOpen(false)} curve={stats.curve} unit={eqUnit} balance={balance} />
         </>

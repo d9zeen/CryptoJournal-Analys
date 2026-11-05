@@ -60,8 +60,8 @@ src/
   layout/AppLayout.tsx левая панель-меню (иконки, подпись при наведении) + шапка; на телефоне — нижнее меню с подписями
   lib/sync/            подключения бирж по API: run.ts (общий движок), bybit.ts (closed-pnl), hyperliquid.ts (исполнения кошелька),
                        polymarket.ts (закрытые позиции по адресу; рынок prediction: цена исхода 0…1, проигрыш — выход 0, название — trades.title) + тесты
-  features/<раздел>/   auth, dashboard, admin, connections (подключённые биржи, автосинхронизация) (админка: пользователи, Pro, сброс лимита), analysis (вкладка «Разбор»: таблицы по сетапам, ошибкам, парам, эмоциям, Long/Short), trades, import, settings
-                       dashboard: SummaryStrip («Лента» + мини-кривая на SVG), charts.tsx (Recharts, лениво), ProfitCalendar (календарь прибыли, lib/calc/calendar.ts),
+  features/<раздел>/   auth, dashboard, calendar (вкладка «Календарь»: календарь прибыли ProfitCalendar, lib/calc/calendar.ts), admin, connections (подключённые биржи, автосинхронизация) (админка: пользователи, Pro, сброс лимита), analysis (вкладка «Разбор»: таблицы по сетапам, ошибкам, парам, эмоциям, Long/Short), trades, import, settings
+                       dashboard: SummaryStrip («Лента» + мини-кривая на SVG), charts.tsx (Recharts, лениво),
                        EquityTableDialog (таблица сделок в <dialog>), equityTime.ts (время точек, $ / %)
 supabase/migrations/   SQL-миграции, нумерация 0001_..., 0002_...
 supabase/tests/        заглушка Supabase для чистого Postgres + тесты RLS (rls_test.sql);

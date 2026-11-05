@@ -1,5 +1,5 @@
 /**
- * «Календарь прибыли» на дашборде: месяц сеткой, по дням — PnL, сделки и винрейт; справа — итог недели; внизу — итог месяца.
+ * «Календарь прибыли» (вкладка «Календарь», /calendar): месяц сеткой, по дням — PnL, сделки и винрейт; справа — итог недели; внизу — итог месяца.
  * Свой месяц (стрелки), не зависит от фильтра периода. Дни соседних месяцев — заштрихованы, данные бледные.
  * На телефоне клетки компактные (PnL коротко), итог недели скрыт — итог месяца внизу.
  */
@@ -43,7 +43,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
   const m = cal.month
 
   return (
-    <Card className="rise !p-4 [--i:3]">
+    <Card className="rise !p-4 [--i:1]">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="font-semibold">{c.title}</h2>
         <div className="flex items-center gap-1 rounded-xl border border-border bg-surface-2/60 p-1">
@@ -146,9 +146,9 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
 
 function Stat({ label, value, tone = '' }: { label: string; value: string; tone?: string }) {
   return (
-    <div className="flex items-center justify-between gap-2 rounded-lg bg-surface-2/60 px-3 py-2">
-      <span className="text-muted">{label}</span>
-      <span className={`num font-semibold ${tone}`}>{value}</span>
+    <div className="flex min-w-0 flex-col gap-0.5 rounded-lg bg-surface-2/60 px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+      <span className="truncate text-muted">{label}</span>
+      <span className={`num font-semibold whitespace-nowrap ${tone}`}>{value}</span>
     </div>
   )
 }

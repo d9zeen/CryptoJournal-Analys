@@ -1,4 +1,4 @@
-/** Календарь прибыли на дашборде: дни месяца, итог недели и месяца, листание месяцев */
+/** Вкладка «Календарь»: дни месяца, итог недели и месяца, листание месяцев */
 import { test, expect, fakeSupabase, makeTrade } from './fixtures'
 
 test('календарь прибыли: дни, итоги и листание месяцев', async ({ page, db }) => {
@@ -10,7 +10,11 @@ test('календарь прибыли: дни, итоги и листание 
     makeTrade(3, { entry_at: day(3, 10), exit_at: day(3, 11), pnl: -50 }),
   ]
   await fakeSupabase(page, db)
+  // на дашборде календаря больше нет — он в своей вкладке
   await page.goto('dashboard')
+  await expect(page.getByText('Календарь прибыли')).toHaveCount(0)
+  await page.getByRole('link', { name: 'Календарь' }).first().click()
+  await expect(page).toHaveURL(/\/calendar$/)
   const cal = page.getByText('Календарь прибыли').locator('xpath=ancestor::div[contains(@class,"rise")][1]')
   await expect(cal).toBeVisible()
   const month = new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(now)

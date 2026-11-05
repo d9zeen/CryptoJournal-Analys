@@ -13,6 +13,7 @@ function useNavItems() {
   const items = [
     { to: '/dashboard', label: t.nav.dashboard, icon: 'M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z' },
     { to: '/trades', label: t.nav.trades, icon: 'M4 6h16M4 12h16M4 18h10' },
+    { to: '/calendar', label: t.nav.calendar, icon: 'M8 3v3m8-3v3M4 9h16M5 5h14a1 1 0 011 1v13a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1zm3 8h2m3 0h2m-7 4h2m3 0h2' },
     { to: '/analysis', label: t.nav.analysis, icon: 'M4 20V11m6 9V5m6 15v-6m5 6H3' },
     { to: '/import', label: t.nav.import, icon: 'M12 3v12m0 0l-4-4m4 4l4-4M4 17v3h16v-3' },
     { to: '/settings', label: t.nav.settings, icon: 'M12 15a3 3 0 100-6 3 3 0 000 6zm7.4-3a7.4 7.4 0 00-.1-1.3l2-1.6-2-3.4-2.4 1a7.6 7.6 0 00-2.2-1.3L14.3 2h-4l-.4 2.4a7.6 7.6 0 00-2.2 1.3l-2.4-1-2 3.4 2 1.6a7.4 7.4 0 000 2.6l-2 1.6 2 3.4 2.4-1c.7.5 1.4 1 2.2 1.3l.4 2.4h4l.4-2.4c.8-.3 1.5-.8 2.2-1.3l2.4 1 2-3.4-2-1.6c.1-.4.1-.9.1-1.3z' },
@@ -98,13 +99,16 @@ export function AppLayout() {
       </main>
 
       {/* Нижнее меню на телефоне: там нет наведения, поэтому подписи остаются */}
-      <nav className={`fixed inset-x-0 bottom-0 z-10 grid ${items.length > 5 ? 'grid-cols-6' : 'grid-cols-5'} border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden`}>
+      <nav
+        className="fixed inset-x-0 bottom-0 z-10 grid border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden"
+        style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
+      >
         {items.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             viewTransition
-            className={({ isActive }) => `flex flex-col items-center gap-1 py-2 text-[11px] transition-colors ${isActive ? 'text-primary' : 'text-muted'}`}
+            className={({ isActive }) => `flex min-w-0 flex-col items-center gap-1 py-2 ${items.length > 6 ? 'text-[10px]' : 'text-[11px]'} transition-colors ${isActive ? 'text-primary' : 'text-muted'}`}
           >
             <Icon d={item.icon} />
             {item.label}
