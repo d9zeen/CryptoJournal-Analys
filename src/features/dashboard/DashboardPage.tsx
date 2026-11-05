@@ -11,8 +11,6 @@ import { rangeFor, type CustomRange, type PeriodPreset } from '@/lib/period'
 import { browserTimeZone } from '@/lib/tz'
 import { formatUsd } from '@/lib/format'
 import {
-  byHour,
-  byWeekday,
   closedTrades,
   downsampleEquity,
   drawdownPeriod,
@@ -31,7 +29,6 @@ import { Segmented } from '@/components/ui/Segmented'
 // Recharts тяжёлый — грузим графики отдельным файлом
 const EquityChart = lazy(() => import('./charts').then((m) => ({ default: m.EquityChart })))
 const DailyPnlChart = lazy(() => import('./charts').then((m) => ({ default: m.DailyPnlChart })))
-const BucketChart = lazy(() => import('./charts').then((m) => ({ default: m.BucketChart })))
 
 export function DashboardPage() {
   const t = useT()
@@ -58,8 +55,6 @@ export function DashboardPage() {
       period: drawdownPeriod(curve),
       rwl: rWinLoss(closed),
       bars: pnlBars(pnlByDay(closed, tz)),
-      weekday: byWeekday(closed, tz),
-      hour: byHour(closed, tz),
     }
   }, [trades, profile?.starting_balance, tz])
 
@@ -133,16 +128,6 @@ export function DashboardPage() {
             </ChartCard>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2">
-            <ChartCard title={t.dashboard.charts.weekday}>
-              <BucketChart data={stats.weekday.map((g) => ({ label: t.dashboard.weekdays[g.key], pnl: g.pnl, count: g.count }))} />
-            </ChartCard>
-            <ChartCard title={t.dashboard.charts.hour}>
-              <BucketChart data={stats.hour.map((g) => ({ label: `${g.key}:00`, pnl: g.pnl, count: g.count }))} />
-            </ChartCard>
-          </div>
-
-          <p className="text-xs text-muted">{fmt(t.dashboard.timezoneNote, { tz })}</p>
           <EquityTableDialog open={tableOpen} onClose={() => setTableOpen(false)} curve={stats.curve} unit={eqUnit} balance={balance} />
         </>
       )}

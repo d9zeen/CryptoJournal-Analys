@@ -78,6 +78,25 @@ test.describe('дашборд и сделки', () => {
     for (const name of ['Сетапы', 'Топ ошибок', 'Пары', 'Эмоции', 'Long / Short']) await expect(page.getByRole('heading', { name })).toBeVisible()
   })
 
+  test('свой диапазон: календарь с быстрыми вариантами, применяется кнопкой', async ({ page, db }) => {
+    db.trades = Array.from({ length: 6 }, (_, i) => makeTrade(i))
+    await fakeSupabase(page, db)
+    await page.goto('dashboard')
+    await page.getByRole('radio', { name: 'Свой диапазон' }).click()
+    const picker = page.getByRole('dialog', { name: 'Свой диапазон' })
+    await expect(picker).toBeVisible()
+    await expect(picker.getByRole('button', { name: 'Применить' })).toBeDisabled()
+    await picker.getByRole('button', { name: 'Прошлый месяц' }).click()
+    await picker.getByRole('button', { name: 'Применить' }).click()
+    await expect(picker).toBeHidden()
+    await expect(page.getByRole('radio', { name: /—/ })).toHaveAttribute('aria-checked', 'true')
+    // Esc закрывает без изменений
+    await page.getByRole('radio', { name: /—/ }).click()
+    await expect(picker).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(picker).toBeHidden()
+  })
+
   test('список сделок по умолчанию за всё время (старые сделки видны)', async ({ page, db }) => {
     db.trades = [makeTrade(0, { symbol: 'OLDUSDT', entry_at: '2025-01-05T10:00:00Z', exit_at: '2025-01-05T12:00:00Z' })]
     await fakeSupabase(page, db)
