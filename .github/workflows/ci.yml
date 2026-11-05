@@ -30,6 +30,8 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      - name: Серверная синхронизация собрана из текущего кода (engine.js)
+        run: npm run build:functions && git diff --exit-code supabase/functions/sync-worker/engine.js
 
   database:
     name: Тесты базы и защиты (RLS)

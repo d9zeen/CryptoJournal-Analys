@@ -59,6 +59,15 @@ $$;
 create view vault.decrypted_secrets as select id, name, description, secret, secret as decrypted_secret from vault.secrets;
 revoke all on schema vault from public;
 
+-- Заглушка pg_net: запросы не отправляются, а записываются (тесты проверяют, кому и что ушло)
+create schema net;
+create table net.calls (id bigserial primary key, url text, body jsonb, headers jsonb);
+create function net.http_post(url text, body jsonb default '{}', params jsonb default '{}', headers jsonb default '{}', timeout_milliseconds int default 5000)
+returns bigint language sql as $$
+  insert into net.calls (url, body, headers) values (url, body, headers) returning id
+$$;
+revoke all on schema net from public;
+
 -- Как в Supabase: по умолчанию роли получают права на новые таблицы public (защищает RLS)
 grant usage on schema public to anon, authenticated;
 alter default privileges in schema public grant all on tables to anon, authenticated;
