@@ -59,6 +59,8 @@ src/
   components/ui/       базовые компоненты (Button, Input, Card, Alert, Spinner)
   layout/AppLayout.tsx шапка + нижнее меню на телефоне
   features/<раздел>/   auth, dashboard, trades, import, settings
+                       dashboard: SummaryStrip («Лента» + мини-кривая на SVG), charts.tsx (Recharts, лениво),
+                       EquityTableDialog (таблица сделок в <dialog>), equityTime.ts (время точек, $ / %)
 supabase/migrations/   SQL-миграции, нумерация 0001_..., 0002_...
 supabase/tests/        заглушка Supabase для чистого Postgres + тесты RLS (rls_test.sql);
                        live_check.sql — проверка защиты на НАСТОЯЩЕЙ базе (всё откатывает)

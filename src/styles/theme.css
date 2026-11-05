@@ -64,11 +64,14 @@
 /* Сила неонового свечения цифр: в тёмной теме есть, в светлой — нет (иначе мутное пятно) */
 :root {
   --glow-mix: 45%;
+  /* мягкий неон кривой капитала: светлая «сердцевина» + слабое фиолетовое сияние */
+  --neon: drop-shadow(0 0 2px rgb(232 234 243 / 0.36)) drop-shadow(0 0 10px rgb(141 120 255 / 0.54));
 }
 
 /* Светлая тема: переопределяем те же переменные */
 :root[data-theme='light'] {
   --glow-mix: 0%;
+  --neon: drop-shadow(0 0 1.5px rgb(102 80 238 / 0.3)) drop-shadow(0 0 8px rgb(102 80 238 / 0.32));
   --color-bg: #f5f6fa;
   --color-surface: #ffffff;
   --color-surface-2: #edeff6;
@@ -108,6 +111,43 @@
     border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
     box-shadow: var(--shadow-lift);
   }
+}
+
+/* Кривая капитала (Recharts) — мягкий неон */
+.equity-neon .recharts-line-curve {
+  filter: var(--neon);
+}
+
+/* Мини-кривая: прорисовка слева направо, точки «выскакивают», точка «сейчас» пульсирует */
+@utility reveal {
+  animation: reveal 1.1s cubic-bezier(0.3, 0.7, 0.2, 1) both;
+}
+@utility pop {
+  animation: pop 0.35s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+  animation-delay: var(--d, 1s);
+}
+@utility live {
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    background: inherit;
+    animation: halo 2.4s 1.4s ease-out infinite;
+  }
+}
+@keyframes reveal {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+/* scale, а не transform: сдвиг точки задают классы -translate-* (в Tailwind v4 это отдельное свойство translate) */
+@keyframes pop {
+  from { scale: 0; }
+  to { scale: 1; }
+}
+@keyframes halo {
+  0% { transform: scale(1); opacity: 0.5; }
+  70%, 100% { transform: scale(3.2); opacity: 0; }
 }
 
 /* Лесенка появления: style={{ '--i': номер }} задаёт задержку */

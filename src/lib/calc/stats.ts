@@ -133,7 +133,8 @@ export function drawdown(closed: ClosedTrade[], startingBalance?: number | null)
   return { usd, pct: start === null ? null : pct }
 }
 
-export type EquityPoint = { n: number; at: string | null; pnl: number; cum: number }
+/** Точка кривой: n — номер сделки (0 — старт), at — время закрытия, symbol / id — для подсказки и перехода к сделке */
+export type EquityPoint = { n: number; at: string | null; pnl: number; cum: number; symbol?: string; id?: string }
 
 /** Кривая накопленного PnL: точка 0 — старт, далее по сделке на точку. */
 export function equityCurve(closed: ClosedTrade[]): EquityPoint[] {
@@ -141,9 +142,55 @@ export function equityCurve(closed: ClosedTrade[]): EquityPoint[] {
   let cum = 0
   closed.forEach((t, i) => {
     cum += t.pnl
-    points.push({ n: i + 1, at: t.exit_at, pnl: t.pnl, cum })
+    points.push({ n: i + 1, at: t.exit_at, pnl: t.pnl, cum, symbol: t.symbol, id: t.id })
   })
   return points
+}
+
+/**
+ * Период максимальной просадки на кривой (тот же расчёт, что drawdown(): пик считается с нуля).
+ * peak / trough / recovery — номера точек (n): пик, дно и первая точка, где капитал вернулся к пику
+ * (null — ещё не вернулся). null целиком — просадки не было.
+ */
+export type DrawdownPeriod = { peak: number; trough: number; recovery: number | null; depth: number }
+
+export function drawdownPeriod(points: EquityPoint[]): DrawdownPeriod | null {
+  let peakI = 0
+  let best = { peak: 0, trough: 0, depth: 0 }
+  for (let i = 0; i < points.length; i++) {
+    // >= — пик берём последний из равных: так длительность просадки честнее
+    if (points[i].cum >= points[peakI].cum) peakI = i
+    const depth = points[peakI].cum - points[i].cum
+    if (depth > best.depth) best = { peak: peakI, trough: i, depth }
+  }
+  if (best.depth <= 0) return null
+  let recovery: number | null = null
+  for (let i = best.trough + 1; i < points.length; i++) {
+    if (points[i].cum >= points[best.peak].cum) {
+      recovery = points[i].n
+      break
+    }
+  }
+  return { peak: points[best.peak].n, trough: points[best.trough].n, recovery, depth: best.depth }
+}
+
+/** Средний выигрыш и средний проигрыш в R — только по сделкам со стопом (r не null). */
+export function rWinLoss(closed: ClosedTrade[]): { avgWinR: number | null; avgLossR: number | null } {
+  let win = 0
+  let winN = 0
+  let loss = 0
+  let lossN = 0
+  for (const t of closed) {
+    if (t.r === null) continue
+    if (t.r > 0) {
+      win += t.r
+      winN++
+    } else if (t.r < 0) {
+      loss += t.r
+      lossN++
+    }
+  }
+  return { avgWinR: winN ? win / winN : null, avgLossR: lossN ? loss / lossN : null }
 }
 
 export type DayPnl = { date: string; pnl: number; count: number }
