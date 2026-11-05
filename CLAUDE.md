@@ -112,7 +112,8 @@ docs/SECURITY.md       вся защита (база, сайт, сборка) + 
 - [x] Этап 4 — импорт Bybit CSV (сверить с реальным файлом Bybit)
 - [ ] Этап 5 — лимиты, полировка, деплой
 
-Разработка сейчас идёт на localhost (`npm run dev`), деплой и домен — позже (этап 5).
+Сайт уже выкладывается на GitHub Pages: проверка изменений — на https://d9zeen.github.io/CryptoJournal-Analys/ после слияния PR
+(владелец localhost не использует; в отчёте «как проверить» — ссылка на сайт). Домен — позже (этап 5).
 Данные: TanStack Query, ключи `['trades', ...]`, `['trade', id]`, `['list', kind]`, `['profile']`, `['usage']`.
 Ошибка лимита из БД приходит как `FREE_LIMIT_REACHED` → `lib/errors.ts`.
 
