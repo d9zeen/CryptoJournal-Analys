@@ -9,7 +9,7 @@ import { Alert } from '@/components/ui/Alert'
 import { NumberField, SelectField, TextField } from '@/components/ui/Field'
 import { parseDecimal, toInput } from '@/lib/parse'
 import { dbErrorMessage } from '@/lib/errors'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { deleteMyAccount, downloadTradesCsv } from './dataApi'
 import { SecurityCard } from './SecurityCard'
 import { Segmented } from '@/components/ui/Segmented'
@@ -123,15 +123,18 @@ function PlanCard() {
   const { data: usage } = useUsage()
   const { data: profile } = useProfile()
   if (!usage) return <Card className="text-muted">{t.common.loading}</Card>
-  const isPro = usage.plan === 'pro'
+  const isPro = usage.plan !== 'free'
   const pct = usage.trade_limit ? Math.min(100, (usage.trades_created / usage.trade_limit) * 100) : 0
   return (
     <Card className="flex flex-col gap-3">
       <h2 className="font-medium">{t.settings.plan}</h2>
       <div className="flex items-baseline gap-2">
         <span className={`rounded-md px-2 py-0.5 text-sm font-semibold ${isPro ? 'bg-primary/15 text-primary' : 'bg-surface-2'}`}>
-          {isPro ? t.settings.planPro : t.settings.planFree}
+          {t.plans.names[usage.plan]}
         </span>
+        <Link to="/plans" className="ml-auto text-sm text-primary hover:underline">
+          {t.settings.plansLink}
+        </Link>
         {isPro && profile?.plan_until && (
           <span className="text-sm text-muted">{fmt(t.settings.planUntil, { date: new Date(profile.plan_until).toLocaleDateString('ru-RU') })}</span>
         )}

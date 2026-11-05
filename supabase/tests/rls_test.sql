@@ -126,9 +126,21 @@ reset role;
 update profiles set plan = 'pro', plan_until = now() + interval '30 days' where id = 'aaaaaaaa-0000-0000-0000-000000000001';
 set role authenticated;
 insert into trades (exchange, symbol, side, entry_at, entry_price, size_usd) values ('okx', 'SOLUSDT', 'long', now(), 150, 100);
-select pg_temp.check((select trade_limit is null and plan = 'pro' from get_my_usage()), 'на Pro лимита нет');
+select pg_temp.check((select trade_limit = 50 and plan = 'pro' from get_my_usage()), 'на Pro лимит 50 сделок в месяц');
+insert into trades (exchange, symbol, side, entry_at, entry_price, size_usd)
+select 'okx', 'SOLUSDT', 'long', now(), 150, 100 from generate_series(1, 19);
+select pg_temp.check((select trades_created from get_my_usage()) = 50, 'на Pro счётчик дошёл до 50');
+select pg_temp.expect_error($$insert into trades (exchange, symbol, side, entry_at, entry_price, size_usd) values ('okx', 'SOLUSDT', 'long', now(), 150, 100)$$, 'FREE_LIMIT_REACHED');
+select pg_temp.check(true, '51-я сделка на Pro отклоняется');
 
--- Импорт CSV (этап 4). Делаем на Pro, чтобы не упираться в лимит.
+-- Pro Plus — без лимита
+reset role;
+update profiles set plan = 'pro_plus', plan_until = now() + interval '30 days' where id = 'aaaaaaaa-0000-0000-0000-000000000001';
+set role authenticated;
+insert into trades (exchange, symbol, side, entry_at, entry_price, size_usd) values ('okx', 'SOLUSDT', 'long', now(), 150, 100);
+select pg_temp.check((select trade_limit is null and plan = 'pro_plus' from get_my_usage()), 'на Pro Plus лимита нет');
+
+-- Импорт CSV (этап 4). Делаем на Pro Plus, чтобы не упираться в лимит.
 insert into imports (id, exchange, filename, rows_total) values ('aaaaaaaa-2222-0000-0000-000000000000', 'bybit', 'closed_pnl.csv', 2);
 insert into trades (exchange, symbol, side, entry_at, exit_at, entry_price, exit_price, size_usd, fee, pnl, source, import_id, external_id) values
   ('bybit', 'BTCUSDT', 'long',  now() - interval '1 hour', now(), 60000, 61000, 600,  0.66, 9.34, 'import', 'aaaaaaaa-2222-0000-0000-000000000000', 'o:a1'),
@@ -155,7 +167,7 @@ select pg_temp.check((select count(*) from trades where source = 'import') = 1 a
 reset role;
 update profiles set plan_until = now() - interval '1 day' where id = 'aaaaaaaa-0000-0000-0000-000000000001';
 set role authenticated;
-select pg_temp.check((select plan = 'free' from get_my_usage()), 'истёкший Pro = Free');
+select pg_temp.check((select plan = 'free' from get_my_usage()), 'истёкший Pro Plus = Free');
 select pg_temp.expect_error($$insert into trades (exchange, symbol, side, entry_at, entry_price, size_usd) values ('okx', 'SOLUSDT', 'long', now(), 150, 100)$$, 'FREE_LIMIT_REACHED');
 select pg_temp.check(true, 'после окончания Pro снова действует лимит');
 
@@ -303,7 +315,7 @@ select pg_temp.check((select trades_created from usage_counters where user_id = 
 update profiles set plan = 'free', plan_until = null where id = 'aaaaaaaa-0000-0000-0000-000000000001';
 set role authenticated;
 set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
-select pg_temp.check((select plan = 'pro' and trade_limit is null from get_my_usage()), 'админ — всегда Pro без лимита, даже если в профиле Free');
+select pg_temp.check((select plan = 'pro_plus' and trade_limit is null from get_my_usage()), 'админ — всегда Pro Plus без лимита, даже если в профиле Free');
 insert into trades (exchange, symbol, side, entry_at, entry_price, size_usd)
   select 'bybit', 'BTCUSDT', 'long', now(), 100, 10 from generate_series(1, 35);
 select pg_temp.check(true, 'админ добавляет сделки сверх лимита Free');
@@ -387,12 +399,22 @@ set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
 select add_exchange_connection('hyperliquid', '0x3333333333333333333333333333333333333333', null, 'свежий');
 select add_exchange_connection('hyperliquid', '0x4444444444444444444444444444444444444444', null, 'сломан');
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
-select add_exchange_connection('hyperliquid', '0x2222222222222222222222222222222222222222');
+select pg_temp.expect_error($$select add_exchange_connection('polymarket', '0x2222222222222222222222222222222222222222')$$, 'PLAN_REQUIRED');
+select pg_temp.check(true, 'Basic (Free): подключения недоступны');
+reset role;
+update profiles set plan = 'pro', plan_until = null where id = 'bbbbbbbb-0000-0000-0000-000000000002';
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
+select pg_temp.expect_error($$select add_exchange_connection('hyperliquid', '0x2222222222222222222222222222222222222222')$$, 'PLAN_REQUIRED');
+select pg_temp.check(true, 'Pro: биржи (ключи API, кошельки DEX) — только на Pro Plus');
+select pg_temp.expect_error($$select add_exchange_connection('bybit', 'KEYB1234567', 'SecretSecret1')$$, 'PLAN_REQUIRED');
+select pg_temp.check(true, 'Pro: ключ Bybit — только на Pro Plus');
+select pg_temp.check(add_exchange_connection('polymarket', '0x2222222222222222222222222222222222222222') is not null, 'Pro: Polymarket доступен');
 reset role;
 update exchange_connections set last_sync_at = now() - interval '10 minutes' where label in ('свежий', 'Основной');
 update exchange_connections set last_error = 'KEY_INVALID | 10003' where label = 'сломан';
 select id as hl_due from exchange_connections where api_key = '0x1111111111111111111111111111111111111111' \gset
-select pg_temp.check(dispatch_sync() = 1, 'рассылка: только Pro, давно не обновлялось и без ошибки ключа');
+select pg_temp.check(dispatch_sync() = 1, 'рассылка каждые 3 часа: только Pro Plus (не Pro), давно не обновлялось и без ошибки ключа');
 select pg_temp.check((select count(*) from net.calls) = 1
   and (select url from net.calls) = 'https://proj.example.co/functions/v1/sync-worker'
   and (select body ->> 'connectionId' from net.calls) = :'hl_due'
@@ -420,7 +442,7 @@ reset role;
 select decrypted_secret as sync_secret from vault.decrypted_secrets where name = 'cj_sync_secret' \gset
 set role service_role;
 select pg_temp.check(sync_secret_ok(:'sync_secret') and not sync_secret_ok('wrong') and not sync_secret_ok('') and not sync_secret_ok(null), 'sync-worker отличает верный секрет от неверного');
-select pg_temp.check(effective_plan('aaaaaaaa-0000-0000-0000-000000000001') = 'pro', 'sync-worker видит тариф владельца');
+select pg_temp.check(effective_plan('aaaaaaaa-0000-0000-0000-000000000001') = 'pro_plus', 'sync-worker видит тариф владельца');
 reset role;
 update profiles set plan = 'free' where id = 'aaaaaaaa-0000-0000-0000-000000000001';
 

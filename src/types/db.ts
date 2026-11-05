@@ -1,7 +1,8 @@
 /** Типы строк базы данных (см. supabase/migrations). */
 import type { MarketType, Side } from '@/lib/calc/trade'
 
-export type Plan = 'free' | 'pro'
+/** free — Basic, pro — Pro, pro_plus — Pro Plus (src/lib/plans.ts) */
+export type Plan = 'free' | 'pro' | 'pro_plus'
 export type TradeSource = 'manual' | 'import' | 'api'
 
 export type Profile = {

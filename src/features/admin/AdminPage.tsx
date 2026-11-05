@@ -12,10 +12,11 @@ import { Input } from '@/components/ui/Input'
 import { formatDateTime, formatNumber } from '@/lib/format'
 import { dbErrorMessage } from '@/lib/errors'
 import { useMediaQuery } from '@/lib/useMediaQuery'
-import type { AdminUser } from '@/types/db'
+import type { AdminUser, Plan } from '@/types/db'
+import { planInfo } from '@/lib/plans'
+import { SelectField } from '@/components/ui/Field'
 import { useAdminResetUsage, useAdminSetPlan, useAdminUsers, useIsAdmin } from './api'
 
-const FREE_LIMIT = 30
 const dateOnly = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
 
 export function AdminPage() {
@@ -28,6 +29,7 @@ export function AdminPage() {
   const resetUsage = useAdminResetUsage()
   const desktop = useMediaQuery('(min-width: 1024px)')
   const [query, setQuery] = useState('')
+  const [giveTo, setGiveTo] = useState<Plan>('pro_plus')
   const [status, setStatus] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
 
   const shown = useMemo(() => {
@@ -38,7 +40,7 @@ export function AdminPage() {
   const totals = useMemo(
     () => ({
       users: users.length,
-      pro: users.filter((u) => u.effective_plan === 'pro').length,
+      pro: users.filter((u) => u.effective_plan !== 'free').length,
       month: users.reduce((s, u) => s + u.trades_month, 0),
       total: users.reduce((s, u) => s + Number(u.trades_total), 0),
     }),
@@ -56,27 +58,26 @@ export function AdminPage() {
   }
 
   const actions = (u: AdminUser) => {
-    // админ всегда работает без лимитов — выдавать / снимать Pro ему не нужно
+    // админ всегда работает без лимитов — выдавать / снимать тариф ему не нужно
     if (u.is_admin) return <span className="text-xs text-muted">{a.unlimitedHint}</span>
     const email = u.email ?? u.id
     const busy = setPlan.isPending || resetUsage.isPending
     const small = '!px-2.5 !py-1.5 text-xs'
     const in30 = new Date(Date.now() + 30 * 86_400_000).toISOString()
+    const give = (until: string | null) =>
+      run(() => setPlan.mutateAsync({ userId: u.id, plan: giveTo, until }), fmt(a.done.give, { email, plan: t.plans.names[giveTo] }))
     return (
-      <div className="flex flex-wrap gap-1.5">
-        {u.effective_plan === 'pro' ? (
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Button className={small} disabled={busy} onClick={() => give(in30)}>
+          {t.plans.names[giveTo]} · {a.give30}
+        </Button>
+        <Button variant="secondary" className={small} disabled={busy} onClick={() => give(null)}>
+          {t.plans.names[giveTo]} · {a.giveForever}
+        </Button>
+        {u.effective_plan !== 'free' && (
           <Button variant="secondary" className={small} disabled={busy} onClick={() => run(() => setPlan.mutateAsync({ userId: u.id, plan: 'free', until: null }), fmt(a.done.remove, { email }))}>
             {a.removePro}
           </Button>
-        ) : (
-          <>
-            <Button className={small} disabled={busy} onClick={() => run(() => setPlan.mutateAsync({ userId: u.id, plan: 'pro', until: in30 }), fmt(a.done.give, { email }))}>
-              {a.give30}
-            </Button>
-            <Button variant="secondary" className={small} disabled={busy} onClick={() => run(() => setPlan.mutateAsync({ userId: u.id, plan: 'pro', until: null }), fmt(a.done.give, { email }))}>
-              {a.giveForever}
-            </Button>
-          </>
         )}
         <Button variant="ghost" className={small} disabled={busy || u.trades_month === 0} onClick={() => run(() => resetUsage.mutateAsync(u.id), fmt(a.done.reset, { email }))}>
           {a.resetLimit}
@@ -87,23 +88,25 @@ export function AdminPage() {
 
   const planBadge = (u: AdminUser) => {
     if (u.is_admin) return <span className="rounded-md bg-primary/15 px-2 py-0.5 text-xs font-semibold whitespace-nowrap text-primary">{a.unlimited}</span>
-    const pro = u.effective_plan === 'pro'
-    const text = pro
+    const paid = u.effective_plan !== 'free'
+    const name = t.plans.names[paid ? u.effective_plan : u.plan]
+    const text = paid
       ? u.plan_until
-        ? fmt(a.proUntil, { d: dateOnly.format(new Date(u.plan_until)) })
-        : a.proForever
-      : u.plan === 'pro' && u.plan_until
-        ? fmt(a.proExpired, { d: dateOnly.format(new Date(u.plan_until)) })
+        ? fmt(a.planUntil, { plan: name, d: dateOnly.format(new Date(u.plan_until)) })
+        : fmt(a.planForever, { plan: name })
+      : u.plan !== 'free' && u.plan_until
+        ? fmt(a.planExpired, { plan: name, d: dateOnly.format(new Date(u.plan_until)) })
         : a.free
-    return <span className={`rounded-md px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${pro ? 'bg-primary/15 text-primary' : 'bg-surface-2 text-muted'}`}>{text}</span>
+    return <span className={`rounded-md px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${paid ? 'bg-primary/15 text-primary' : 'bg-surface-2 text-muted'}`}>{text}</span>
   }
 
   const monthCell = (u: AdminUser) => {
-    const full = u.effective_plan === 'free' && u.trades_month >= FREE_LIMIT
+    const limit = u.is_admin ? null : planInfo(u.effective_plan).tradeLimit
+    const full = limit !== null && u.trades_month >= limit
     return (
       <span className={`num ${full ? 'text-loss' : ''}`}>
         {u.trades_month}
-        {u.effective_plan === 'free' && <span className="text-muted"> / {FREE_LIMIT}</span>}
+        {limit !== null && <span className="text-muted"> / {limit}</span>}
       </span>
     )
   }
@@ -134,8 +137,16 @@ export function AdminPage() {
           <h1 className="text-xl font-semibold">{a.title}</h1>
           <p className="mt-1 text-sm text-muted">{a.hint}</p>
         </div>
-        <div className="w-full sm:w-72">
-          <Input label={a.search} value={query} onChange={(e) => setQuery(e.target.value)} type="search" />
+        <div className="flex w-full flex-wrap gap-3 sm:w-auto">
+          <div className="w-full sm:w-44">
+            <SelectField label={a.planToGive} value={giveTo} onChange={(e) => setGiveTo(e.target.value as Plan)}>
+              <option value="pro">{t.plans.names.pro}</option>
+              <option value="pro_plus">{t.plans.names.pro_plus}</option>
+            </SelectField>
+          </div>
+          <div className="w-full sm:w-72">
+            <Input label={a.search} value={query} onChange={(e) => setQuery(e.target.value)} type="search" />
+          </div>
         </div>
       </div>
 

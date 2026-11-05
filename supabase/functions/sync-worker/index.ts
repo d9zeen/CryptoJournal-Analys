@@ -1,5 +1,5 @@
 /**
- * sync-worker — синхронизация подключения биржи на сервере, по расписанию (как TradeZella: каждые 3 часа, тариф Pro).
+ * sync-worker — синхронизация подключения биржи на сервере, по расписанию (как TradeZella: каждые 3 часа, тариф Pro Plus).
  *
  * Кто вызывает: только база (pg_cron → public.dispatch_sync → pg_net) с секретом из Vault в заголовке x-sync-secret.
  * Из браузера вызвать нельзя: без секрета — 403 (JWT здесь не нужен, verify_jwt = false).
@@ -42,9 +42,9 @@ Deno.serve(async (req) => {
   if (!conn) return json({ error: 'NOT_FOUND' }, 404)
   const userId = conn.user_id as string
 
-  // 2. Только Pro (dispatch_sync уже отбирает Pro — проверяем ещё раз: тариф мог закончиться)
+  // 2. Только Pro Plus (dispatch_sync уже отбирает Pro Plus — проверяем ещё раз: тариф мог закончиться)
   const { data: plan } = await admin.rpc('effective_plan', { uid: userId })
-  if (plan !== 'pro') return json({ skipped: 'NOT_PRO' })
+  if (plan !== 'pro_plus') return json({ skipped: 'NOT_PRO_PLUS' })
 
   // 3. Bybit: подпись запросов ключом пользователя (только адреса для чтения)
   let secret: string | null = null
@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
           }
           return found
         },
-        remaining: async () => null, // Pro — без лимита (лимит всё равно проверяет триггер в базе)
+        remaining: async () => null, // Pro Plus — без лимита (лимит всё равно проверяет триггер в базе)
         insert: async ({ exchange, filename, trades }) => {
           const { data: rec, error: recErr } = await admin
             .from('imports')

@@ -58,7 +58,7 @@ export function TradesPage() {
 
       {usage && usage.trade_limit !== null && (
         <p className={`text-sm ${usage.trades_created >= usage.trade_limit ? 'text-loss' : 'text-muted'}`}>
-          {fmt(t.tradeForm.usage, { used: usage.trades_created, limit: usage.trade_limit })}
+          {fmt(t.tradeForm.usage, { used: usage.trades_created, limit: usage.trade_limit, plan: t.plans.names[usage.plan] })}
         </p>
       )}
 

@@ -1,7 +1,7 @@
 # CryptoJournal — контекст для Claude
 
 Онлайн-дневник сделок для русскоязычных криптотрейдеров (фьючерсы Bybit / BingX / OKX + спот):
-запись сделок, статистика, импорт CSV. Подписка Free / Pro (оплаты в MVP нет, только поле `plan` и лимиты).
+запись сделок, статистика, импорт CSV. Тарифы Basic (free) / Pro / Pro Plus — `src/lib/plans.ts` + база (0013); оплаты пока нет, тариф выдаёт админ.
 
 Владелец — не профессиональный разработчик: объяснять простым языком, маленькие шаги,
 после каждого шага — как проверить результат. Общение на русском.
@@ -98,12 +98,14 @@ docs/SECURITY.md       вся защита (база, сайт, сборка) + 
 | `VITE_SUPABASE_ANON_KEY` | anon key или publishable key (публичный) |
 | `BASE_PATH` | только при сборке для GitHub Pages: `/CryptoJournal-Analys/` (ставит workflow) |
 
-Проект Supabase: `cryptojournal`, ref `dkjavndvuulnzflowdhj` (Frankfurt), миграции 0001–0011 применены (0005 — админка, владелец добавлен в `admins`; 0006 — подключения бирж; 0007–0008 — синхронизация по расписанию; 0009 — админ без лимитов; 0010–0011 — Polymarket, рынок `prediction`, `trades.title`, 05.11.2026).
+Проект Supabase: `cryptojournal`, ref `dkjavndvuulnzflowdhj` (Frankfurt), миграции 0001–0013 применены (0005 — админка, владелец добавлен в `admins`; 0006 — подключения бирж; 0007–0008 — синхронизация по расписанию; 0009 — админ без лимитов; 0010–0011 — Polymarket, рынок `prediction`, `trades.title`; 0012–0013 — тарифы Pro / Pro Plus, 05.11.2026).
 Подключения бирж (как TradeZella): `features/connections` + `lib/sync` + серверная функция `supabase/functions/exchange-proxy` (выложена; при изменении — выложить заново через коннектор Supabase, verify_jwt = true). Секреты ключей — в Vault, браузер их не видит. Новые биржи: `connection_kind` в новой миграции + модуль в `lib/sync` + `CONNECTABLE`.
-Синхронизация по расписанию (Pro, каждые 3 ч): pg_cron `cj-sync` → `dispatch_sync()` → pg_net → функция `sync-worker` (verify_jwt = false, проверяет секрет `cj_sync_secret` из Vault).
+Синхронизация по расписанию (Pro Plus, каждые 3 ч): pg_cron `cj-sync` → `dispatch_sync()` → pg_net → функция `sync-worker` (verify_jwt = false, проверяет секрет `cj_sync_secret` из Vault).
 Логика одна для браузера и сервера: `src/lib/sync/run.ts`; `supabase/functions/sync-worker/engine.js` собирается `npm run build:functions` (CI проверяет, что он свежий).
 Выкладка sync-worker: в index.ts импорт `./engine.js` заменить на `https://cdn.jsdelivr.net/gh/d9zeen/CryptoJournal-Analys@<SHA коммита>/supabase/functions/sync-worker/engine.js` (коммит уже запушен) и выложить через коннектор Supabase.
-Админка: `/admin` (features/admin); админ всегда Pro и без потолков записей (`effective_plan`, 0009); таблица `admins` + функции `is_admin`, `admin_list_users`, `admin_set_plan`, `admin_reset_usage`; админов добавляют только в SQL Editor (docs/ADMIN.md).
+Тарифы: Basic — 30 сделок/мес; Pro ($10) — 50 сделок/мес + Polymarket; Pro Plus ($15) — без лимита, биржи по API, Polymarket, сервер каждые 3 ч.
+Проверки тарифа — в базе (`plan_trade_limit`, `connection_plan_ok`, `dispatch_sync`), в exchange-proxy / sync-worker и в интерфейсе (`canConnect`). Страница `/plans`.
+Админка: `/admin` (features/admin); админ всегда Pro Plus и без потолков записей (`effective_plan`, 0009); таблица `admins` + функции `is_admin`, `admin_list_users`, `admin_set_plan`, `admin_reset_usage`; админов добавляют только в SQL Editor (docs/ADMIN.md).
 Скриншоты: таблица `trade_screenshots` (до 10 на сделку), файлы `{user_id}/{trade_id}/{uuid}.webp`; старое поле `trades.screenshot_path` не используется.
 Публичные URL и publishable key вписаны в `.env.example` и `.github/workflows/pages.yml` (секреты репозитория НЕ используются — старый секрет однажды перебил адрес).
 Новые миграции владелец применяет в SQL Editor (или Claude через коннектор Supabase, если он подключён).

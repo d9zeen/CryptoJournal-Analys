@@ -14,6 +14,8 @@ import { checkBybitKey, type BybitCall, type BybitResponse } from '@/lib/sync/by
 import { pmPositionToTrade, type PmGet } from '@/lib/sync/polymarket'
 import { SyncError, errorCodeOf, runSync, toSyncError, type SyncResult } from '@/lib/sync/run'
 import { fetchExistingIds, runImport } from '@/features/import/api'
+import { useUsage } from '@/features/settings/api'
+import { canConnect } from '@/lib/plans'
 
 export { SyncError, errorCodeOf, shortKey, type SyncResult } from '@/lib/sync/run'
 
@@ -73,7 +75,7 @@ function bybitCall(connectionId: string): BybitCall {
       } catch {
         /* тело не JSON */
       }
-      throw new SyncError(code === 'EXCHANGE_HTTP' ? 'EXCHANGE_DOWN' : 'PROXY', code)
+      throw new SyncError(code === 'EXCHANGE_HTTP' ? 'EXCHANGE_DOWN' : code === 'PLAN_REQUIRED' ? 'PLAN_REQUIRED' : 'PROXY', code)
     }
     return data as BybitResponse<unknown>
   }
@@ -199,15 +201,18 @@ export function useAutoSync() {
   const { user } = useAuth()
   const qc = useQueryClient()
   const { data: conns } = useConnections()
+  const { data: usage } = useUsage()
+  const plan = usage?.plan
   const running = useRef(false)
 
   useEffect(() => {
-    if (!user || !conns?.length) return
+    if (!user || !conns?.length || !plan) return
     const tick = async () => {
       if (running.current || document.visibilityState === 'hidden') return
       const due = conns.filter((c) => {
         const code = errorCodeOf(c.last_error)
         if (code && code.startsWith('KEY_')) return false // сломанный ключ — ждём, пока человек поправит
+        if (!canConnect(c.exchange, plan)) return false // тариф закончился — подключение на паузе
         return !c.last_sync_at || Date.now() - Date.parse(c.last_sync_at) > AUTO_SYNC_MS
       })
       if (!due.length) return
@@ -231,5 +236,5 @@ export function useAutoSync() {
     void tick()
     const id = window.setInterval(() => void tick(), 60_000)
     return () => window.clearInterval(id)
-  }, [user, conns, qc])
+  }, [user, conns, qc, plan])
 }
