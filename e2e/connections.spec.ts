@@ -79,3 +79,35 @@ test('Free: подсказка про Pro', async ({ page, db }) => {
   await page.goto('import')
   await expect(page.getByText(/На Pro — сами на сервере каждые 3 часа/)).toBeVisible()
 })
+
+test('Polymarket: подключение по адресу — закрытые позиции становятся сделками с названием рынка', async ({ page, db }) => {
+  await fakeSupabase(page, db)
+  await page.goto('import')
+  await page.getByRole('button', { name: '+ Подключить' }).click()
+  await page.getByLabel('Биржа').first().selectOption('polymarket')
+  await expect(page.getByText(/Нужен адрес аккаунта Polymarket/)).toBeVisible()
+  await page.getByLabel('Адрес кошелька').fill('0x9999999999999999999999999999999999999999')
+  await page.getByRole('button', { name: 'Подключить', exact: true }).click()
+  await expect(page.getByText('Polymarket подключена')).toBeVisible()
+  await expect.poll(() => db.inserted.filter((x) => x.table === 'trades').length).toBe(1)
+  const rows = db.inserted.find((x) => x.table === 'trades')!.body as Record<string, unknown>[]
+  expect(rows[0]).toMatchObject({ exchange: 'polymarket', market_type: 'prediction', side: 'long', symbol: 'PM-ABCDEF01-YES', title: 'Will BTC hit 150k in 2026? — Yes', entry_price: 0.4, exit_price: 1, pnl: 60, source: 'api' })
+  // запрос ушёл через серверную функцию, не напрямую
+  expect(db.connCalls!.some((c) => c.fn === 'exchange-proxy' && c.body.path === '/v2/positions')).toBe(true)
+})
+
+test('Polymarket: демо без подключения — пример сделок, в дневник ничего не пишется', async ({ page, db }) => {
+  await fakeSupabase(page, db)
+  await page.goto('import')
+  await page.getByRole('button', { name: '+ Подключить' }).click()
+  await page.getByLabel('Биржа').first().selectOption('polymarket')
+  await page.getByRole('button', { name: /Посмотреть пример/ }).click()
+  const dialog = page.getByRole('dialog', { name: 'Пример: Polymarket в дневнике' })
+  await expect(dialog.getByText('Will BTC hit 150k in 2026? — Yes')).toBeVisible()
+  await expect(dialog.getByText(/Сделок: 1, в плюс: 1 \(100%\)/)).toBeVisible()
+  expect(db.connCalls!.find((c) => c.fn === 'exchange-proxy')?.body).toMatchObject({ demo: true, path: '/v2/positions' })
+  expect(db.inserted.filter((x) => x.table === 'trades')).toEqual([])
+  expect(db.connCalls!.some((c) => c.fn === 'add_exchange_connection')).toBe(false)
+  await dialog.getByRole('button', { name: 'Закрыть' }).click()
+  await expect(dialog).toBeHidden()
+})

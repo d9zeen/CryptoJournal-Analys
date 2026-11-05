@@ -7,6 +7,7 @@ export const EXCHANGES = [
   { id: 'bitget', name: 'Bitget' },
   { id: 'mexc', name: 'MEXC' },
   { id: 'hyperliquid', name: 'Hyperliquid' },
+  { id: 'polymarket', name: 'Polymarket' },
   { id: 'other', name: null },
 ] as const
 

@@ -92,6 +92,12 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
         if (c) Object.assign(c, { last_sync_at: new Date().toISOString(), cursor_at: b.p_cursor ?? c.cursor_at, last_error: b.p_error })
         return route.fulfill({ status: 204 })
       }
+      // exchange-proxy: Polymarket — закрытые позиции
+      if (b.path === '/v2/positions')
+        return json({
+          data: [{ conditionId: '0xabcdef0123456789', title: 'Will BTC hit 150k in 2026?', outcome: 'Yes', avgPrice: 0.4, totalBought: 100, realizedPnl: 60, timestamp: 1793000000 }],
+          pagination: { next_cursor: null },
+        })
       // exchange-proxy: ответы Bybit
       const params = (b.params ?? {}) as Record<string, number | string>
       if (b.path === '/v5/user/query-api') return json({ retCode: 0, retMsg: 'OK', result: { readOnly: db.bybitReadOnly ?? 1 } })

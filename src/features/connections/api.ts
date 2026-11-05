@@ -2,6 +2,7 @@
  * Подключения бирж (как у TradeZella): сделки подтягиваются сами.
  *  - Bybit: ключ API «только чтение»; запросы подписывает серверная функция exchange-proxy (секрет в браузер не попадает).
  *  - Hyperliquid: только адрес кошелька; история открыта, запросы идут напрямую в api.hyperliquid.xyz.
+ *  - Polymarket: только адрес кошелька; закрытые позиции через exchange-proxy (без ключей).
  * Найденные сделки проходят тот же путь, что импорт файла: проверка дублей → лимит Free → запись в «Историю импортов».
  */
 import { useEffect, useRef } from 'react'
@@ -10,6 +11,7 @@ import { FunctionRegion } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { checkBybitKey, type BybitCall, type BybitResponse } from '@/lib/sync/bybit'
+import { pmPositionToTrade, type PmGet } from '@/lib/sync/polymarket'
 import { SyncError, errorCodeOf, runSync, toSyncError, type SyncResult } from '@/lib/sync/run'
 import { fetchExistingIds, runImport } from '@/features/import/api'
 
@@ -32,6 +34,7 @@ export type Connection = {
 export const CONNECTABLE = [
   { id: 'bybit', kind: 'cex' },
   { id: 'hyperliquid', kind: 'wallet' },
+  { id: 'polymarket', kind: 'wallet' },
 ] as const
 export type ConnectableId = (typeof CONNECTABLE)[number]['id']
 
@@ -76,6 +79,33 @@ function bybitCall(connectionId: string): BybitCall {
   }
 }
 
+/** Polymarket Data API через серверную функцию (у Polymarket нет разрешения на запросы со сторонних сайтов) */
+function polymarketGet(connectionId: string): PmGet {
+  return async (path, params) => {
+    const { data, error } = await supabase.functions.invoke('exchange-proxy', { body: { connectionId, path, params } })
+    if (error) throw new SyncError('EXCHANGE_DOWN', 'PROXY')
+    return data
+  }
+}
+
+/** Демо Polymarket: закрытые позиции публичного кошелька → сделки (в дневник не пишутся) */
+export function usePolymarketDemo(enabled: boolean) {
+  return useQuery({
+    queryKey: ['polymarketDemo'],
+    enabled,
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('exchange-proxy', { body: { demo: true, path: '/v2/positions' } })
+      if (error) throw new SyncError('EXCHANGE_DOWN', 'PROXY')
+      const items = Array.isArray(data) ? data : ((data as { data?: unknown[] })?.data ?? [])
+      return (items as Record<string, unknown>[]).flatMap((p) => {
+        const t = pmPositionToTrade(p)
+        return t ? [t] : []
+      })
+    },
+  })
+}
+
 /** Синхронизации, которые идут прямо сейчас: одно подключение не качаем дважды (кнопка + авто) */
 const inFlight = new Map<string, Promise<SyncResult>>()
 
@@ -85,6 +115,7 @@ export function syncConnection(conn: Connection, remaining: () => Promise<number
   if (running) return running
   const p = runSync(conn, {
     bybitCall: bybitCall(conn.id),
+    polymarketGet: polymarketGet(conn.id),
     existingIds: fetchExistingIds,
     remaining,
     insert: ({ exchange, filename, trades }) => runImport({ exchange, filename, rowsTotal: trades.length, trades, source: 'api' }),

@@ -33,6 +33,8 @@ export type Trade = {
   exchange: string
   market_type: MarketType
   symbol: string
+  /** название рынка (Polymarket: вопрос и исход) — показывается вместо кода */
+  title?: string | null
   side: Side
   entry_at: string
   exit_at: string | null

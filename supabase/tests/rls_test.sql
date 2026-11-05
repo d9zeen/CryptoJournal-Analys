@@ -436,6 +436,21 @@ select pg_temp.expect_error($$select add_exchange_connection('hyperliquid', '0x1
 select pg_temp.check(true, 'аноним не может добавить подключение');
 reset role;
 
+-- Polymarket: рынок «предсказания» (0010–0011)
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
+select pg_temp.check(add_exchange_connection('polymarket', '0x5555555555555555555555555555555555555555') is not null, 'подключение Polymarket по адресу кошелька');
+insert into trades (exchange, market_type, symbol, title, side, entry_at, exit_at, entry_price, exit_price, size_usd, pnl, external_id)
+values ('polymarket', 'prediction', 'PM-0A1B2C3D-YES', 'Will BTC hit 150k in 2026? — Yes', 'long', now() - interval '1 day', now(), 0.42, 0, 42, -42, 'pm:test');
+select pg_temp.check((select count(*) from trades where market_type = 'prediction' and exit_price = 0) = 1, 'проигравший исход: цена выхода 0 разрешена у предсказаний');
+select pg_temp.expect_error($$insert into trades (exchange, symbol, side, entry_at, exit_at, entry_price, exit_price, size_usd, pnl) values ('bybit', 'BTCUSDT', 'long', now(), now(), 100, 0, 10, -10)$$, 'trades_exit_price_check');
+select pg_temp.check(true, 'у фьючерсов цена выхода 0 по-прежнему запрещена');
+select pg_temp.expect_error($$insert into trades (exchange, market_type, symbol, side, entry_at, entry_price, size_usd) values ('polymarket', 'prediction', 'PM-X-NO', 'short', now(), 0.5, 10)$$, 'trades_prediction_rules');
+select pg_temp.check(true, 'предсказание — только покупка исхода');
+select pg_temp.expect_error($$insert into trades (exchange, market_type, symbol, title, side, entry_at, entry_price, size_usd) values ('polymarket', 'prediction', 'PM-X-NO', repeat('x', 301), 'long', now(), 0.5, 10)$$, 'title');
+select pg_temp.check(true, 'слишком длинное название рынка отклоняется');
+reset role;
+
 -- Удаление аккаунта чистит всё
 set role authenticated;
 set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';

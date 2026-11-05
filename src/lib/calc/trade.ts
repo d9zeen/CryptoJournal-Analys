@@ -2,7 +2,8 @@
  * Формулы по одной сделке. Все суммы — в USD.
  * Подробное описание — docs/PLAN.md, раздел «Формулы».
  */
-export type MarketType = 'linear' | 'inverse' | 'spot'
+/** prediction — рынок предсказаний (Polymarket): цена исхода 0…1, проигравший исход погашается по 0 */
+export type MarketType = 'linear' | 'inverse' | 'spot' | 'prediction'
 export type Side = 'long' | 'short'
 
 export type TradeCalcInput = {
@@ -40,13 +41,16 @@ export function inversePnlCoin(t: TradeCalcInput): number | null {
 
 /** Валовый PnL до комиссий и фандинга, USD. null — если сделка не закрыта или не хватает данных. */
 export function grossPnl(t: TradeCalcInput): number | null {
-  if (!valid(t.entryPrice) || !valid(t.exitPrice) || !valid(t.sizeUsd)) return null
+  // у предсказаний проигравший исход погашается по 0
+  const exit = t.exitPrice
+  const exitOk = typeof exit === 'number' && Number.isFinite(exit) && (exit > 0 || (t.marketType === 'prediction' && exit === 0))
+  if (!valid(t.entryPrice) || !exitOk || !valid(t.sizeUsd)) return null
   if (t.marketType === 'inverse') {
     // PnL в монете, переведённый в USD по цене выхода
-    return inversePnlCoin(t)! * t.exitPrice
+    return inversePnlCoin(t)! * (exit as number)
   }
   const qty = t.sizeUsd / t.entryPrice
-  return dir(t.side) * (t.exitPrice - t.entryPrice) * qty
+  return dir(t.side) * ((exit as number) - t.entryPrice) * qty
 }
 
 /** Итоговый (реализованный) PnL = валовый − комиссии + фандинг. */

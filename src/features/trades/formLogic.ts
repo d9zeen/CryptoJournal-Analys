@@ -142,7 +142,7 @@ export function buildTrade(
   if (!entryAt) errors.entryAt = 'entryAt'
   const entryPrice = num('entryPrice', { required: true, positive: true, err: 'entryPrice' })
   const sizeUsd = num('sizeUsd', { required: true, positive: true, err: 'sizeUsd' })
-  const isSpot = f.marketType === 'spot'
+  const isSpot = f.marketType === 'spot' || f.marketType === 'prediction' // без плеча и шорта
   const leverage = isSpot ? 1 : num('leverage', { required: true, positive: true, err: 'leverage' })
   if (leverage !== null && (leverage < 1 || leverage > 1000)) errors.leverage = 'leverage'
   const stopLoss = num('stopLoss', { positive: true })
@@ -156,7 +156,8 @@ export function buildTrade(
     exitAt = localInputToIso(f.exitAt)
     if (!exitAt) errors.exitAt = 'exitAt'
     else if (entryAt && exitAt < entryAt) errors.exitAt = 'exitBeforeEntry'
-    exitPrice = num('exitPrice', { required: true, positive: true, err: 'exitPrice' })
+    // предсказание: проигравший исход — цена выхода 0
+    exitPrice = num('exitPrice', { required: true, positive: f.marketType !== 'prediction', min0: true, err: 'exitPrice' })
   }
 
   const { pnl, r } = computeDerived(f)

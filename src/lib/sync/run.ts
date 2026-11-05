@@ -7,6 +7,7 @@ import { planImport } from '@/lib/import/plan'
 import type { ImportedTrade, ParsedRow } from '@/lib/import/types'
 import { BYBIT_HISTORY_DAYS, BybitError, DAY, checkBybitKey, fetchBybitTrades, type BybitCall } from './bybit'
 import { fetchHlFills, hlFillsToTrades } from './hyperliquid'
+import { fetchPmClosed, pmDirectGet, pmPositionToTrade, type PmGet } from './polymarket'
 
 export type SyncConnection = {
   id: string
@@ -22,6 +23,8 @@ export type SyncDeps = {
   /** запросы к Bybit, подписанные ключом подключения */
   bybitCall: BybitCall
   fetchFn?: typeof fetch
+  /** запросы к Polymarket Data API (по умолчанию — напрямую; из браузера — через exchange-proxy) */
+  polymarketGet?: PmGet
   /** external_id сделок этой биржи, которые уже есть у пользователя */
   existingIds: (exchange: string, ids: string[]) => Promise<Set<string>>
   /** сколько сделок ещё можно создать в этом месяце (null — без лимита) */
@@ -59,7 +62,7 @@ export function toSyncError(e: unknown): SyncError {
   if (e instanceof BybitError) return new SyncError(bybitErrorCode(e), `${e.code}: ${e.message}`)
   const msg = e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e)
   if (msg.includes('FREE_LIMIT_REACHED')) return new SyncError('FREE_LIMIT')
-  if (/HL_HTTP|fetch|network/i.test(msg)) return new SyncError('EXCHANGE_DOWN', msg)
+  if (/HL_HTTP|PM_HTTP|fetch|network/i.test(msg)) return new SyncError('EXCHANGE_DOWN', msg)
   return new SyncError('UNKNOWN', msg)
 }
 
@@ -89,6 +92,14 @@ export async function runSync(conn: SyncConnection, deps: SyncDeps): Promise<Syn
       const res = hlFillsToTrades(await fetchHlFills(conn.api_key, from, deps.fetchFn))
       trades = res.trades
       nextCursor = res.cursor
+    } else if (conn.exchange === 'polymarket') {
+      // закрытые позиции целиком (их немного); повторы отсекаются по id
+      const positions = await fetchPmClosed(deps.polymarketGet ?? pmDirectGet(deps.fetchFn), conn.api_key)
+      trades = positions.flatMap((p) => {
+        const t = pmPositionToTrade(p)
+        return t ? [t] : []
+      })
+      nextCursor = now
     } else {
       throw new SyncError('UNSUPPORTED')
     }

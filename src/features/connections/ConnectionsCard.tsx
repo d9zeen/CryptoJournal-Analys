@@ -13,6 +13,7 @@ import { exchangeName } from '@/lib/exchanges'
 import { dbErrorMessage } from '@/lib/errors'
 import { formatDateTime } from '@/lib/format'
 import { useUsage } from '@/features/settings/api'
+import { PolymarketDemoDialog } from './PolymarketDemoDialog'
 import {
   CONNECTABLE,
   SyncError,
@@ -165,6 +166,7 @@ function AddForm({ onDone, onCancel }: { onDone: (name: string) => void; onCance
   const [secret, setSecret] = useState('')
   const [label, setLabel] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [demo, setDemo] = useState(false)
   const kind = CONNECTABLE.find((x) => x.id === exchange)!.kind
 
   async function submit(e: FormEvent) {
@@ -200,13 +202,22 @@ function AddForm({ onDone, onCancel }: { onDone: (name: string) => void; onCance
         </ol>
       </details>
 
+      {exchange === 'polymarket' && (
+        <>
+          <Button type="button" variant="secondary" className="!py-2 text-xs" onClick={() => setDemo(true)}>
+            {c.demo.open}
+          </Button>
+          <PolymarketDemoDialog open={demo} onClose={() => setDemo(false)} />
+        </>
+      )}
+
       {kind === 'cex' ? (
         <>
           <TextField label={c.apiKey} value={apiKey} onChange={(e) => setApiKey(e.target.value)} autoComplete="off" spellCheck={false} required />
           <TextField label={c.secret} value={secret} onChange={(e) => setSecret(e.target.value)} type="password" autoComplete="new-password" required hint={c.secretHint} />
         </>
       ) : (
-        <TextField label={c.wallet} value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="0x…" autoComplete="off" spellCheck={false} required hint={c.walletHint} />
+        <TextField label={c.wallet} value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="0x…" autoComplete="off" spellCheck={false} required hint={exchange === 'polymarket' ? c.walletHintPolymarket : c.walletHint} />
       )}
       <TextField label={c.label} value={label} onChange={(e) => setLabel(e.target.value)} maxLength={60} placeholder={c.labelPlaceholder} />
 

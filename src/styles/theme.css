@@ -104,6 +104,11 @@
 }
 
 /* Карточка, которая «оживает» при наведении (дашборд) */
+/* дни соседнего месяца в календаре прибыли — штриховка */
+@utility cal-hatch {
+  background-image: repeating-linear-gradient(135deg, color-mix(in srgb, var(--color-border) 70%, transparent) 0 1px, transparent 1px 9px);
+}
+
 @utility card-lift {
   transition: transform 0.2s, box-shadow 0.25s, border-color 0.25s;
   &:hover {

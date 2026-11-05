@@ -12,3 +12,12 @@ export function useT(): Dict {
 export function fmt(template: string, params: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (_, key: string) => String(params[key] ?? `{${key}}`))
 }
+
+const pluralRules = new Intl.PluralRules('ru-RU')
+
+/** Число со словом в нужной форме: plural(3, { one: '{n} сделка', few: '{n} сделки', many: '{n} сделок' }) */
+export function plural(n: number, forms: { one: string; few: string; many: string }): string {
+  const rule = pluralRules.select(n)
+  const form = rule === 'one' ? forms.one : rule === 'few' ? forms.few : forms.many
+  return fmt(form, { n })
+}
