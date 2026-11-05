@@ -11,7 +11,7 @@ import { FunctionRegion } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { checkBybitKey, type BybitCall, type BybitResponse } from '@/lib/sync/bybit'
-import type { PmGet } from '@/lib/sync/polymarket'
+import { pmPositionToTrade, type PmGet } from '@/lib/sync/polymarket'
 import { SyncError, errorCodeOf, runSync, toSyncError, type SyncResult } from '@/lib/sync/run'
 import { fetchExistingIds, runImport } from '@/features/import/api'
 
@@ -86,6 +86,24 @@ function polymarketGet(connectionId: string): PmGet {
     if (error) throw new SyncError('EXCHANGE_DOWN', 'PROXY')
     return data
   }
+}
+
+/** Демо Polymarket: закрытые позиции публичного кошелька → сделки (в дневник не пишутся) */
+export function usePolymarketDemo(enabled: boolean) {
+  return useQuery({
+    queryKey: ['polymarketDemo'],
+    enabled,
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('exchange-proxy', { body: { demo: true, path: '/v2/positions' } })
+      if (error) throw new SyncError('EXCHANGE_DOWN', 'PROXY')
+      const items = Array.isArray(data) ? data : ((data as { data?: unknown[] })?.data ?? [])
+      return (items as Record<string, unknown>[]).flatMap((p) => {
+        const t = pmPositionToTrade(p)
+        return t ? [t] : []
+      })
+    },
+  })
 }
 
 /** Синхронизации, которые идут прямо сейчас: одно подключение не качаем дважды (кнопка + авто) */

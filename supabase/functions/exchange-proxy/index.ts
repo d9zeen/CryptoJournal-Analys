@@ -9,6 +9,7 @@
  *  - подключение читается С ЕГО ПРАВАМИ (RLS + 2FA): чужое подключение просто не найдётся;
  *  - к бирже — только адреса для чтения (BYBIT_READ_PATHS) и только разрешённые параметры;
  *  - Polymarket: только закрытые позиции адреса из подключения (чужой адрес не подставить; браузер не упирается в CORS);
+ *    демо ({ demo: true }) — одна страница закрытых позиций фиксированного публичного кошелька;
  *  - ключ с правом торговли отклоняет сайт при подключении (/v5/user/query-api → readOnly).
  *
  * Выкладка: Supabase → Edge Functions → exchange-proxy (или коннектор Supabase у Claude).
@@ -19,6 +20,8 @@ import { BYBIT_READ_PATHS, buildQuery, bybitSignature } from './sign.ts'
 const ORIGINS = ['https://d9zeen.github.io', 'http://localhost:5173', 'http://127.0.0.1:4173']
 const BYBIT = 'https://api.bybit.com'
 const POLYMARKET = 'https://data-api.polymarket.com'
+// Демо Polymarket: публичный кошелёк активного трейдера (только закрытые позиции, без имени — сайт показывает рынки и PnL)
+const POLYMARKET_DEMO = '0x821dab0565ebf5b327f51db06223fdcfe01acf16'
 const RECV_WINDOW = '10000'
 
 function corsHeaders(origin: string): Record<string, string> {
@@ -48,6 +51,17 @@ Deno.serve(async (req) => {
     if (!who?.user) return json({ error: 'NOT_AUTHENTICATED' }, 401)
 
     const body = await req.json().catch(() => null)
+
+    // Демо Polymarket (кнопка «Посмотреть пример»): адрес фиксирован здесь, из браузера его не задать
+    if (body?.demo === true) {
+      if (body.path !== '/v2/positions') return json({ error: 'NOT_ALLOWED' }, 403)
+      const q = new URLSearchParams({ user: POLYMARKET_DEMO, status: 'CLOSED', limit: '50' })
+      const res = await fetch(`${POLYMARKET}/v2/positions?${q}`)
+      const text = await res.text()
+      if (!res.ok) return json({ error: 'EXCHANGE_HTTP', status: res.status, body: text.slice(0, 300) }, 502)
+      return new Response(text, { headers: { ...cors, 'Content-Type': 'application/json' } })
+    }
+
     const connectionId = body?.connectionId
     const path = body?.path
     if (typeof connectionId !== 'string' || typeof path !== 'string') return json({ error: 'BAD_REQUEST' }, 400)

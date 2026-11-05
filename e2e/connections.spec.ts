@@ -95,3 +95,19 @@ test('Polymarket: подключение по адресу — закрытые 
   // запрос ушёл через серверную функцию, не напрямую
   expect(db.connCalls!.some((c) => c.fn === 'exchange-proxy' && c.body.path === '/v2/positions')).toBe(true)
 })
+
+test('Polymarket: демо без подключения — пример сделок, в дневник ничего не пишется', async ({ page, db }) => {
+  await fakeSupabase(page, db)
+  await page.goto('import')
+  await page.getByRole('button', { name: '+ Подключить' }).click()
+  await page.getByLabel('Биржа').first().selectOption('polymarket')
+  await page.getByRole('button', { name: /Посмотреть пример/ }).click()
+  const dialog = page.getByRole('dialog', { name: 'Пример: Polymarket в дневнике' })
+  await expect(dialog.getByText('Will BTC hit 150k in 2026? — Yes')).toBeVisible()
+  await expect(dialog.getByText(/Сделок: 1, в плюс: 1 \(100%\)/)).toBeVisible()
+  expect(db.connCalls!.find((c) => c.fn === 'exchange-proxy')?.body).toMatchObject({ demo: true, path: '/v2/positions' })
+  expect(db.inserted.filter((x) => x.table === 'trades')).toEqual([])
+  expect(db.connCalls!.some((c) => c.fn === 'add_exchange_connection')).toBe(false)
+  await dialog.getByRole('button', { name: 'Закрыть' }).click()
+  await expect(dialog).toBeHidden()
+})

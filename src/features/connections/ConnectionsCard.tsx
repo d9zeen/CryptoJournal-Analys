@@ -13,6 +13,7 @@ import { exchangeName } from '@/lib/exchanges'
 import { dbErrorMessage } from '@/lib/errors'
 import { formatDateTime } from '@/lib/format'
 import { useUsage } from '@/features/settings/api'
+import { PolymarketDemoDialog } from './PolymarketDemoDialog'
 import {
   CONNECTABLE,
   SyncError,
@@ -165,6 +166,7 @@ function AddForm({ onDone, onCancel }: { onDone: (name: string) => void; onCance
   const [secret, setSecret] = useState('')
   const [label, setLabel] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [demo, setDemo] = useState(false)
   const kind = CONNECTABLE.find((x) => x.id === exchange)!.kind
 
   async function submit(e: FormEvent) {
@@ -199,6 +201,15 @@ function AddForm({ onDone, onCancel }: { onDone: (name: string) => void; onCance
           ))}
         </ol>
       </details>
+
+      {exchange === 'polymarket' && (
+        <>
+          <Button type="button" variant="secondary" className="!py-2 text-xs" onClick={() => setDemo(true)}>
+            {c.demo.open}
+          </Button>
+          <PolymarketDemoDialog open={demo} onClose={() => setDemo(false)} />
+        </>
+      )}
 
       {kind === 'cex' ? (
         <>
