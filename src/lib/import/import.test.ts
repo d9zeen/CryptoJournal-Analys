@@ -379,3 +379,36 @@ describe('Bybit AllPerp ClosedPNL (новый формат: Market, Trade Type, 
     expect(p.rows.map((r) => r.trade?.side)).toEqual(['long', 'short', 'long', 'long'])
   })
 })
+
+describe('Bybit UTA Perp Trade History (реальный формат: Filled Type, Direction = покупка / продажа, «12:00 2026-11-05»)', () => {
+  const head = 'Market,Filled Type,Filled Quantity,Filled Price,Order Price,Fee Rate,Trading Fee,feeCoin,ExecFeeV2,Direction,Order Type,Trasaction ID,Order No.,Transaction Time(UTC+0)'
+  // как в файле Bybit: новые сверху, время — до минуты, сначала время, потом дата
+  const csv = [head,
+    'ZROUSDT,Funding,100,1.8,0,5.0E-5,0.009,USDT,0.009,Long,--, f2, f2,12:00 2026-11-05', // позиция ещё открыта
+    'ZROUSDT,Trade,100,1.7,1.717,0.00055,0.0935,USDT,0.0935,Long,Market, t9, o9,09:30 2026-11-05',
+    'BTCUSDT,Trade,0.01,61000,60390,0.00055,0.3355,USDT,0.3355,Short,Market, t4, o3,10:15 2026-11-02', // закрытие лонга — две части
+    'BTCUSDT,Trade,0.01,61000,60390,0.00055,0.3355,USDT,0.3355,Short,Market, t3, o3,10:15 2026-11-02',
+    'BTCUSDT,Funding,0.02,60500,0,1.0E-4,0.121,USDT,0.121,Long,--, f1, f1,08:00 2026-11-02', // лонг платит фандинг
+    'BTCUSDT,Trade,0.01,59000,59500,0.00055,0.3245,USDT,0.3245,Long,Limit, t2, o2,07:00 2026-11-02', // доливка лимиткой
+    'BTCUSDT,Trade,0.01,60000,60600,0.00055,0.33,USDT,0.33,Long,Market, t1, o1,23:10 2026-11-01',
+    'ETHUSDT,Trade,1,2900,2929,0.00055,1.595,USDT,1.595,Long,Market, t6, o6,15:00 2026-11-01', // закрытие шорта
+    'ETHUSDT,Trade,1,3000,2970,0.00055,1.65,USDT,1.65,Short,Market, t5, o5,12:00 2026-11-01',
+  ].join('\n')
+
+  it('Long / Short — покупка / продажа (видно по цене ордера), фандинг — к позиции, дата «время дата»', () => {
+    const p = prepareImport(csv, bybitParser)
+    expect(p.missing).toEqual([])
+    expect(p.sideFallback).toBe('longIsBuy')
+    const trades = p.rows.filter((r) => r.trade).map((r) => r.trade!)
+    expect(trades).toHaveLength(2)
+    const btc = trades.find((t) => t.symbol === 'BTCUSDT')!
+    expect(btc).toMatchObject({ side: 'long', entry_price: 59500, exit_price: 61000, entry_at: '2026-11-01T23:10:00.000Z', exit_at: '2026-11-02T10:15:00.000Z' })
+    expect(btc.funding).toBeCloseTo(-0.121)
+    expect(btc.fee).toBeCloseTo(0.33 + 0.3245 + 0.671)
+    expect(btc.pnl).toBeCloseTo(30 - 1.3255 - 0.121)
+    const eth = trades.find((t) => t.symbol === 'ETHUSDT')!
+    expect(eth).toMatchObject({ side: 'short', entry_price: 3000, exit_price: 2900 })
+    // строки фандинга — не сделки; ZRO ещё открыта
+    expect(p.rows.filter((r) => r.error)).toEqual([expect.objectContaining({ error: 'stillOpen' })])
+  })
+})

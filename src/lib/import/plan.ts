@@ -1,9 +1,9 @@
 /** Подготовка импорта: файл → строки → что вставляем, что пропускаем и почему. */
 import { parseCsv, type CsvTable } from './csv'
 import { autoMap, type ColumnMapping } from './mapping'
-import { FUZZY, fillSign } from './fields'
+import { FUZZY, bareSide, fillSign } from './fields'
 import type { ImportedTrade, ImportMode, ImportParser, MarketChoice, ParsedRow, SideFallback } from './types'
-import { offsetFromHeader } from './values'
+import { offsetFromHeader, parseNumberCell } from './values'
 
 export type Prepared = {
   table: CsvTable
@@ -50,14 +50,17 @@ export function prepareImport(
       let best = { trades: 0, open: Infinity }
       let fallbackRows: ParsedRow[] | null = null
       // Long / Short как сторона позиции + закрытый PnL у каждого исполнения — самый надёжный вариант (Bybit UTA)
-      const order: SideFallback[] = mapping.pnl >= 0 ? ['positionSide', 'qtySign', 'longIsBuy'] : ['qtySign', 'longIsBuy', 'positionSide']
+      // есть цена ордера: у покупки она не ниже цены исполнения — если «Long» почти всегда так, Long = покупка
+      const vote = longIsBuyVote(table, mapping)
+      const order: SideFallback[] =
+        vote !== null && vote >= 0.95 ? ['longIsBuy'] : mapping.pnl >= 0 ? ['positionSide', 'qtySign', 'longIsBuy'] : ['qtySign', 'longIsBuy', 'positionSide']
       for (const fb of order) {
         const tryRows = parser.parse(table, mapping, { ...base, sideFallback: fb })
         if (tryRows.filter((r) => r.error === 'side').length > tryRows.length * 0.1) continue
         const trades = tryRows.filter((r) => r.trade).length
         const open = tryRows.filter((r) => r.error === 'stillOpen').length
         // позиций должно закрыться заметно больше, чем осталось открытыми
-        if (trades > 0 && trades >= open * 2 && trades > best.trades) {
+        if (trades > 0 && (trades >= open * 2 || order.length === 1) && trades > best.trades) {
           best = { trades, open }
           rows = tryRows
           sideFallback = fb
@@ -74,6 +77,26 @@ export function prepareImport(
     }
   }
   return { table, mapping, utcOffsetMinutes, offsetDetected: fromHeader !== null, missing, mode, rows, sideFallback }
+}
+
+/**
+ * Доля исполнений, где «Long» / «Short» совпадает с покупкой / продажей по цене ордера
+ * (покупка: цена ордера выше цены исполнения — защита рыночного ордера или лимит, исполненный не хуже).
+ * null — сравнить не по чему.
+ */
+function longIsBuyVote(table: CsvTable, mapping: ColumnMapping<string>): number | null {
+  if (mapping.orderPrice < 0 || mapping.price < 0 || mapping.side < 0) return null
+  let agree = 0
+  let total = 0
+  for (const row of table.rows) {
+    const dir = bareSide(row[mapping.side])
+    const order = parseNumberCell(row[mapping.orderPrice])
+    const fill = parseNumberCell(row[mapping.price])
+    if (!dir || !order || !fill || order <= 0 || order === fill) continue
+    total++
+    if ((order > fill ? 1 : -1) === dir) agree++
+  }
+  return total >= 5 ? agree / total : null
 }
 
 /**

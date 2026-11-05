@@ -58,6 +58,9 @@ export function parseDateCell(raw: string | undefined, offsetMinutes = 0): strin
   let y: number, mo: number, d: number
   let rest: string
   let m: RegExpExecArray | null
+  // сначала время, потом дата (Bybit UTA: «12:00 2026-11-05»)
+  const timeFirst = /^(\d{1,2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:\s*[AP]M)?)\s+(\S+)$/i.exec(s)
+  if (timeFirst) return parseDateCell(`${timeFirst[2]} ${timeFirst[1]}`, offsetMinutes)
   if ((m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(.*)$/.exec(s))) {
     ;[y, mo, d, rest] = [Number(m[1]), Number(m[2]), Number(m[3]), m[4]]
   } else if ((m = /^(\d{1,2})\.(\d{1,2})\.(\d{4})(.*)$/.exec(s))) {

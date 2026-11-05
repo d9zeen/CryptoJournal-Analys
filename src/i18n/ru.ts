@@ -542,6 +542,8 @@ export const ru = {
       symbol: 'Пара',
       side: 'Направление',
       sideHint: 'Открытие / закрытие',
+      rowType: 'Тип строки (сделка / фандинг)',
+      orderPrice: 'Цена ордера',
       qty: 'Объём',
       entryValue: 'Стоимость входа',
       entryPrice: 'Цена входа',

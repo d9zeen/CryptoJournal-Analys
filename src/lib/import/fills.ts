@@ -46,6 +46,7 @@ type Position = {
   feeUnknown: boolean
   pnl: number
   pnlSeen: boolean
+  funding: number // фандинг за время позиции, $ (плюс — получили)
   entryAt: string
   exitAt: string
   firstLine: number
@@ -113,6 +114,7 @@ export function parseFills(table: CsvTable, mapping: ColumnMapping<string>, { ut
   const has = (f: ImportField) => mapping[f] >= 0
   const out: ParsedRow[] = []
   const fills: Fill[] = []
+  const fundings: { line: number; symbol: string; at: string; amount: number }[] = []
 
   // 1. Разбираем строки
   table.rows.forEach((row, i) => {
@@ -123,6 +125,13 @@ export function parseFills(table: CsvTable, mapping: ColumnMapping<string>, { ut
 
     const symbol = normalizeSymbol(cell('symbol'))
     if (!symbol) return fail('symbol')
+    // строка фандинга (Bybit UTA: Filled Type = Funding) — не сделка: её сумму добавим к фандингу открытой позиции
+    if (/fund|фандинг|资金/i.test(cell('rowType') ?? '')) {
+      const at = parseDateCell(cell('closeTime'), utcOffsetMinutes)
+      const amount = n('fee') ?? n('funding')
+      if (at && amount !== null) fundings.push({ line, symbol, at, amount: -amount }) // комиссия фандинга «+» — заплатили
+      return
+    }
     const qtyRaw = n('qty')
     const posDir = sideFallback === 'positionSide' ? bareSide(cell('side')) : null
     const fallback =
@@ -154,7 +163,13 @@ export function parseFills(table: CsvTable, mapping: ColumnMapping<string>, { ut
   })
 
   // 2. Собираем позиции: по времени, при равном времени — по порядку строк
-  fills.sort((a, b) => a.at.localeCompare(b.at) || a.line - b.line)
+  // если файл идёт от новых к старым, исполнения в одну и ту же минуту берём снизу вверх
+  const byLine = [...fills].sort((a, b) => a.line - b.line)
+  const newestFirst = byLine.length > 1 && byLine[0].at > byLine[byLine.length - 1].at
+  const tie = (a: { line: number }, b: { line: number }) => (newestFirst ? b.line - a.line : a.line - b.line)
+  fills.sort((a, b) => a.at.localeCompare(b.at) || tie(a, b))
+  fundings.sort((a, b) => a.at.localeCompare(b.at) || tie(a, b))
+  let fi = 0
   const open = new Map<string, Position>()
   const seen = new Map<string, number>()
 
@@ -173,6 +188,7 @@ export function parseFills(table: CsvTable, mapping: ColumnMapping<string>, { ut
     feeUnknown: f.feeUnknown,
     pnl: 0,
     pnlSeen: false,
+    funding: 0,
     entryAt: f.at,
     exitAt: f.at,
     firstLine: f.line,
@@ -188,7 +204,7 @@ export function parseFills(table: CsvTable, mapping: ColumnMapping<string>, { ut
     const exitPrice = inverse ? p.exitQty / p.exitCoins : p.exitNotional / p.exitQty
     const sizeUsd = inverse ? p.entryQty : p.entryNotional
     const gross = grossPnl({ marketType: p.market, side, entryPrice, exitPrice, sizeUsd })!
-    const { pnl, pnlManual } = finalPnl({ gross, fee: p.fee, funding: 0, filePnl: p.pnlSeen ? p.pnl : null, sizeUsd })
+    const { pnl, pnlManual } = finalPnl({ gross, fee: p.fee, funding: p.funding, filePnl: p.pnlSeen ? p.pnl : null, sizeUsd })
     const warnings: RowWarning[] = []
     if (p.feeUnknown) warnings.push('feeNotUsd')
     if (p.guessed) warnings.push('sideGuessed')
@@ -208,7 +224,7 @@ export function parseFills(table: CsvTable, mapping: ColumnMapping<string>, { ut
       size_usd: round(sizeUsd, 8),
       leverage: 1,
       fee: round(p.fee, 8),
-      funding: 0,
+      funding: round(p.funding, 8),
       pnl: round(pnl, 8),
       pnl_manual: pnlManual,
       external_id: (dup > 1 ? `${baseId}#${dup}` : baseId).slice(0, 200),
@@ -231,7 +247,19 @@ export function parseFills(table: CsvTable, mapping: ColumnMapping<string>, { ut
     return guessed?.has(f) ?? false
   }
 
+  // фандинг, начисленный до этого момента, — открытой позиции по этой паре
+  const applyFunding = (until: string | null) => {
+    while (fi < fundings.length && (until === null || fundings[fi].at <= until)) {
+      const fu = fundings[fi++]
+      for (const [key, pos] of open) if (key === fu.symbol || key.startsWith(`${fu.symbol}|`)) {
+        pos.funding += fu.amount
+        break
+      }
+    }
+  }
+
   for (const f of fills) {
+    applyFunding(f.at)
     const k = posKey(f)
     const p = open.get(k)
     if (f.posDir) {
@@ -288,6 +316,8 @@ export function parseFills(table: CsvTable, mapping: ColumnMapping<string>, { ut
       }
     }
   }
+
+  applyFunding(null)
 
   // 3. Не закрытые к концу файла позиции не импортируем — сообщаем
   for (const p of open.values()) out.push({ line: p.firstLine, lineTo: p.lastLine, trade: null, error: 'stillOpen', warnings: [] })
