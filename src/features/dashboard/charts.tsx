@@ -43,7 +43,7 @@ const pointOf = <T,>(p: TipProps<T>): T | undefined => (p.active ? p.payload?.[0
 type EqRow = TimedPoint & { v: number; trade: number; fromPeak: number }
 
 /**
- * Кривая капитала: белая гладкая линия с мягким неоном (класс equity-neon в theme.css), без заливки.
+ * Кривая капитала: гладкая линия цветом текста, без заливки и свечения.
  * Ось X — даты (расстояние между точками = реальное время), подпись итога у последней точки.
  */
 export function EquityChart({ points, unit, balance }: { points: EquityPoint[]; unit: EquityUnit; balance: number | null }) {
@@ -60,7 +60,7 @@ export function EquityChart({ points, unit, balance }: { points: EquityPoint[]; 
   const last = data[data.length - 1]
   const yTick = (v: number) => (unit === 'usd' ? formatUsdShort(v) : `${formatNumber(v, 0)} %`)
   return (
-    <div className="equity-neon">
+    <div>
       <ResponsiveContainer width="100%" height={HEIGHT + 40}>
         <LineChart data={data} margin={{ top: 22, right: wide ? 104 : 16, bottom: 0, left: 0 }}>
           <CartesianGrid stroke={C.grid} vertical={false} />

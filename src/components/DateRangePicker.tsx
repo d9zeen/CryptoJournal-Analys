@@ -165,7 +165,7 @@ export function DateRangePicker({ value, onApply, onClose, anchor }: Props) {
                           aria-pressed={edge}
                           className={`num relative mx-auto flex size-9 items-center justify-center rounded-full text-[13px] transition-colors ${
                             edge
-                              ? 'bg-primary font-semibold text-on-primary shadow-glow'
+                              ? 'bg-primary font-semibold text-on-primary'
                               : inRange
                                 ? 'text-text hover:bg-primary/25'
                                 : `hover:bg-surface-2 ${key > today ? 'text-muted/60' : 'text-text'}`
