@@ -6,6 +6,7 @@ export const ru = {
   app: {
     name: 'CryptoJournal',
     tagline: 'Дневник сделок криптотрейдера',
+    authFooter: 'Bybit и Hyperliquid по API, Polymarket по кошельку, файлы Binance, OKX, BingX, Bitget и MEXC. Ключи бирж принимаем только на чтение.',
   },
   nav: {
     dashboard: 'Дашборд',
@@ -292,9 +293,12 @@ export const ru = {
     until: 'до {date}',
     choose: 'Хочу этот тариф',
     contact: 'Чтобы подключить тариф, напиши администратору сайта — он включит его вручную.',
+    feature: 'Что входит',
+    yes: 'есть',
+    no: 'нет',
     features: {
-      trades: 'Сделок в месяц: {n}',
-      tradesUnlimited: 'Сделок — без ограничений',
+      trades: 'Сделок в месяц',
+      tradesUnlimited: 'без лимита',
       base: 'Дневник, статистика, календарь, разбор, импорт файлов с любой биржи',
       polymarket: 'Polymarket по адресу кошелька',
       exchanges: 'Биржи по API: Bybit, Hyperliquid (скоро BingX, OKX, Binance)',

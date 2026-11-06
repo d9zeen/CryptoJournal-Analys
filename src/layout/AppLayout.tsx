@@ -52,7 +52,7 @@ export function AppLayout() {
               aria-label={item.label}
               className={({ isActive }) =>
                 `group relative flex size-11 items-center justify-center rounded-xl transition-colors ${
-                  isActive ? 'bg-surface-2 text-text shadow-glow' : 'text-muted hover:bg-surface-2/60 hover:text-text'
+                  isActive ? 'bg-surface-2 text-text' : 'text-muted hover:bg-surface-2/60 hover:text-text'
                 }`
               }
             >

@@ -1,19 +1,12 @@
-import { useId } from 'react'
 import { useT } from '@/i18n'
 
-/** Значок: линия капитала с переходом фиолетовый → мятный (единственное место, где два акцента смешиваются, кроме графика) */
+/** Значок: линия капитала цветом текста, последний отрезок — мятный (без градиентов и свечения) */
 export function LogoMark({ className = 'size-7' }: { className?: string }) {
-  const id = useId()
   return (
-    <svg viewBox="0 0 32 32" className={`${className} shrink-0 drop-shadow-[0_0_10px_var(--color-glow)]`} aria-hidden>
-      <defs>
-        <linearGradient id={id} x1="0" y1="1" x2="1" y2="0">
-          <stop offset="0" style={{ stopColor: 'var(--color-primary)' }} />
-          <stop offset="1" style={{ stopColor: 'var(--color-accent)' }} />
-        </linearGradient>
-      </defs>
-      <rect width="32" height="32" rx="8" className="fill-surface-2" />
-      <path d="M6 22l6-7 5 4 9-11" fill="none" stroke={`url(#${id})`} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
+    <svg viewBox="0 0 32 32" className={`${className} shrink-0`} aria-hidden>
+      <rect x="0.75" y="0.75" width="30.5" height="30.5" rx="7" className="fill-surface-2 stroke-border" strokeWidth={1.5} />
+      <path d="M7 21.5l5.5-6.5 4.5 3.5" fill="none" className="stroke-text" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M17 18.5l8-9.5" fill="none" className="stroke-accent" strokeWidth={2.6} strokeLinecap="round" />
     </svg>
   )
 }

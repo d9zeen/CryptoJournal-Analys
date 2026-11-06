@@ -22,7 +22,6 @@ type Props = {
 export function SummaryStrip({ summary: s, curve, period, startingBalance, rwl }: Props) {
   const t = useT()
   const k = t.dashboard.kpi
-  const glow = s.totalPnl > 0 ? 'glow-profit' : s.totalPnl < 0 ? 'glow-loss' : ''
   const toDeposit = startingBalance ? `${fmt(k.toDeposit, { p: signedPercent(s.totalPnl / startingBalance) })} · ` : ''
 
   // длительность максимальной просадки: от пика до восстановления (или до последней сделки)
@@ -43,7 +42,7 @@ export function SummaryStrip({ summary: s, curve, period, startingBalance, rwl }
         <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
           <div className="min-w-0">
             <div className="text-xs text-muted">{k.totalPnl}</div>
-            <div className={`num mt-1 truncate text-[28px] leading-tight font-semibold sm:text-3xl ${pnlClass(s.totalPnl)} ${glow}`}>
+            <div className={`num mt-1 truncate text-[28px] leading-tight font-semibold sm:text-3xl ${pnlClass(s.totalPnl)}`}>
               <CountPnl value={s.totalPnl} />
             </div>
             <div className="mt-1 text-xs text-muted">
@@ -232,7 +231,7 @@ function MiniEquity({ curve, period }: { curve: EquityPoint[]; period: DrawdownP
           {g.dd && <path d={g.dd} fill="none" stroke="var(--color-loss)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />}
         </svg>
         {g.trough && <Dot x={pct(g.trough[0])} y={top(g.trough[1])} className="bg-loss" delay=".7s" />}
-        <Dot x={pct(last[0])} y={top(last[1])} className="live bg-accent" delay="1.05s" />
+        <Dot x={pct(last[0])} y={top(last[1])} className="bg-accent" delay="1.05s" />
         {hp && hxy && (
           <>
             <i className="pointer-events-none absolute inset-y-0 w-px bg-muted/50" style={{ left: pct(hxy[0]) }} />

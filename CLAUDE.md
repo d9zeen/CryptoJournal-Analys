@@ -38,8 +38,8 @@ Node 22 (см. `.node-version`).
 src/
   styles/theme.css     ВСЕ цвета, шрифты и анимации (Tailwind @theme), стиль «Аврора». Классы: bg-bg, bg-surface, bg-surface-2,
                        border-border, text-text, text-muted, text-primary (фиолет: кнопки), text-accent (мята: данные),
-                       text-profit, text-loss, font-display (заголовки), num (цифры моно), rise (появление, --i), card-lift,
-                       shadow-glow, glow-profit/glow-loss. Светлая тема — :root[data-theme='light'] в том же файле
+                       text-profit, text-loss, font-display (заголовки), num (цифры моно), rise (появление, --i), card-lift.
+                       Без свечений, неона, пульсаций и градиентов — сайт не должен выглядеть «сгенерированным». Светлая тема — :root[data-theme='light'] в том же файле
   lib/theme.ts         тёмная / светлая тема (localStorage, ставится до отрисовки в main.tsx), useTheme / setTheme
   lib/motion.ts        prefersReducedMotion, useCountUp — анимации уважают «уменьшить движение»
   i18n/ru.ts           ВСЕ тексты интерфейса. Новый язык = файл с той же структурой (тип Dict)
