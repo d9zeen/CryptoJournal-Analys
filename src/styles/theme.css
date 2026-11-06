@@ -60,12 +60,13 @@
 
 /* Светлая тема: переопределяем те же переменные */
 :root[data-theme='light'] {
-  --color-bg: #f5f6fa;
-  --color-surface: #ffffff;
-  --color-surface-2: #edeff6;
-  --color-border: #dce0eb;
-  --color-text: #12141c;
-  --color-muted: #646b80;
+  /* тёплый фон «кость» вместо белого — не бьёт в глаза */
+  --color-bg: #efe9dc;
+  --color-surface: #f8f4ea;
+  --color-surface-2: #e6dfcf;
+  --color-border: #d9d1bf;
+  --color-text: #1f1b14;
+  --color-muted: #6d6555;
   --color-primary: #6650ee;
   --color-primary-hover: #5640e0;
   --color-on-primary: #ffffff;
