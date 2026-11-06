@@ -170,10 +170,10 @@ export function DailyPnlChart({ days, unit = 'day', height = HEIGHT }: { days: D
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={days} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-        <CartesianGrid stroke={C.grid} strokeDasharray="3 3" vertical={false} />
+        <CartesianGrid stroke={C.grid} vertical={false} />
         <XAxis dataKey="date" {...axisProps} tickFormatter={labels.tick} minTickGap={16} />
         <YAxis {...axisProps} width={56} tickFormatter={formatUsdShort} />
-        <ReferenceLine y={0} stroke={C.muted} strokeOpacity={0.5} />
+        <ReferenceLine y={0} stroke={C.muted} strokeOpacity={0.45} strokeDasharray="4 4" />
         <Tooltip
           cursor={{ fill: C.grid, fillOpacity: 0.4 }}
           content={(props) => {
@@ -188,9 +188,10 @@ export function DailyPnlChart({ days, unit = 'day', height = HEIGHT }: { days: D
             )
           }}
         />
+        {/* в тон кривой (выбор владельца 06.11.2026): прибыльный день — фиолетовый, убыточный — приглушённый серый */}
         <Bar dataKey="pnl" radius={[4, 4, 0, 0]} maxBarSize={28} {...anim()}>
           {days.map((d) => (
-            <Cell key={d.date} fill={d.pnl >= 0 ? C.profit : C.loss} />
+            <Cell key={d.date} fill={d.pnl >= 0 ? C.primary : C.muted} fillOpacity={d.pnl >= 0 ? 1 : 0.45} />
           ))}
         </Bar>
       </BarChart>

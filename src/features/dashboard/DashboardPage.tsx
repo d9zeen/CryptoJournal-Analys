@@ -98,7 +98,7 @@ export function DashboardPage() {
       ) : (
         <>
           {/* верхний ряд: PnL, винрейт сделок, profit factor, винрейт дней, выигрыш / проигрыш */}
-          <KpiRow summary={s} score={score} startingBalance={balance} />
+          <KpiRow summary={s} score={score} startingBalance={balance} equity={stats.equity} />
 
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] xl:grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)]">
             <ScoreCard score={score} trades={s.closed} />

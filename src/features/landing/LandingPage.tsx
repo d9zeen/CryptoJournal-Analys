@@ -85,7 +85,7 @@ export function LandingPage() {
               <span className="ml-2 truncate text-xs text-muted">{l.previewLabel}</span>
             </div>
             <div className="flex flex-col gap-3 rounded-lg bg-bg p-3 sm:p-4">
-              <KpiRow summary={demo.summary} score={demo.score} startingBalance={demo.balance} />
+              <KpiRow summary={demo.summary} score={demo.score} startingBalance={demo.balance} equity={demo.equity} />
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)]">
                 <div className="hidden lg:block">
                   <ScoreCard score={demo.score} trades={demo.summary.closed} />
