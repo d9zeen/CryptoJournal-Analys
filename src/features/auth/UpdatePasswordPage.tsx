@@ -26,7 +26,7 @@ export function UpdatePasswordPage() {
     e.preventDefault()
     setError(null)
     const problem = passwordProblem(password)
-    if (problem) return setError(problem === 'short' ? t.auth.errors.passwordShort : t.auth.errors.passwordWeak)
+    if (problem) return setError(t.auth.errors.passwordShort)
     if (password !== password2) return setError(t.auth.errors.passwordMismatch)
     setLoading(true)
     const { error } = await supabase.auth.updateUser({ password })

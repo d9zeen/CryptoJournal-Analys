@@ -143,7 +143,7 @@ function PasswordBlock() {
     e.preventDefault()
     setMsg(null)
     const problem = passwordProblem(pw)
-    if (problem) return setMsg({ tone: 'error', text: problem === 'short' ? t.auth.errors.passwordShort : t.auth.errors.passwordWeak })
+    if (problem) return setMsg({ tone: 'error', text: t.auth.errors.passwordShort })
     if (pw !== pw2) return setMsg({ tone: 'error', text: t.auth.errors.passwordMismatch })
     setBusy(true)
     const { error } = await supabase.auth.updateUser({ password: pw })
