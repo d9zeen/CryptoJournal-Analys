@@ -188,7 +188,7 @@ test.describe('админка', () => {
   test('обычному пользователю пункт не виден, страница закрыта', async ({ page, db }) => {
     await fakeSupabase(page, db)
     await page.goto('dashboard')
-    await expect(page.getByRole('link', { name: 'Дашборд' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Статистика' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Админка' })).toHaveCount(0)
     await page.goto('admin')
     await expect(page.getByText('Нет доступа')).toBeVisible()
