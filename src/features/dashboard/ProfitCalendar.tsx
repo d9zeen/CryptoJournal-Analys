@@ -14,6 +14,11 @@ import { parseYmd, ymd } from '@/lib/period'
 import { useMediaQuery } from '@/lib/useMediaQuery'
 
 const monthTitle = new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' })
+/** «Ноябрь 2026» — без «г.» и без CSS capitalize (он делал «2026 Г.») */
+const monthLabel = (y: number, m: number) => {
+  const s = monthTitle.format(new Date(y, m, 1)).replace(/\s*г\.?$/, '')
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
 /** сделка могла открыться задолго до закрытия — грузим с запасом */
 const LOOKBACK_DAYS = 60
 
@@ -48,7 +53,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
         <h2 className="font-semibold">{c.title}</h2>
         <div className="flex items-center gap-1 rounded-xl border border-border bg-surface-2/60 p-1">
           <NavBtn dir={-1} label={c.prev} onClick={() => shift(-1)} />
-          <span className="min-w-36 text-center text-sm font-semibold capitalize">{monthTitle.format(new Date(view.y, view.m, 1))}</span>
+          <span className="min-w-36 text-center text-sm font-semibold">{monthLabel(view.y, view.m)}</span>
           <NavBtn dir={1} label={c.next} onClick={() => shift(1)} />
         </div>
       </div>

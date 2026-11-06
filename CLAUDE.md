@@ -39,13 +39,13 @@ src/
   styles/theme.css     ВСЕ цвета, шрифты и анимации (Tailwind @theme), стиль «Аврора». Классы: bg-bg, bg-surface, bg-surface-2,
                        border-border, text-text, text-muted, text-primary (фиолет: кнопки), text-accent (мята: данные),
                        text-profit, text-loss, font-display (заголовки), num (цифры моно), rise (появление, --i), card-lift.
-                       Без свечений, неона, пульсаций и градиентов — сайт не должен выглядеть «сгенерированным». Светлая тема — :root[data-theme='light'] в том же файле
+                       Без свечений, пульсаций и градиентов — сайт не должен выглядеть «сгенерированным». Исключение по желанию владельца: неон кривой капитала (.equity-glow) Светлая тема — :root[data-theme='light'] в том же файле
   lib/theme.ts         тёмная / светлая тема (localStorage, ставится до отрисовки в main.tsx), useTheme / setTheme
   lib/motion.ts        prefersReducedMotion, useCountUp — анимации уважают «уменьшить движение»
   i18n/ru.ts           ВСЕ тексты интерфейса. Новый язык = файл с той же структурой (тип Dict)
   i18n/index.ts        useT(), fmt(), plural() — числа со словом («1 сделка / 2 сделки / 5 сделок»)
   lib/supabase.ts      клиент Supabase (только публичный ключ)
-  lib/calc/            формулы PnL / R (trade.ts), статистика дашборда (stats.ts) + тесты
+  lib/calc/            формулы PnL / R (trade.ts), статистика дашборда (stats.ts), оценка трейдера 0…100 (score.ts) + тесты
   lib/tz.ts            дата / час / день недели в часовом поясе пользователя
   lib/format.ts        форматирование $, цен, R, дат
   lib/parse.ts         ввод чисел (понимает запятую)
@@ -60,8 +60,10 @@ src/
   layout/AppLayout.tsx левая панель-меню (иконки, подпись при наведении) + шапка; на телефоне — нижнее меню с подписями
   lib/sync/            подключения бирж по API: run.ts (общий движок), bybit.ts (closed-pnl), hyperliquid.ts (исполнения кошелька),
                        polymarket.ts (закрытые позиции по адресу; рынок prediction: цена исхода 0…1, проигрыш — выход 0, название — trades.title) + тесты
+  features/landing/    главная для гостей «/» (вошедшего — в дашборд): живое демо на тех же виджетах (demo.ts), возможности, тарифы (PlansTable), вопросы
   features/<раздел>/   auth, dashboard, admin, connections (подключённые биржи, автосинхронизация) (админка: пользователи, Pro, сброс лимита), analysis (вкладка «Разбор»: таблицы по сетапам, ошибкам, парам, эмоциям, Long/Short), trades, import, settings
-                       dashboard: SummaryStrip («Лента» + мини-кривая на SVG), charts.tsx (Recharts, лениво), ProfitCalendar (календарь прибыли, lib/calc/calendar.ts),
+                       dashboard (в духе TradeZella): Widgets.tsx (ряд показателей со шкалами на SVG, «Оценка трейдера», «Ключевые цифры»),
+                       charts.tsx (Recharts, лениво: кривая капитала зелёная/красная от нуля, PnL по дням, радар оценки), ProfitCalendar (lib/calc/calendar.ts),
                        EquityTableDialog (таблица сделок в <dialog>), equityTime.ts (время точек, $ / %)
 supabase/migrations/   SQL-миграции, нумерация 0001_..., 0002_...
 supabase/tests/        заглушка Supabase для чистого Postgres + тесты RLS (rls_test.sql);

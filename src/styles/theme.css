@@ -16,8 +16,9 @@
 @import '@fontsource-variable/jetbrains-mono';
 
 @theme static {
-  /* Шрифты: font-sans — текст, font-display — заголовки, font-mono — цифры (класс num) */
+  /* Шрифты: font-sans — текст и цифры (класс num), font-display — только логотип, font-mono — запас (в интерфейсе не используется) */
   --font-sans: 'Manrope Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  /* Unbounded — только логотип; заголовки страниц — обычный Manrope (широкий «крипто»-шрифт везде выглядел шаблонно) */
   --font-display: 'Unbounded Variable', 'Manrope Variable', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
@@ -37,9 +38,9 @@
   --color-on-primary: #ffffff;
   --color-accent: #4ee6c2;        /* мятный: данные, графики */
 
-  /* Торговые цвета («мята / малина») */
+  /* Торговые цвета: прибыль — фирменная неоновая мята, убыток — красный как в стаканах бирж */
   --color-profit: #4dffb0;      /* прибыль, long */
-  --color-loss: #ff4d8d;        /* убыток, short */
+  --color-loss: #f6465d;        /* убыток, short */
   --color-warning: #f4b64a;
 
 
@@ -69,16 +70,15 @@
   --color-primary-hover: #5640e0;
   --color-on-primary: #ffffff;
   --color-accent: #0b9f84;
-  --color-profit: #0b9e62;
-  --color-loss: #d6266b;
+  --color-profit: #0a9b6a;
+  --color-loss: #dc2f4a;
   --color-warning: #b0700a;
 }
 
-/* Цифры: моноширинные и одной ширины, чтобы столбцы ровно стояли */
+/* Цифры: тем же шрифтом, что текст, но одной ширины — столбцы стоят ровно */
 @utility num {
-  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.03em;
+  font-feature-settings: 'tnum';
 }
 
 /* дни соседнего месяца в календаре прибыли — штриховка */
@@ -94,22 +94,17 @@
   }
 }
 
-/* Мини-кривая: прорисовка слева направо, точки появляются */
-@utility reveal {
-  animation: reveal 1.1s cubic-bezier(0.3, 0.7, 0.2, 1) both;
+/* Кривая капитала: мягкое неоновое свечение линии её же цветом (фильтр <filter> в charts.tsx), только в тёмной теме */
+:root:not([data-theme='light']) .equity-glow .recharts-area-curve {
+  filter: var(--eq-glow);
 }
-@utility pop {
-  animation: pop 0.35s cubic-bezier(0.3, 1.6, 0.5, 1) both;
-  animation-delay: var(--d, 1s);
+
+/* Бегущая строка бирж на главной: список продублирован, едем на половину ширины и начинаем заново */
+@utility marquee {
+  animation: marquee 40s linear infinite;
 }
-@keyframes reveal {
-  from { clip-path: inset(0 100% 0 0); }
-  to { clip-path: inset(0 0 0 0); }
-}
-/* scale, а не transform: сдвиг точки задают классы -translate-* (в Tailwind v4 это отдельное свойство translate) */
-@keyframes pop {
-  from { scale: 0; }
-  to { scale: 1; }
+@keyframes marquee {
+  to { translate: -50% 0; }
 }
 
 /* Лесенка появления: style={{ '--i': номер }} задаёт задержку */
@@ -129,7 +124,7 @@
     @apply bg-bg text-text font-sans antialiased;
   }
   h1 {
-    @apply font-display tracking-tight;
+    @apply font-bold tracking-tight;
   }
   ::selection {
     background: color-mix(in srgb, var(--color-primary) 35%, transparent);
