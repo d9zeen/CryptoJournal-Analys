@@ -19,7 +19,8 @@ export function authErrorMessage(error: AuthError, t: Dict): string {
     case 'email_exists':
       return t.auth.errors.userExists
     case 'weak_password':
-      return t.auth.errors.passwordShort
+      // сервер (настройки Supabase) строже сайта — объясняем, а не пишем «короткий»
+      return t.auth.errors.passwordWeak
     case 'over_email_send_rate_limit':
     case 'over_request_rate_limit':
       return t.auth.errors.rateLimit
@@ -32,14 +33,10 @@ export function authErrorMessage(error: AuthError, t: Dict): string {
   }
 }
 
-export const MIN_PASSWORD_LENGTH = 10
+/** Минимум 6 символов — как минимум у Supabase; других требований нет (решение владельца 06.11.2026: простые пароли разрешены) */
+export const MIN_PASSWORD_LENGTH = 6
 
-/** Проблема с новым паролем: короткий / только буквы или только цифры / слишком простой; null — пароль подходит */
-export function passwordProblem(password: string): 'short' | 'weak' | null {
-  if (password.length < MIN_PASSWORD_LENGTH) return 'short'
-  const hasLetter = /\p{L}/u.test(password)
-  const hasDigit = /\d/.test(password)
-  const distinct = new Set(password.toLowerCase()).size
-  if (!hasLetter || !hasDigit || distinct < 5) return 'weak'
-  return null
+/** Проблема с новым паролем: только длина; null — пароль подходит */
+export function passwordProblem(password: string): 'short' | null {
+  return password.length < MIN_PASSWORD_LENGTH ? 'short' : null
 }

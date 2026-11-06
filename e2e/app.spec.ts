@@ -16,14 +16,14 @@ test.describe('вход', () => {
     await expect(page.getByRole('heading', { name: 'Вход' })).toBeVisible()
   })
 
-  test('регистрация не принимает слабый пароль', async ({ page, db }) => {
+  test('регистрация не принимает пароль короче 6 символов', async ({ page, db }) => {
     await fakeSupabase(page, db, { signedIn: false })
     await page.goto('register')
     await page.getByLabel('Email').fill('new@example.com')
-    await page.getByLabel('Пароль', { exact: true }).fill('abcdefghijk')
-    await page.getByLabel('Повтори пароль').fill('abcdefghijk')
+    await page.getByLabel('Пароль', { exact: true }).fill('abc12')
+    await page.getByLabel('Повтори пароль').fill('abc12')
     await page.getByRole('button', { name: 'Создать аккаунт' }).click()
-    await expect(page.getByText('Пароль слишком простой')).toBeVisible()
+    await expect(page.getByText('Пароль должен быть не короче 6 символов')).toBeVisible()
   })
 
   test('при включённой 2FA после пароля спрашивается код', async ({ page, db }) => {

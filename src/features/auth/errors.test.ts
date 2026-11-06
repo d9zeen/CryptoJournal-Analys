@@ -18,15 +18,11 @@ describe('authErrorMessage', () => {
 
 import { passwordProblem } from './errors'
 describe('passwordProblem', () => {
-  it('короткий', () => expect(passwordProblem('abc123')).toBe('short'))
-  it('только буквы / только цифры / однообразный', () => {
-    expect(passwordProblem('abcdefghijk')).toBe('weak')
-    expect(passwordProblem('12345678901')).toBe('weak')
-    expect(passwordProblem('aaaa1111aaaa')).toBe('weak')
-  })
-  it('нормальный', () => {
-    expect(passwordProblem('Trade2026journal')).toBeNull()
-    expect(passwordProblem('дневник2026сделок')).toBeNull()
+  it('короче 6 символов — нельзя', () => expect(passwordProblem('abc12')).toBe('short'))
+  it('простые пароли от 6 символов — можно', () => {
+    expect(passwordProblem('abcdef')).toBeNull()
+    expect(passwordProblem('123456')).toBeNull()
+    expect(passwordProblem('дневник')).toBeNull()
   })
 })
 

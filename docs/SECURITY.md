@@ -83,7 +83,8 @@
    Кто получит доступ к ним — получит доступ ко всему, никакие правила базы не помогут.
 2. **2FA в самом дневнике:** сайт → Настройки → Безопасность → «Включить 2FA».
 3. **Пароли в Supabase:** Authentication → Sign In / Providers → Email:
-   - Minimum password length: **10**;
-   - Password requirements: **Lowercase, uppercase letters and digits**;
-   - Prevent use of leaked passwords — включить, если доступно на тарифе.
+   - Minimum password length: **6** (решение владельца 06.11.2026: простые пароли разрешены, сайт проверяет только длину);
+   - Password requirements: **No required characters**;
+   - Prevent use of leaked passwords — выключено (иначе простые пароли сервер не примет).
+   Защита аккаунта при простом пароле — 2FA (Настройки → Безопасность).
 4. Когда будет своя почта (SMTP) — включить **Confirm email** (подтверждение адреса при регистрации).
