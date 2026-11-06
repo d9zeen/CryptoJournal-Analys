@@ -52,7 +52,7 @@ export function PlansPage() {
               </th>
               {PLANS.map((plan) => (
                 <th key={plan.id} scope="col" className={`px-3 pt-4 pb-3 text-left align-top font-normal md:px-4 ${col(plan, 'top')}`}>
-                  <h2 className="font-display text-base font-semibold">{p.names[plan.id]}</h2>
+                  <h2 className="text-base font-bold">{p.names[plan.id]}</h2>
                   <p className="num mt-0.5 text-sm font-semibold md:text-lg">{plan.price === 0 ? p.free : fmt(p.perMonth, { price: plan.price })}</p>
                   {isCurrent(plan) && (
                     <p className="mt-1 text-xs text-primary">

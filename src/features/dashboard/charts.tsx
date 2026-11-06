@@ -116,7 +116,7 @@ export function EquityChart({ points, unit, balance }: { points: EquityPoint[]; 
                 fill: 'var(--color-text)',
                 fontSize: 12,
                 fontWeight: 600,
-                fontFamily: 'var(--font-mono)',
+                fontFamily: 'var(--font-sans)',
                 ...(wide ? {} : { textAnchor: 'end' }),
               }}
             />

@@ -13,14 +13,17 @@ test('календарь прибыли: дни, итоги и листание 
   await page.goto('dashboard')
   const cal = page.getByText('Календарь прибыли').locator('xpath=ancestor::div[contains(@class,"rise")][1]')
   await expect(cal).toBeVisible()
-  const month = new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(now)
-  await expect(cal.getByText(month, { exact: false })).toBeVisible()
+  // подпись месяца: «Ноябрь 2026» — с большой буквы и без «г.»
+  const label = (d: Date) => {
+    const s = new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(d).replace(/\s*г\.?$/, '')
+    return s.charAt(0).toUpperCase() + s.slice(1)
+  }
+  await expect(cal.getByText(label(now), { exact: true })).toBeVisible()
   // итог месяца: 3 сделки, 1 в плюс, +50 $
   await expect(cal.getByText('Сделки', { exact: true }).locator('..')).toContainText('3')
   await expect(cal.getByText('Винрейт', { exact: true }).locator('..')).toContainText('33')
   await expect(cal.getByText('Результат', { exact: true }).locator('..')).toContainText('+50')
   await cal.getByRole('button', { name: 'Следующий месяц' }).click()
-  const next = new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(new Date(now.getFullYear(), now.getMonth() + 1, 1))
-  await expect(cal.getByText(next, { exact: false })).toBeVisible()
+  await expect(cal.getByText(label(new Date(now.getFullYear(), now.getMonth() + 1, 1)), { exact: true })).toBeVisible()
   await expect(cal.getByText('Сделки', { exact: true }).locator('..')).toContainText('0')
 })
