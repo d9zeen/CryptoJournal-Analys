@@ -55,8 +55,9 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
   const m = cal.month
 
   return (
-    <div className="rise grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
-      <section className="rounded-lg border border-border bg-surface p-4 sm:p-5">
+    // на широком экране календарь тянется до низа экрана (шапки нет, отступы main сверху и снизу — 4rem)
+    <div className="rise grid gap-4 xl:min-h-[calc(100dvh-4rem)] xl:grid-cols-[minmax(0,1fr)_360px]">
+      <section className="flex flex-col rounded-lg border border-border bg-surface p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-baseline gap-3">
             <h1 className="text-lg font-semibold">{c.title}</h1>
@@ -69,7 +70,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
           </div>
         </div>
 
-        <div className={`mt-4 grid gap-1.5 ${wide ? 'grid-cols-[repeat(7,minmax(0,1fr))_minmax(0,1fr)]' : 'grid-cols-7'} ${isLoading ? 'opacity-60' : ''}`}>
+        <div className={`mt-4 grid flex-1 gap-1.5 ${wide ? 'grid-cols-[repeat(7,minmax(0,1fr))_minmax(0,1fr)] grid-rows-[auto_repeat(6,minmax(0,1fr))]' : 'grid-cols-7'} ${isLoading ? 'opacity-60' : ''}`}>
           {t.period.weekdaysShort.map((w) => (
             <div key={w} className="pb-1 text-center text-xs text-muted">
               {w}

@@ -118,7 +118,8 @@ export function AppLayout() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1800px] px-4 py-6 lg:px-8 lg:py-8">
+      {/* на широком экране контент прилегает к левой панели (без пустой полосы слева); шире 2200 px — не растягиваем */}
+      <main className="max-w-[2200px] px-4 py-6 lg:px-8 lg:py-8">
         <Outlet />
       </main>
 
