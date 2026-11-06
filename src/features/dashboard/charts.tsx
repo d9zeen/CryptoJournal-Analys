@@ -2,7 +2,7 @@
  * Графики дашборда (Recharts). Файл грузится отдельно (lazy), чтобы не утяжелять первый экран.
  * Цвета — только CSS-переменные из theme.css.
  */
-import { useId, useMemo, type CSSProperties, type ReactNode } from 'react'
+import { useId, useMemo, type ReactNode } from 'react'
 import {
   Area,
   AreaChart,
@@ -10,7 +10,6 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  Line,
   PolarAngleAxis,
   PolarGrid,
   PolarRadiusAxis,
@@ -59,82 +58,40 @@ function Tip({ children }: { children: ReactNode }) {
 type TipProps<T> = { active?: boolean; payload?: ReadonlyArray<{ payload?: T }> }
 const pointOf = <T,>(p: TipProps<T>): T | undefined => (p.active ? p.payload?.[0]?.payload : undefined)
 
-type EqRow = TimedPoint & { v: number; trade: number; fromPeak: number; i: number; peak: number }
-
-/** Как выглядит кривая капитала. Варианты для выбора владельцем (временно переключаются через localStorage «cj-eq-variant»). */
-export type EquityVariant = {
-  color: 'profit' | 'primary'
-  glow: boolean
-  axis: 'time' | 'trade'
-  /** заливка под линией: градиент, ровная слабая или без заливки */
-  fill?: 'gradient' | 'flat' | 'none'
-  /** линия пика (максимум счёта) и затенённая просадка между пиком и кривой */
-  peak?: boolean
-  /** итог на плашке у конца линии, как цена на графике биржи */
-  tag?: boolean
-}
-export const EQUITY_VARIANTS: Record<string, EquityVariant> = {
-  a: { color: 'profit', glow: false, axis: 'time' },
-  b: { color: 'profit', glow: true, axis: 'time' },
-  c: { color: 'profit', glow: false, axis: 'trade' },
-  d: { color: 'primary', glow: false, axis: 'trade' },
-  e: { color: 'primary', glow: false, axis: 'trade', fill: 'flat', tag: true },
-  f: { color: 'primary', glow: false, axis: 'trade', fill: 'flat', tag: true, peak: true },
-  g: { color: 'primary', glow: false, axis: 'trade', fill: 'none', tag: true, peak: true },
-}
-function currentVariant(): EquityVariant {
-  try {
-    return EQUITY_VARIANTS[localStorage.getItem('cj-eq-variant') ?? ''] ?? EQUITY_VARIANTS.a
-  } catch {
-    return EQUITY_VARIANTS.a
-  }
-}
+type EqRow = TimedPoint & { v: number; trade: number; fromPeak: number; i: number }
 
 /**
- * Кривая капитала: одна линия одного цвета (и выше, и ниже нуля), под ней мягкая заливка тем же цветом, сходящая на нет.
- * Ноль — тонкая пунктирная линия. Ось X — по времени (расстояние = реальные дни) или по номеру сделки (без длинных прямых отрезков в паузах).
+ * Кривая капитала (выбрана владельцем 06.11.2026): одна фиолетовая линия (цвет кнопок) и выше, и ниже нуля,
+ * под ней мягкая заливка тем же цветом, сходящая на нет; ноль — тонкий пунктир.
+ * Ось X — по номеру сделки (без длинных прямых отрезков в паузах между сделками), подписи — даты этих сделок.
  */
 export function EquityChart({ points, unit, balance, height = HEIGHT + 40 }: { points: EquityPoint[]; unit: EquityUnit; balance: number | null; height?: number }) {
   const t = useT()
   const wide = useMediaQuery('(min-width: 640px)')
-  const variant = useMemo(currentVariant, [])
-  const color = variant.color === 'primary' ? C.primary : C.profit
+  const color = C.primary
   const data = useMemo<EqRow[]>(() => {
     let peak = -Infinity
     return withTime(points).map((p, i) => {
       const v = inUnit(p.cum, unit, balance)
       peak = Math.max(peak, v)
-      return { ...p, i, v, peak, trade: inUnit(p.pnl, unit, balance), fromPeak: v - peak }
+      return { ...p, i, v, trade: inUnit(p.pnl, unit, balance), fromPeak: v - peak }
     })
   }, [points, unit, balance])
   const last = data[data.length - 1]
   const id = useId().replace(/:/g, '')
   const yTick = (v: number) => (unit === 'usd' ? formatUsdShort(v) : `${formatNumber(v, 0)} %`)
-  const byTrade = variant.axis === 'trade'
   return (
-    <div className={variant.glow ? 'equity-glow' : ''} style={{ '--eq-glow': `url(#${id}g)` } as CSSProperties}>
+    <div>
       <ResponsiveContainer width="100%" height={height}>
         <AreaChart data={data} margin={{ top: 22, right: wide ? 104 : 16, bottom: 0, left: 0 }}>
           <defs>
             <linearGradient id={`${id}f`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset={0} stopColor={color} stopOpacity={variant.fill === 'flat' ? 0.1 : 0.26} />
-              <stop offset={1} stopColor={color} stopOpacity={variant.fill === 'flat' ? 0.1 : 0} />
+              <stop offset={0} stopColor={color} stopOpacity={0.26} />
+              <stop offset={1} stopColor={color} stopOpacity={0} />
             </linearGradient>
-            {/* мягкое свечение линии её же цветом */}
-            <filter id={`${id}g`} x="-5%" y="-20%" width="110%" height="140%">
-              <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
           </defs>
           <CartesianGrid stroke={C.grid} vertical={false} />
-          {byTrade ? (
-            <XAxis dataKey="i" type="number" domain={['dataMin', 'dataMax']} {...axisProps} tickFormatter={(i: number) => (data[i] ? shortDate(data[i].t) : '')} minTickGap={40} />
-          ) : (
-            <XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} {...axisProps} tickFormatter={shortDate} minTickGap={40} />
-          )}
+          <XAxis dataKey="i" type="number" domain={['dataMin', 'dataMax']} {...axisProps} tickFormatter={(i: number) => (data[i] ? shortDate(data[i].t) : '')} minTickGap={40} />
           <YAxis {...axisProps} width={60} tickFormatter={yTick} />
           <ReferenceLine y={0} stroke={C.muted} strokeOpacity={0.45} strokeDasharray="4 4" />
           <Tooltip
@@ -162,19 +119,12 @@ export function EquityChart({ points, unit, balance, height = HEIGHT + 40 }: { p
               )
             }}
           />
-          {variant.peak && (
-            <>
-              {/* просадка: полоса между пиком и кривой */}
-              <Area type="monotone" dataKey={(d: EqRow) => [d.v, d.peak]} stroke="none" fill={C.muted} fillOpacity={0.12} isAnimationActive={false} activeDot={false} />
-              <Line type="monotone" dataKey="peak" stroke={C.muted} strokeOpacity={0.55} strokeWidth={1} strokeDasharray="3 4" dot={false} activeDot={false} isAnimationActive={false} />
-            </>
-          )}
           <Area
             type="monotone"
             dataKey="v"
             baseValue="dataMin"
             stroke={color}
-            fill={variant.fill === 'none' || variant.peak ? 'none' : `url(#${id}f)`}
+            fill={`url(#${id}f)`}
             strokeWidth={2}
             dot={false}
             activeDot={{ r: 5, fill: color, stroke: 'var(--color-surface)', strokeWidth: 2 }}
@@ -182,20 +132,13 @@ export function EquityChart({ points, unit, balance, height = HEIGHT + 40 }: { p
           />
           {last && (
             <ReferenceDot
-              x={byTrade ? last.i : last.t}
+              x={last.i}
               y={last.v}
               r={4.5}
               fill={color}
               stroke="var(--color-surface)"
               strokeWidth={2}
-              label={
-                variant.tag && wide
-                  ? (props: unknown) => {
-                      // viewBox точки — квадрат вокруг неё: правый край и середина по высоте
-                      const vb = (props as { viewBox?: { x?: number; y?: number; width?: number; height?: number } }).viewBox
-                      return <PriceTag x={(vb?.x ?? 0) + (vb?.width ?? 0)} y={(vb?.y ?? 0) + (vb?.height ?? 0) / 2} text={formatUnit(last.v, unit)} color={color} />
-                    }
-                  : {
+              label={{
                 value: formatUnit(last.v, unit),
                 position: wide ? 'right' : 'top',
                 offset: 10,
@@ -204,26 +147,12 @@ export function EquityChart({ points, unit, balance, height = HEIGHT + 40 }: { p
                 fontWeight: 600,
                 fontFamily: 'var(--font-sans)',
                 ...(wide ? {} : { textAnchor: 'end' }),
-              }
-              }
+              }}
             />
           )}
         </AreaChart>
       </ResponsiveContainer>
     </div>
-  )
-}
-
-/** Итог на плашке справа от последней точки — как текущая цена на графике биржи */
-function PriceTag({ x, y, text, color }: { x: number; y: number; text: string; color: string }) {
-  const w = text.length * 7 + 16
-  return (
-    <g>
-      <rect x={x + 10} y={y - 11} width={w} height={22} rx={4} fill={color} />
-      <text x={x + 10 + w / 2} y={y + 4} textAnchor="middle" fontSize={12} fontWeight={600} fontFamily="var(--font-sans)" fill="var(--color-on-primary)">
-        {text}
-      </text>
-    </g>
   )
 }
 

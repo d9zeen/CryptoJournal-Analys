@@ -94,11 +94,6 @@
   }
 }
 
-/* Кривая капитала: мягкое неоновое свечение линии её же цветом (фильтр <filter> в charts.tsx), только в тёмной теме */
-:root:not([data-theme='light']) .equity-glow .recharts-area-curve {
-  filter: var(--eq-glow);
-}
-
 /* Бегущая строка бирж на главной: список продублирован, едем на половину ширины и начинаем заново */
 @utility marquee {
   animation: marquee 40s linear infinite;
