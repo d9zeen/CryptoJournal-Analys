@@ -30,7 +30,7 @@
 
   /* Текст */
   --color-text: #e8eaf3;
-  --color-muted: #8b91a7;
+  --color-muted: #a3a9bd;   /* подписи: светлее, чтобы читались на тёмном фоне */
 
   /* Акценты */
   --color-primary: #8d78ff;       /* фиолетовый: кнопки, ссылки */
@@ -92,14 +92,6 @@
   &:hover {
     border-color: color-mix(in srgb, var(--color-muted) 45%, var(--color-border));
   }
-}
-
-/* Бегущая строка бирж на главной: список продублирован, едем на половину ширины и начинаем заново */
-@utility marquee {
-  animation: marquee 40s linear infinite;
-}
-@keyframes marquee {
-  to { translate: -50% 0; }
 }
 
 /* Лесенка появления: style={{ '--i': номер }} задаёт задержку */

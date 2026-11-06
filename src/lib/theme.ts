@@ -1,5 +1,5 @@
 /**
- * Тема оформления: тёмная (по умолчанию) или светлая.
+ * Тема оформления: светлая (по умолчанию, решение владельца 06.11.2026) или тёмная.
  * Хранится в браузере (localStorage) — у каждого устройства своя, в базу не пишем.
  * Цвета обеих тем — в src/styles/theme.css.
  */
@@ -12,9 +12,9 @@ const listeners = new Set<() => void>()
 
 export function readTheme(): Theme {
   try {
-    return localStorage.getItem(KEY) === 'light' ? 'light' : 'dark'
+    return localStorage.getItem(KEY) === 'dark' ? 'dark' : 'light'
   } catch {
-    return 'dark' // приватный режим / запрет хранилища
+    return 'light' // приватный режим / запрет хранилища
   }
 }
 
