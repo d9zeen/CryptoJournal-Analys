@@ -55,9 +55,9 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
   const m = cal.month
 
   return (
-    // на широком экране календарь тянется до низа экрана (шапки нет, отступы main сверху и снизу — 4rem)
-    <div className="rise grid gap-4 xl:min-h-[calc(100dvh-4rem)] xl:grid-cols-[minmax(0,1fr)_360px]">
-      <section className="flex flex-col rounded-lg border border-border bg-surface p-4 sm:p-5">
+    // широкий экран: блок по центру с небольшими полями слева и справа (до 1760 px), высота — около 3/4 экрана
+    <div className="rise mx-auto grid w-full max-w-[1760px] gap-4 xl:h-[78dvh] xl:min-h-[640px] xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
+      <section className="flex flex-col rounded-lg border border-border bg-surface p-4 sm:p-5 xl:h-full">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-baseline gap-3">
             <h1 className="text-lg font-semibold">{c.title}</h1>
