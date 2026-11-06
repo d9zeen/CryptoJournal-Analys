@@ -22,7 +22,10 @@ export function GroupTable({ title, hint, rows, mode = 'default', empty, limit =
   const [expanded, setExpanded] = useState(false)
   const visible = expanded ? rows : rows.slice(0, limit)
   const c = t.dashboard.tables
-  const num = 'px-2 py-2 text-right whitespace-nowrap'
+  const num = 'px-2 py-2.5 text-right whitespace-nowrap'
+  // полоска под названием: доля PnL (или убытков по ошибкам) от самого большого в таблице
+  const val = (g: Group<unknown>) => (mode === 'mistakes' ? g.lossSum : g.pnl)
+  const maxAbs = Math.max(1e-9, ...rows.map((r) => Math.abs(val(r.group))))
 
   return (
     <Card className="rise !p-4 [--i:10]">
@@ -50,8 +53,11 @@ export function GroupTable({ title, hint, rows, mode = 'default', empty, limit =
           <tbody>
             {visible.map(({ id, label, group: g }) => (
               <tr key={id} className="border-t border-border">
-                <td className="max-w-0 py-2 pr-2" title={label}>
+                <td className="max-w-0 py-2.5 pr-3" title={label}>
                   <div className="truncate">{label}</div>
+                  <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-surface-2" aria-hidden>
+                    <i className={`block h-full rounded-full ${val(g) >= 0 ? 'bg-profit' : 'bg-loss'}`} style={{ width: `${(Math.abs(val(g)) / maxAbs) * 100}%` }} />
+                  </div>
                   {/* на телефоне число сделок — под названием, чтобы названию хватило места */}
                   <div className="text-xs text-muted sm:hidden">{fmt(t.dashboard.tooltipTrades, { n: g.count })}</div>
                 </td>

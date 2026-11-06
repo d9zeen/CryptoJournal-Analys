@@ -228,7 +228,21 @@ export function ImportPage() {
 
         {/* Справа: результат разбора */}
         <div className="flex min-w-0 flex-col gap-4">
-          {!file && <Card className="hidden min-h-64 items-center justify-center text-center text-muted xl:flex">{t.import.previewEmpty}</Card>}
+          {!file && (
+            <Card className="hidden !p-6 xl:block">
+              <h2 className="font-semibold">{t.import.how.title}</h2>
+              <ol className="mt-5 grid gap-6 2xl:grid-cols-3">
+                {(['a', 'b', 'c'] as const).map((k, i) => (
+                  <li key={k} className="border-t-2 border-primary/70 pt-4">
+                    <div className="num text-sm font-semibold text-primary">0{i + 1}</div>
+                    <h3 className="mt-1.5 font-medium">{t.import.how[k].title}</h3>
+                    <p className="mt-1.5 text-sm leading-relaxed text-muted">{t.import.how[k].text}</p>
+                  </li>
+                ))}
+              </ol>
+              <p className="mt-6 text-sm text-muted">{t.import.previewEmpty}</p>
+            </Card>
+          )}
 
           {prepared && prepared.table.rows.length === 0 && <Alert tone="error">{t.import.emptyFile}</Alert>}
 

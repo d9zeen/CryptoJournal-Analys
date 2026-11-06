@@ -44,6 +44,7 @@ const AdminPage = lazyPage(() => import('@/features/admin/AdminPage'), 'AdminPag
 const ImportPage = lazyPage(() => import('@/features/import/ImportPage'), 'ImportPage')
 const SettingsPage = lazyPage(() => import('@/features/settings/SettingsPage'), 'SettingsPage')
 const PlansPage = lazyPage(() => import('@/features/plans/PlansPage'), 'PlansPage')
+const CalendarPage = lazyPage(() => import('@/features/calendar/CalendarPage'), 'CalendarPage')
 const LandingPage = lazyPage(() => import('@/features/landing/LandingPage'), 'LandingPage')
 
 /** Главная: вошедшего — сразу в дашборд, остальным — страница о сервисе */
@@ -79,6 +80,7 @@ const router = createBrowserRouter([
           { path: '/trades', element: <TradesPage /> },
           { path: '/trades/new', element: <TradeFormPage /> },
           { path: '/trades/:id', element: <TradeFormPage /> },
+          { path: '/calendar', element: <CalendarPage /> },
           { path: '/analysis', element: <AnalysisPage /> },
           { path: '/import', element: <ImportPage /> },
           { path: '/settings', element: <SettingsPage /> },

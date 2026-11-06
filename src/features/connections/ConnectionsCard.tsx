@@ -62,7 +62,7 @@ export function ConnectionsCard() {
           <p className="mt-0.5 text-xs text-muted">{pro ? c.hintPro : c.hintFree}</p>
         </div>
         {!adding && (
-          <Button variant="secondary" className="!px-3 !py-1.5 text-xs" onClick={() => setAdding(true)}>
+          <Button variant="secondary" className="shrink-0 !px-3 !py-1.5 text-xs whitespace-nowrap" onClick={() => setAdding(true)}>
             {c.add}
           </Button>
         )}

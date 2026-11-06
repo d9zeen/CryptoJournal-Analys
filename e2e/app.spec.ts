@@ -69,6 +69,9 @@ test.describe('дашборд и сделки', () => {
     await expect(page.getByRole('heading', { name: 'Сетапы' })).toHaveCount(0)
     const link = page.getByRole('link', { name: 'Разбор' })
     if (info.project.name === 'desktop') {
+      // широкий экран: подпись видна в самой панели, всплывающая подсказка — только у узкой панели (планшет)
+      await expect(link.getByText('Разбор', { exact: true }).filter({ visible: true })).toBeVisible()
+      await page.setViewportSize({ width: 900, height: 800 })
       await link.hover()
       await expect(page.getByRole('tooltip', { name: 'Разбор' })).toBeVisible()
     }
@@ -222,7 +225,8 @@ test('страница тарифов: Basic, Pro, Pro Plus; текущий та
   db.usage = { plan: 'pro', trades_created: 3, trade_limit: 50 }
   await fakeSupabase(page, db)
   await page.goto('dashboard')
-  await page.getByRole('link', { name: 'Pro', exact: true }).click()
+  // тариф в шапке (телефон) или карточка тарифа в левой панели (компьютер)
+  await page.getByRole('link', { name: /^Pro(\s|$)/ }).filter({ visible: true }).first().click()
   await expect(page.getByRole('heading', { name: 'Тарифы' })).toBeVisible()
   for (const name of ['Basic', 'Pro', 'Pro Plus']) await expect(page.getByRole('heading', { name, exact: true })).toBeVisible()
   await expect(page.getByText('$10 / мес')).toBeVisible()

@@ -280,12 +280,13 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
 
       {submitError && <Alert tone="error">{submitError}</Alert>}
 
-      <div className="sticky bottom-20 z-10 flex gap-3 md:bottom-4">
-        <Button type="submit" loading={save.isPending} disabled={limitReached} className="flex-1 shadow-lg sm:flex-none">
-          {t.tradeForm.save}
-        </Button>
-        <Button type="button" variant="secondary" onClick={() => navigate('/trades')} className="shadow-lg">
+      {/* панель действий прилипает к низу экрана, пока форма длиннее экрана */}
+      <div className="sticky bottom-20 z-10 flex items-center justify-end gap-3 rounded-lg border border-border bg-surface/95 px-3 py-3 backdrop-blur md:bottom-4 md:px-4">
+        <Button type="button" variant="secondary" onClick={() => navigate('/trades')}>
           {t.common.cancel}
+        </Button>
+        <Button type="submit" loading={save.isPending} disabled={limitReached} className="flex-1 sm:flex-none sm:px-6">
+          {t.tradeForm.save}
         </Button>
       </div>
     </form>
