@@ -5,15 +5,11 @@
  */
 import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { fmt, useT } from '@/i18n'
-import { formatNumber, formatPercent, formatPnl, formatR, formatRatio, formatUsd, pnlClass } from '@/lib/format'
+import { formatNumber, formatPercent, formatPnl, formatR, formatRatio, formatUsd } from '@/lib/format'
 import type { DrawdownPeriod, EquityPoint, Summary } from '@/lib/calc/stats'
 import { SCORE_MIN_TRADES, type TraderScore } from '@/lib/calc/score'
 import { prefersReducedMotion, useCountUp } from '@/lib/motion'
 import { daysBetween, withTime } from './equityTime'
-import { previewVariant } from '@/lib/designPreview'
-
-/* ВРЕМЕННО: варианты «Ключевых цифр» для выбора владельцем (см. lib/designPreview.ts) */
-const KEYS = previewVariant('keys')
 
 /** Цвета шкал — в тон кривой капитала (выбор владельца 06.11.2026): выигрыш фиолетовый, проигрыш приглушённый */
 const TONE = { aStroke: 'stroke-primary', bStroke: 'stroke-muted/40', aBg: 'bg-primary', bBg: 'bg-muted/40', aPill: 'bg-primary/15 text-primary', bPill: 'bg-surface-2 text-muted', aText: 'text-text', bText: 'text-muted' }
@@ -265,8 +261,6 @@ export function KeyNumbers({
   period: DrawdownPeriod | null
   rwl: { avgWinR: number | null; avgLossR: number | null }
 }) {
-  const t = useT()
-  const k = t.dashboard.kpi
   // длительность максимальной просадки: от пика до восстановления (или до последней сделки)
   const ddDays = useMemo(() => {
     if (!period) return null
@@ -274,35 +268,8 @@ export function KeyNumbers({
     return daysBetween(tp[period.peak].t, tp[period.recovery ?? tp.length - 1].t)
   }, [curve, period])
   const ddValue = s.maxDrawdown <= 0 ? '—' : s.maxDrawdownPct !== null ? `−${formatPercent(s.maxDrawdownPct)}` : `−${formatUsd(s.maxDrawdown)}`
-  const rows: [string, string, string][] = [
-    [k.expectancy, formatPnl(s.expectancy), pnlClass(s.expectancy)],
-    [k.bestTrade, formatPnl(s.best), pnlClass(s.best)],
-    [k.worstTrade, formatPnl(s.worst), pnlClass(s.worst)],
-    [k.maxDrawdown, ddValue, s.maxDrawdown > 0 ? 'text-loss' : ''],
-  ]
-  if (ddDays !== null && period) rows.push([period.recovery !== null ? k.recoveredIn : k.lasting, fmt(k.days, { n: ddDays }), ''])
-  rows.push([k.avgR, s.rCount ? formatR(s.avgR) : '—', pnlClass(s.avgR)])
-  if (s.rCount) {
-    rows.push([k.avgWinR, formatR(rwl.avgWinR), pnlClass(rwl.avgWinR)])
-    rows.push([k.avgLossR, formatR(rwl.avgLossR), pnlClass(rwl.avgLossR)])
-  }
-  if (KEYS === 'd') return <KeysDiverging summary={s} rwl={rwl} ddValue={ddValue} ddDays={ddDays} recovered={period?.recovery !== null} />
-  if (KEYS === 'e') return <KeysReport summary={s} rwl={rwl} ddValue={ddValue} ddDays={ddDays} recovered={period?.recovery !== null} />
-  if (KEYS === 'f') return <KeysPanels summary={s} rwl={rwl} ddValue={ddValue} ddDays={ddDays} recovered={period?.recovery !== null} />
-  return (
-    <section data-shot="keys" className="rise card-lift rounded-lg border border-border bg-surface p-4 [--i:3]">
-      <h2 className="font-semibold">{k.keyNumbers}</h2>
-      <dl className="mt-2 divide-y divide-border text-sm">
-        {rows.map(([label, value, tone]) => (
-          <div key={label} className="flex items-baseline justify-between gap-4 py-2">
-            <dt className="text-muted">{label}</dt>
-            <dd className={`num font-semibold ${tone}`}>{value}</dd>
-          </div>
-        ))}
-      </dl>
-      {s.rCount === 0 && <p className="mt-1 text-xs text-muted">{k.avgRNone}</p>}
-    </section>
-  )
+  // выбор владельца 06.11.2026: три мини-панели (разброс сделок, просадка, R)
+  return <KeysPanels summary={s} rwl={rwl} ddValue={ddValue} ddDays={ddDays} recovered={period !== null && period.recovery !== null} />
 }
 
 type KeysProps = {
@@ -313,107 +280,7 @@ type KeysProps = {
   recovered: boolean
 }
 
-/** Вариант d: у каждой цифры — полоска от нуля (вправо фиолетовая — плюс, влево серая — минус) */
-function KeysDiverging({ summary: s, rwl, ddValue, ddDays, recovered }: KeysProps) {
-  const t = useT()
-  const k = t.dashboard.kpi
-  const shown = useShown()
-  const usd = Math.max(1e-9, ...[s.expectancy, s.best, s.worst].map((v) => Math.abs(v ?? 0)))
-  const r = Math.max(1e-9, ...[s.avgR, rwl.avgWinR, rwl.avgLossR].map((v) => Math.abs(v ?? 0)))
-  const row = (label: string, value: string, v: number | null, max: number) => {
-    const w = v === null ? 0 : (Math.abs(v) / max) * 50
-    return (
-      <div key={label} className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto] items-center gap-3 py-2 text-sm">
-        <span className="truncate text-muted">{label}</span>
-        <div className="relative h-1.5 rounded-full bg-surface-2">
-          <i className="absolute inset-y-[-3px] left-1/2 w-px bg-border" aria-hidden />
-          <i
-            className={`absolute inset-y-0 rounded-full transition-[width] duration-[900ms] ease-out ${v !== null && v < 0 ? 'right-1/2 bg-muted/50' : 'left-1/2 bg-primary'}`}
-            style={{ width: shown ? `${w}%` : 0 }}
-          />
-        </div>
-        <span className="num min-w-20 text-right font-semibold">{value}</span>
-      </div>
-    )
-  }
-  return (
-    <section data-shot="keys" className="rise card-lift rounded-lg border border-border bg-surface p-4 [--i:3]">
-      <h2 className="font-semibold">{k.keyNumbers}</h2>
-      <div className="mt-2 divide-y divide-border">
-        <div>
-          {row(k.expectancy, formatPnl(s.expectancy), s.expectancy, usd)}
-          {row(k.bestTrade, formatPnl(s.best), s.best, usd)}
-          {row(k.worstTrade, formatPnl(s.worst), s.worst, usd)}
-        </div>
-        <div>
-          {row(k.maxDrawdown, ddValue, s.maxDrawdownPct !== null ? -s.maxDrawdownPct : null, 0.5)}
-          {ddDays !== null && (
-            <div className="flex justify-between py-2 text-sm">
-              <span className="text-muted">{recovered ? k.recoveredIn : k.lasting}</span>
-              <span className="num font-semibold">{fmt(k.days, { n: ddDays })}</span>
-            </div>
-          )}
-        </div>
-        {s.rCount > 0 && (
-          <div>
-            {row(k.avgR, formatR(s.avgR), s.avgR, r)}
-            {row(k.avgWinR, formatR(rwl.avgWinR), rwl.avgWinR, r)}
-            {row(k.avgLossR, formatR(rwl.avgLossR), rwl.avgLossR, r)}
-          </div>
-        )}
-      </div>
-    </section>
-  )
-}
-
-/** Вариант e: «отчёт» — главная цифра крупно, остальные сеткой с тонкими линиями, единицы мелко и бледно */
-function KeysReport({ summary: s, rwl, ddValue, ddDays, recovered }: KeysProps) {
-  const t = useT()
-  const k = t.dashboard.kpi
-  // «+52,25 $» → «+52,25» и «$»: единица отдельно, мельче
-  const split = (v: string) => {
-    const m = v.match(/^(.*?)\s*([$%R]|дн\.)$/)
-    return m ? [m[1], m[2]] : [v, '']
-  }
-  const cell = (label: string, value: string) => {
-    const [n, u] = split(value)
-    return (
-      <div key={label} className="border-t border-border px-1 py-3">
-        <div className="text-xs text-muted">{label}</div>
-        <div className="num mt-1 text-lg font-semibold">
-          {n}
-          {u && <span className="ml-1 text-sm font-normal text-muted">{u}</span>}
-        </div>
-      </div>
-    )
-  }
-  const [en, eu] = split(formatPnl(s.expectancy))
-  return (
-    <section data-shot="keys" className="rise card-lift rounded-lg border border-border bg-surface p-4 [--i:3]">
-      <h2 className="font-semibold">{k.keyNumbers}</h2>
-      <div className="mt-4 flex items-end justify-between gap-3 border-l-2 border-primary pl-3">
-        <div>
-          <div className="text-xs text-muted">{k.expectancy}</div>
-          <div className="num mt-1 text-3xl font-semibold">
-            {en}
-            <span className="ml-1 text-base font-normal text-muted">{eu}</span>
-          </div>
-        </div>
-        <span className="text-xs text-muted">{k.expectancyHint}</span>
-      </div>
-      <div className="mt-4 grid grid-cols-2 gap-x-6">
-        {cell(k.bestTrade, formatPnl(s.best))}
-        {cell(k.worstTrade, formatPnl(s.worst))}
-        {cell(k.maxDrawdown, ddValue)}
-        {ddDays !== null ? cell(recovered ? k.recoveredIn : k.lasting, fmt(k.days, { n: ddDays })) : cell(k.avgR, formatR(s.avgR))}
-        {s.rCount > 0 && cell(k.avgWinR, formatR(rwl.avgWinR))}
-        {s.rCount > 0 && cell(k.avgLossR, formatR(rwl.avgLossR))}
-      </div>
-    </section>
-  )
-}
-
-/** Вариант f: три мини-панели с картинками — разброс сделок, глубина просадки, R выигрыша против R проигрыша */
+/** «Ключевые цифры»: три мини-панели с картинками — разброс сделок, глубина просадки, R выигрыша против R проигрыша */
 function KeysPanels({ summary: s, rwl, ddValue, ddDays, recovered }: KeysProps) {
   const t = useT()
   const k = t.dashboard.kpi
