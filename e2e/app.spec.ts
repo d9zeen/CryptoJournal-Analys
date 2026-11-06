@@ -168,14 +168,14 @@ test.describe('оформление', () => {
     await fakeSupabase(page, db)
     await page.goto('dashboard')
     const html = page.locator('html')
-    await expect(html).not.toHaveAttribute('data-theme', 'light') // тёмная по умолчанию
-    await page.getByRole('button', { name: 'Светлая тема' }).click()
-    await expect(html).toHaveAttribute('data-theme', 'light')
-    await page.reload()
-    await expect(html).toHaveAttribute('data-theme', 'light')
-    await page.goto('settings')
-    await page.getByRole('radio', { name: 'Тёмная' }).click()
+    await expect(html).toHaveAttribute('data-theme', 'light') // светлая по умолчанию
+    await page.getByRole('button', { name: 'Тёмная тема' }).filter({ visible: true }).first().click()
     await expect(html).not.toHaveAttribute('data-theme', 'light')
+    await page.reload()
+    await expect(html).not.toHaveAttribute('data-theme', 'light')
+    await page.goto('settings')
+    await page.getByRole('radio', { name: 'Светлая' }).click()
+    await expect(html).toHaveAttribute('data-theme', 'light')
   })
 })
 
@@ -242,7 +242,7 @@ test('страница тарифов: Basic, Pro, Pro Plus; текущий та
 test('главная: гость видит страницу о сервисе с живым демо, вошедший — сразу дашборд', async ({ page, db }) => {
   await fakeSupabase(page, db, { signedIn: false })
   await page.goto('')
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('в одном дневнике')
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Дневник сделок для фьючерсов')
   await expect(page.getByText('Реализованный PnL')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Тарифы' })).toBeVisible()
   await page.getByRole('link', { name: 'Войти' }).first().click()
@@ -260,7 +260,7 @@ test('главная для вошедшего — дашборд', async ({ pag
 test('/welcome — главная для гостя открывается и после входа, кнопка ведёт в дневник', async ({ page, db }) => {
   await fakeSupabase(page, db)
   await page.goto('welcome')
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('в одном дневнике')
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Дневник сделок для фьючерсов')
   await page.getByRole('link', { name: 'Открыть дневник' }).click()
   await expect(page).toHaveURL(/\/dashboard$/)
 })

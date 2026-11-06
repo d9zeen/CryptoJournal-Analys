@@ -15,7 +15,12 @@ import { demoAccount } from './demo'
 
 const EquityChart = lazy(() => import('@/features/dashboard/charts').then((m) => ({ default: m.EquityChart })))
 
-const EXCHANGES = ['Bybit', 'Hyperliquid', 'Polymarket', 'Binance', 'OKX', 'BingX', 'Bitget', 'MEXC']
+/** Как подключается каждая биржа (названия бирж — не перевод, поэтому прямо здесь) */
+const WAYS = [
+  { key: 'api', names: ['Bybit'] },
+  { key: 'wallet', names: ['Hyperliquid', 'Polymarket'] },
+  { key: 'file', names: ['Bybit', 'Binance', 'OKX', 'BingX', 'Bitget', 'MEXC'] },
+] as const
 
 const btn = 'inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors'
 const btnPrimary = `${btn} bg-primary text-on-primary hover:bg-primary-hover`
@@ -73,17 +78,15 @@ export function LandingPage() {
         {/* первый экран */}
         <section className={`${wrap} pt-12 pb-10 sm:pt-20`}>
           <div className="rise max-w-3xl">
-            <p className="text-sm font-medium text-accent">{l.eyebrow}</p>
-            <h1 className="mt-3 text-4xl leading-[1.08] font-bold tracking-tight text-balance sm:text-5xl lg:text-6xl">{l.title}</h1>
-            <p className="mt-5 max-w-2xl text-base leading-relaxed text-muted sm:text-lg">{l.lead}</p>
-            <div className="mt-7 flex flex-wrap items-center gap-3">
+            <h1 className="text-4xl leading-[1.08] font-bold tracking-tight text-balance sm:text-5xl lg:text-6xl">{l.title}</h1>
+            <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link to="/register" className={`${btnPrimary} !px-5 !py-3`}>
                 {l.start}
               </Link>
               <Link to="/login" className={`${btnSecondary} !px-5 !py-3`}>
                 {l.login}
               </Link>
-              <span className="text-sm text-muted">{l.note}</span>
+              <span className="text-sm text-text/80">{l.note}</span>
             </div>
           </div>
 
@@ -111,20 +114,30 @@ export function LandingPage() {
           </div>
         </section>
 
-        {/* биржи — бегущая строка */}
-        <section className="border-y border-border py-5" aria-label={l.exchanges}>
-          <div className={`${wrap} flex items-center gap-6`}>
-            <span className="shrink-0 text-xs text-muted">{l.exchanges}</span>
-            <div className="relative min-w-0 flex-1 overflow-hidden [mask-image:linear-gradient(90deg,transparent,black_8%,black_92%,transparent)]">
-              <ul className="marquee flex w-max gap-10 text-lg font-semibold text-muted">
-                {[...EXCHANGES, ...EXCHANGES].map((x, i) => (
-                  <li key={i} aria-hidden={i >= EXCHANGES.length || undefined}>
-                    {x}
-                  </li>
-                ))}
-              </ul>
+        {/* биржи: отдельная плашка — как подключается каждая */}
+        <section className={`${wrap} pb-6`} aria-labelledby="exchanges-title">
+          <Reveal className="rounded-xl border border-border bg-surface p-5 sm:p-8">
+            <h2 id="exchanges-title" className="text-2xl font-bold tracking-tight sm:text-3xl">
+              {l.exchanges.title}
+            </h2>
+            <p className="mt-2 text-text/80">{l.exchanges.hint}</p>
+            <div className="mt-6 grid gap-4 md:grid-cols-3">
+              {WAYS.map((w) => (
+                <div key={w.key} className="flex flex-col rounded-lg border border-border bg-bg/60 p-4 sm:p-5">
+                  <h3 className="font-semibold">{l.exchanges.ways[w.key].title}</h3>
+                  <ul className="mt-3 flex flex-wrap gap-1.5">
+                    {w.names.map((n) => (
+                      <li key={n} className="rounded-md bg-primary/12 px-2 py-1 text-sm font-semibold text-primary">
+                        {n}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-3 text-sm leading-relaxed text-text/80">{l.exchanges.ways[w.key].text}</p>
+                </div>
+              ))}
             </div>
-          </div>
+            <p className="mt-4 text-sm text-text/70">{l.exchanges.soon}</p>
+          </Reveal>
         </section>
 
         {/* возможности: строки «текст — картинка», через одну меняются местами */}
@@ -152,7 +165,7 @@ export function LandingPage() {
                 <Reveal as="li" key={k} delay={i * 120} className="border-t-2 border-primary pt-5">
                   <div className="num text-sm font-semibold text-primary">0{i + 1}</div>
                   <h3 className="mt-2 text-lg font-semibold">{l.steps[k].title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-muted">{l.steps[k].text}</p>
+                  <p className="mt-2 text-sm leading-relaxed text-text/80">{l.steps[k].text}</p>
                 </Reveal>
               ))}
             </ol>
@@ -162,7 +175,7 @@ export function LandingPage() {
         {/* тарифы */}
         <section id="pricing" className={`${wrap} scroll-mt-20 py-16 sm:py-24`}>
           <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">{l.pricingTitle}</h2>
-          <p className="mt-3 text-muted">{l.pricingHint}</p>
+          <p className="mt-3 text-text/80">{l.pricingHint}</p>
           <Reveal className="mt-8">
             <PlansTable
               action={(plan) => (
@@ -187,7 +200,7 @@ export function LandingPage() {
                       +
                     </span>
                   </summary>
-                  <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">{l.faq.items[k].a}</p>
+                  <p className="mt-3 max-w-2xl text-sm leading-relaxed text-text/80">{l.faq.items[k].a}</p>
                 </details>
               ))}
             </div>
@@ -218,7 +231,7 @@ function Feature({ title, text, flip = false, children }: { title: string; text:
     <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-16">
       <Reveal className={flip ? 'lg:order-2' : ''}>
         <h3 className="text-2xl font-bold tracking-tight">{title}</h3>
-        <p className="mt-3 max-w-lg leading-relaxed text-muted">{text}</p>
+        <p className="mt-3 max-w-lg leading-relaxed text-text/80">{text}</p>
       </Reveal>
       <Reveal delay={120}>{children}</Reveal>
     </div>
