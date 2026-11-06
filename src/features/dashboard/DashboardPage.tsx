@@ -74,9 +74,8 @@ export function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        {/* заголовка на экране нет (по желанию владельца) — только для читалок экрана */}
-        <h1 className="sr-only">{t.dashboard.title}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold">{t.dashboard.title}</h1>
         <PeriodFilter preset={preset} custom={custom} onPreset={setPreset} onCustom={setCustom} />
       </div>
 

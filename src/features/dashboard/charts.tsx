@@ -58,64 +58,71 @@ function Tip({ children }: { children: ReactNode }) {
 type TipProps<T> = { active?: boolean; payload?: ReadonlyArray<{ payload?: T }> }
 const pointOf = <T,>(p: TipProps<T>): T | undefined => (p.active ? p.payload?.[0]?.payload : undefined)
 
-type EqRow = TimedPoint & { v: number; trade: number; fromPeak: number }
+type EqRow = TimedPoint & { v: number; trade: number; fromPeak: number; i: number }
+
+/** Как выглядит кривая капитала. Варианты для выбора владельцем (временно переключаются через localStorage «cj-eq-variant»). */
+export type EquityVariant = { color: 'profit' | 'primary'; glow: boolean; axis: 'time' | 'trade' }
+export const EQUITY_VARIANTS: Record<string, EquityVariant> = {
+  a: { color: 'profit', glow: false, axis: 'time' },
+  b: { color: 'profit', glow: true, axis: 'time' },
+  c: { color: 'profit', glow: false, axis: 'trade' },
+  d: { color: 'primary', glow: false, axis: 'trade' },
+}
+function currentVariant(): EquityVariant {
+  try {
+    return EQUITY_VARIANTS[localStorage.getItem('cj-eq-variant') ?? ''] ?? EQUITY_VARIANTS.a
+  } catch {
+    return EQUITY_VARIANTS.a
+  }
+}
 
 /**
- * Кривая капитала (как «Daily net cumulative P&L» в TradeZella): выше нуля — неоново-зелёная с заливкой, ниже — красная.
- * Линия ломаная (type="linear"): видна каждая сделка, без сглаживания.
- * Цвет меняется ровно на нуле: градиент с границей в точке, где ось Y проходит через 0.
- * Ось X — даты (расстояние между точками = реальное время), подпись итога у последней точки.
+ * Кривая капитала: одна линия одного цвета (и выше, и ниже нуля), под ней мягкая заливка тем же цветом, сходящая на нет.
+ * Ноль — тонкая пунктирная линия. Ось X — по времени (расстояние = реальные дни) или по номеру сделки (без длинных прямых отрезков в паузах).
  */
 export function EquityChart({ points, unit, balance, height = HEIGHT + 40 }: { points: EquityPoint[]; unit: EquityUnit; balance: number | null; height?: number }) {
   const t = useT()
   const wide = useMediaQuery('(min-width: 640px)')
+  const variant = useMemo(currentVariant, [])
+  const color = variant.color === 'primary' ? C.primary : C.profit
   const data = useMemo<EqRow[]>(() => {
     let peak = -Infinity
-    return withTime(points).map((p) => {
+    return withTime(points).map((p, i) => {
       const v = inUnit(p.cum, unit, balance)
       peak = Math.max(peak, v)
-      return { ...p, v, trade: inUnit(p.pnl, unit, balance), fromPeak: v - peak }
+      return { ...p, i, v, trade: inUnit(p.pnl, unit, balance), fromPeak: v - peak }
     })
   }, [points, unit, balance])
   const last = data[data.length - 1]
   const id = useId().replace(/:/g, '')
-  // где по высоте проходит ноль (0 — наверху, 1 — внизу)
-  const zero = useMemo(() => {
-    const vs = data.map((d) => d.v)
-    const hi = Math.max(0, ...vs)
-    const lo = Math.min(0, ...vs)
-    return hi - lo > 0 ? hi / (hi - lo) : 1
-  }, [data])
   const yTick = (v: number) => (unit === 'usd' ? formatUsdShort(v) : `${formatNumber(v, 0)} %`)
+  const byTrade = variant.axis === 'trade'
   return (
-    <div className="equity-glow" style={{ '--eq-glow': `url(#${id}g)` } as CSSProperties}>
+    <div className={variant.glow ? 'equity-glow' : ''} style={{ '--eq-glow': `url(#${id}g)` } as CSSProperties}>
       <ResponsiveContainer width="100%" height={height}>
         <AreaChart data={data} margin={{ top: 22, right: wide ? 104 : 16, bottom: 0, left: 0 }}>
           <defs>
             <linearGradient id={`${id}f`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset={0} stopColor={C.profit} stopOpacity={0.32} />
-              <stop offset={zero} stopColor={C.profit} stopOpacity={0.04} />
-              <stop offset={zero} stopColor={C.loss} stopOpacity={0.04} />
-              <stop offset={1} stopColor={C.loss} stopOpacity={0.32} />
+              <stop offset={0} stopColor={color} stopOpacity={0.26} />
+              <stop offset={1} stopColor={color} stopOpacity={0} />
             </linearGradient>
-            <linearGradient id={`${id}s`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset={zero} stopColor={C.profit} />
-              <stop offset={zero} stopColor={C.loss} />
-            </linearGradient>
-            {/* неон: размытая копия линии её же цветом под самой линией */}
+            {/* мягкое свечение линии её же цветом */}
             <filter id={`${id}g`} x="-5%" y="-20%" width="110%" height="140%">
-              <feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="blur" />
+              <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
               <feMerge>
-                <feMergeNode in="blur" />
                 <feMergeNode in="blur" />
                 <feMergeNode in="SourceGraphic" />
               </feMerge>
             </filter>
           </defs>
           <CartesianGrid stroke={C.grid} vertical={false} />
-          <XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} {...axisProps} tickFormatter={shortDate} minTickGap={40} />
+          {byTrade ? (
+            <XAxis dataKey="i" type="number" domain={['dataMin', 'dataMax']} {...axisProps} tickFormatter={(i: number) => (data[i] ? shortDate(data[i].t) : '')} minTickGap={40} />
+          ) : (
+            <XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} {...axisProps} tickFormatter={shortDate} minTickGap={40} />
+          )}
           <YAxis {...axisProps} width={60} tickFormatter={yTick} />
-          <ReferenceLine y={0} stroke={C.muted} strokeOpacity={0.5} />
+          <ReferenceLine y={0} stroke={C.muted} strokeOpacity={0.45} strokeDasharray="4 4" />
           <Tooltip
             cursor={{ stroke: C.muted, strokeOpacity: 0.4 }}
             content={(props) => {
@@ -142,22 +149,22 @@ export function EquityChart({ points, unit, balance, height = HEIGHT + 40 }: { p
             }}
           />
           <Area
-            type="linear"
+            type="monotone"
             dataKey="v"
-            baseValue={0}
-            stroke={`url(#${id}s)`}
+            baseValue="dataMin"
+            stroke={color}
             fill={`url(#${id}f)`}
             strokeWidth={2}
             dot={false}
-            activeDot={{ r: 5, fill: 'var(--color-text)', stroke: 'var(--color-surface)', strokeWidth: 2 }}
+            activeDot={{ r: 5, fill: color, stroke: 'var(--color-surface)', strokeWidth: 2 }}
             {...anim()}
           />
           {last && (
             <ReferenceDot
-              x={last.t}
+              x={byTrade ? last.i : last.t}
               y={last.v}
               r={4.5}
-              fill="var(--color-text)"
+              fill={color}
               stroke="var(--color-surface)"
               strokeWidth={2}
               label={{

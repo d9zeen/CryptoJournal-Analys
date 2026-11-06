@@ -9,7 +9,7 @@ export const ru = {
     authFooter: 'Bybit и Hyperliquid по API, Polymarket по кошельку, файлы Binance, OKX, BingX, Bitget и MEXC. Ключи бирж принимаем только на чтение.',
   },
   nav: {
-    dashboard: 'Дашборд',
+    dashboard: 'Статистика',
     trades: 'Сделки',
     calendar: 'Календарь',
     analysis: 'Разбор',
@@ -410,7 +410,7 @@ export const ru = {
       result: 'Результат',
       tradesN: { one: '{n} сделка', few: '{n} сделки', many: '{n} сделок' },
     },
-    title: 'Дашборд',
+    title: 'Статистика',
     empty: 'Закрытых сделок за этот период нет. Статистика появится, как только закроешь первую сделку.',
     openTrades: 'Открытых сделок: {n} — в статистику не входят, пока не закрыты.',
     kpi: {

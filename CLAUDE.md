@@ -65,7 +65,7 @@ src/
   features/landing/    главная для гостей «/» (вошедшего — в дашборд): живое демо на тех же виджетах (demo.ts), возможности, тарифы (PlansTable), вопросы
   features/<раздел>/   auth, dashboard, admin, connections (подключённые биржи, автосинхронизация) (админка: пользователи, Pro, сброс лимита), analysis (вкладка «Разбор»: таблицы по сетапам, ошибкам, парам, эмоциям, Long/Short), trades, import, settings
                        dashboard (в духе TradeZella): Widgets.tsx (ряд показателей со шкалами на SVG, «Оценка трейдера», «Ключевые цифры»),
-                       charts.tsx (Recharts, лениво: кривая капитала зелёная/красная от нуля, PnL по дням, радар оценки); заголовка «Дашборд» на экране нет (sr-only),
+                       charts.tsx (Recharts, лениво: кривая капитала зелёная/красная от нуля, PnL по дням, радар оценки); страница «Статистика» (пункт меню тоже «Статистика»); кривая капитала — одного цвета, варианты EQUITY_VARIANTS (временный выбор через localStorage «cj-eq-variant»),
                        EquityTableDialog (таблица сделок в <dialog>), equityTime.ts (время точек, $ / %)
 supabase/migrations/   SQL-миграции, нумерация 0001_..., 0002_...
 supabase/tests/        заглушка Supabase для чистого Postgres + тесты RLS (rls_test.sql);
