@@ -12,14 +12,30 @@ import { prefersReducedMotion, useCountUp } from '@/lib/motion'
 import { daysBetween, withTime } from './equityTime'
 import { previewVariant } from '@/lib/designPreview'
 
-/* ВРЕМЕННО: варианты для выбора владельцем (см. lib/designPreview.ts) */
-const KPI = previewVariant('kpi')
+/* ВРЕМЕННО: варианты «Ключевых цифр» для выбора владельцем (см. lib/designPreview.ts) */
 const KEYS = previewVariant('keys')
-/** Цвета шкал: a — прибыль / убыток (зелёный / красный), b — в тон кривой (фиолетовый / приглушённый) */
-const TONE =
-  KPI === 'a'
-    ? { aStroke: 'stroke-profit', bStroke: 'stroke-loss', aBg: 'bg-profit', bBg: 'bg-loss', aPill: 'bg-profit/12 text-profit', bPill: 'bg-loss/12 text-loss', aText: 'text-profit', bText: 'text-loss' }
-    : { aStroke: 'stroke-primary', bStroke: 'stroke-muted/40', aBg: 'bg-primary', bBg: 'bg-muted/40', aPill: 'bg-primary/15 text-primary', bPill: 'bg-surface-2 text-muted', aText: 'text-text', bText: 'text-muted' }
+
+/** Цвета шкал — в тон кривой капитала (выбор владельца 06.11.2026): выигрыш фиолетовый, проигрыш приглушённый */
+const TONE = { aStroke: 'stroke-primary', bStroke: 'stroke-muted/40', aBg: 'bg-primary', bBg: 'bg-muted/40', aPill: 'bg-primary/15 text-primary', bPill: 'bg-surface-2 text-muted', aText: 'text-text', bText: 'text-muted' }
+
+/** Мини-кривая капитала в карточке PnL: фиолетовая линия с мягкой заливкой, как большая кривая */
+function Sparkline({ points }: { points: EquityPoint[] }) {
+  if (points.length < 2) return null
+  const W = 120
+  const H = 36
+  const vs = points.map((p) => p.cum)
+  const lo = Math.min(...vs)
+  const hi = Math.max(...vs)
+  const x = (i: number) => (i / (points.length - 1)) * W
+  const y = (v: number) => 2 + (1 - (v - lo) / (hi - lo || 1)) * (H - 4)
+  const line = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(p.cum).toFixed(1)}`).join('')
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-8 w-full overflow-visible" aria-hidden>
+      <path d={`${line}L${W} ${H}L0 ${H}Z`} className="fill-primary/15" />
+      <path d={line} fill="none" className="stroke-primary" strokeWidth={1.75} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+    </svg>
+  )
+}
 
 const ScoreRadar = lazy(() => import('./charts').then((m) => ({ default: m.ScoreRadar })))
 
@@ -125,7 +141,7 @@ function Widget({ label, hint, aside, children, className = '' }: { label: strin
 
 const big = 'num min-w-0 truncate text-xl leading-tight font-semibold sm:text-2xl'
 
-export function KpiRow({ summary: s, score, startingBalance }: { summary: Summary; score: TraderScore; startingBalance: number | null }) {
+export function KpiRow({ summary: s, score, startingBalance, equity = [] }: { summary: Summary; score: TraderScore; startingBalance: number | null; equity?: EquityPoint[] }) {
   const t = useT()
   const k = t.dashboard.kpi
   const grossWin = (s.avgWin ?? 0) * s.wins
@@ -134,8 +150,6 @@ export function KpiRow({ summary: s, score, startingBalance }: { summary: Summar
   const ratio = s.avgWin !== null && s.avgLoss !== null && s.avgLoss < 0 ? s.avgWin / -s.avgLoss : null
   const toDeposit = startingBalance ? fmt(k.toDeposit, { p: signedPercent(s.totalPnl / startingBalance) }) : null
 
-  if (KPI === 'c') return <KpiStrip summary={s} score={score} toDeposit={toDeposit} ratio={ratio} />
-  const pnlTone = KPI === 'a' ? pnlClass(s.totalPnl) : ''
   return (
     <div data-shot="kpi" className="rise grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-[minmax(0,1.35fr)_repeat(4,minmax(0,1fr))]">
       <Widget
@@ -144,8 +158,11 @@ export function KpiRow({ summary: s, score, startingBalance }: { summary: Summar
         className="col-span-2 md:col-span-4 xl:col-span-1"
         aside={<span className="num shrink-0 rounded-md bg-surface-2 px-2 py-0.5 text-xs text-muted">{fmt(k.trades, { n: s.closed })}</span>}
       >
-        <div className={`${big} text-[30px] ${pnlTone}`}>{formatPnl(pnl)}</div>
-        {toDeposit && <p className="text-xs text-muted">{toDeposit}</p>}
+        <div>
+          <div className={`${big} text-[30px]`}>{formatPnl(pnl)}</div>
+          {toDeposit && <p className="mt-0.5 text-xs text-muted">{toDeposit}</p>}
+        </div>
+        <Sparkline points={equity} />
       </Widget>
 
       <Widget label={k.tradeWinrate} hint={k.hints.tradeWinrate}>
@@ -187,46 +204,6 @@ export function KpiRow({ summary: s, score, startingBalance }: { summary: Summar
   )
 }
 
-/** Вариант c: одна полоса показателей с разделителями, под цифрой — тонкая фиолетовая шкала */
-function KpiStrip({ summary: s, score, toDeposit, ratio }: { summary: Summary; score: TraderScore; toDeposit: string | null; ratio: number | null }) {
-  const t = useT()
-  const k = t.dashboard.kpi
-  const pnl = useCountUp(s.totalPnl)
-  const shown = useShown()
-  const cell = (label: string, hint: string, value: string, share: number | null, sub: ReactNode) => (
-    <div className="flex min-w-0 flex-col gap-2 bg-surface p-4 sm:p-5">
-      <span className="text-xs text-muted" title={hint}>
-        {label}
-      </span>
-      <span className="num truncate text-2xl leading-tight font-semibold">{value}</span>
-      {share !== null && (
-        <div className="h-1 overflow-hidden rounded-full bg-surface-2">
-          <i className="block h-full rounded-full bg-primary transition-[width] duration-[900ms] ease-out" style={{ width: shown ? `${Math.min(1, share) * 100}%` : 0 }} />
-        </div>
-      )}
-      <span className="num text-xs text-muted">{sub}</span>
-    </div>
-  )
-  return (
-    <section data-shot="kpi" className="rise grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border md:grid-cols-5">
-      <div className="col-span-2 flex min-w-0 flex-col gap-2 bg-surface p-4 sm:p-5 md:col-span-1">
-        <span className="text-xs text-muted" title={k.hints.totalPnl}>
-          {k.totalPnl}
-        </span>
-        <span className={`num truncate text-[28px] leading-tight font-semibold ${pnlClass(s.totalPnl)}`}>{formatPnl(pnl)}</span>
-        <span className="text-xs text-muted">
-          {fmt(k.trades, { n: s.closed })}
-          {toDeposit ? ` · ${toDeposit}` : ''}
-        </span>
-      </div>
-      {cell(k.tradeWinrate, k.hints.tradeWinrate, formatPercent(s.winrate), s.winrate, fmt(k.winLoss, { w: s.wins, l: s.losses }))}
-      {cell(k.profitFactor, k.hints.profitFactor, formatRatio(s.profitFactor), s.profitFactor === null ? null : s.profitFactor / 3, k.profitFactorHint)}
-      {cell(k.dayWinrate, k.hints.dayWinrate, formatPercent(score.dayWinrate), score.dayWinrate, fmt(k.dayWinLoss, { w: score.dayWins, l: score.dayLosses }))}
-      {cell(k.avgWinLoss, k.hints.avgWinLoss, ratio === null ? '—' : formatNumber(ratio, 2), ratio === null ? null : ratio / 3, `${formatPnl(s.avgWin)} / ${formatPnl(s.avgLoss)}`)}
-    </section>
-  )
-}
-
 /** «Таблетки» с количеством под шкалой (в прибыль / в убыток) */
 function Counts({ a, b }: { a: number; b: number }) {
   return (
@@ -244,7 +221,7 @@ export function ScoreCard({ score, trades }: { score: TraderScore; trades: numbe
   const sc = t.dashboard.score
   const shown = useShown()
   const total = useCountUp(score.total)
-  const tone = score.total >= 70 ? 'bg-profit' : score.total >= 40 ? 'bg-warning' : 'bg-loss'
+  const tone = 'bg-primary' // в тон кривой и шкал (раньше — зелёный / жёлтый / красный по уровню)
   const data = score.parts.map((p) => ({ name: sc.parts[p.key], score: p.score }))
   return (
     <section className="rise card-lift flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 [--i:1]">
@@ -309,52 +286,9 @@ export function KeyNumbers({
     rows.push([k.avgWinR, formatR(rwl.avgWinR), pnlClass(rwl.avgWinR)])
     rows.push([k.avgLossR, formatR(rwl.avgLossR), pnlClass(rwl.avgLossR)])
   }
-  if (KEYS === 'b')
-    // вариант b: плитки 2 × N — подпись мелко, цифра крупно, цвет только у знака
-    return (
-      <section data-shot="keys" className="rise card-lift rounded-lg border border-border bg-surface p-4 [--i:3]">
-        <h2 className="font-semibold">{k.keyNumbers}</h2>
-        <dl className="mt-3 grid grid-cols-2 gap-2">
-          {rows.map(([label, value, tone]) => (
-            <div key={label} className="rounded-md bg-surface-2/60 px-3 py-2.5">
-              <dt className="text-xs text-muted">{label}</dt>
-              <dd className={`num mt-1 text-lg font-semibold ${tone === 'text-loss' ? 'text-loss' : 'text-text'}`}>{value}</dd>
-            </div>
-          ))}
-        </dl>
-      </section>
-    )
-  if (KEYS === 'c') {
-    // вариант c: группы «Сделки / Риск / R», цифры цветом текста, фиолетовая метка у группы
-    const groups: [string, [string, string, string][]][] = [
-      [k.groups.trades, rows.slice(0, 3)],
-      [k.groups.risk, rows.filter(([l]) => l === k.maxDrawdown || l === k.recoveredIn || l === k.lasting)],
-      [k.groups.r, rows.filter(([l]) => l === k.avgR || l === k.avgWinR || l === k.avgLossR)],
-    ]
-    return (
-      <section data-shot="keys" className="rise card-lift rounded-lg border border-border bg-surface p-4 [--i:3]">
-        <h2 className="font-semibold">{k.keyNumbers}</h2>
-        <div className="mt-3 grid gap-4">
-          {groups.map(([title, list]) => (
-            <div key={title}>
-              <h3 className="flex items-center gap-2 text-[11px] font-semibold tracking-wide text-muted uppercase">
-                <i className="h-3 w-0.5 rounded-full bg-primary" aria-hidden />
-                {title}
-              </h3>
-              <dl className="mt-1.5 text-sm">
-                {list.map(([label, value]) => (
-                  <div key={label} className="flex items-baseline justify-between gap-4 py-1.5">
-                    <dt className="text-muted">{label}</dt>
-                    <dd className="num font-semibold">{value}</dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
-          ))}
-        </div>
-      </section>
-    )
-  }
+  if (KEYS === 'd') return <KeysDiverging summary={s} rwl={rwl} ddValue={ddValue} ddDays={ddDays} recovered={period?.recovery !== null} />
+  if (KEYS === 'e') return <KeysReport summary={s} rwl={rwl} ddValue={ddValue} ddDays={ddDays} recovered={period?.recovery !== null} />
+  if (KEYS === 'f') return <KeysPanels summary={s} rwl={rwl} ddValue={ddValue} ddDays={ddDays} recovered={period?.recovery !== null} />
   return (
     <section data-shot="keys" className="rise card-lift rounded-lg border border-border bg-surface p-4 [--i:3]">
       <h2 className="font-semibold">{k.keyNumbers}</h2>
@@ -367,6 +301,189 @@ export function KeyNumbers({
         ))}
       </dl>
       {s.rCount === 0 && <p className="mt-1 text-xs text-muted">{k.avgRNone}</p>}
+    </section>
+  )
+}
+
+type KeysProps = {
+  summary: Summary
+  rwl: { avgWinR: number | null; avgLossR: number | null }
+  ddValue: string
+  ddDays: number | null
+  recovered: boolean
+}
+
+/** Вариант d: у каждой цифры — полоска от нуля (вправо фиолетовая — плюс, влево серая — минус) */
+function KeysDiverging({ summary: s, rwl, ddValue, ddDays, recovered }: KeysProps) {
+  const t = useT()
+  const k = t.dashboard.kpi
+  const shown = useShown()
+  const usd = Math.max(1e-9, ...[s.expectancy, s.best, s.worst].map((v) => Math.abs(v ?? 0)))
+  const r = Math.max(1e-9, ...[s.avgR, rwl.avgWinR, rwl.avgLossR].map((v) => Math.abs(v ?? 0)))
+  const row = (label: string, value: string, v: number | null, max: number) => {
+    const w = v === null ? 0 : (Math.abs(v) / max) * 50
+    return (
+      <div key={label} className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto] items-center gap-3 py-2 text-sm">
+        <span className="truncate text-muted">{label}</span>
+        <div className="relative h-1.5 rounded-full bg-surface-2">
+          <i className="absolute inset-y-[-3px] left-1/2 w-px bg-border" aria-hidden />
+          <i
+            className={`absolute inset-y-0 rounded-full transition-[width] duration-[900ms] ease-out ${v !== null && v < 0 ? 'right-1/2 bg-muted/50' : 'left-1/2 bg-primary'}`}
+            style={{ width: shown ? `${w}%` : 0 }}
+          />
+        </div>
+        <span className="num min-w-20 text-right font-semibold">{value}</span>
+      </div>
+    )
+  }
+  return (
+    <section data-shot="keys" className="rise card-lift rounded-lg border border-border bg-surface p-4 [--i:3]">
+      <h2 className="font-semibold">{k.keyNumbers}</h2>
+      <div className="mt-2 divide-y divide-border">
+        <div>
+          {row(k.expectancy, formatPnl(s.expectancy), s.expectancy, usd)}
+          {row(k.bestTrade, formatPnl(s.best), s.best, usd)}
+          {row(k.worstTrade, formatPnl(s.worst), s.worst, usd)}
+        </div>
+        <div>
+          {row(k.maxDrawdown, ddValue, s.maxDrawdownPct !== null ? -s.maxDrawdownPct : null, 0.5)}
+          {ddDays !== null && (
+            <div className="flex justify-between py-2 text-sm">
+              <span className="text-muted">{recovered ? k.recoveredIn : k.lasting}</span>
+              <span className="num font-semibold">{fmt(k.days, { n: ddDays })}</span>
+            </div>
+          )}
+        </div>
+        {s.rCount > 0 && (
+          <div>
+            {row(k.avgR, formatR(s.avgR), s.avgR, r)}
+            {row(k.avgWinR, formatR(rwl.avgWinR), rwl.avgWinR, r)}
+            {row(k.avgLossR, formatR(rwl.avgLossR), rwl.avgLossR, r)}
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+/** Вариант e: «отчёт» — главная цифра крупно, остальные сеткой с тонкими линиями, единицы мелко и бледно */
+function KeysReport({ summary: s, rwl, ddValue, ddDays, recovered }: KeysProps) {
+  const t = useT()
+  const k = t.dashboard.kpi
+  // «+52,25 $» → «+52,25» и «$»: единица отдельно, мельче
+  const split = (v: string) => {
+    const m = v.match(/^(.*?)\s*([$%R]|дн\.)$/)
+    return m ? [m[1], m[2]] : [v, '']
+  }
+  const cell = (label: string, value: string) => {
+    const [n, u] = split(value)
+    return (
+      <div key={label} className="border-t border-border px-1 py-3">
+        <div className="text-xs text-muted">{label}</div>
+        <div className="num mt-1 text-lg font-semibold">
+          {n}
+          {u && <span className="ml-1 text-sm font-normal text-muted">{u}</span>}
+        </div>
+      </div>
+    )
+  }
+  const [en, eu] = split(formatPnl(s.expectancy))
+  return (
+    <section data-shot="keys" className="rise card-lift rounded-lg border border-border bg-surface p-4 [--i:3]">
+      <h2 className="font-semibold">{k.keyNumbers}</h2>
+      <div className="mt-4 flex items-end justify-between gap-3 border-l-2 border-primary pl-3">
+        <div>
+          <div className="text-xs text-muted">{k.expectancy}</div>
+          <div className="num mt-1 text-3xl font-semibold">
+            {en}
+            <span className="ml-1 text-base font-normal text-muted">{eu}</span>
+          </div>
+        </div>
+        <span className="text-xs text-muted">{k.expectancyHint}</span>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-x-6">
+        {cell(k.bestTrade, formatPnl(s.best))}
+        {cell(k.worstTrade, formatPnl(s.worst))}
+        {cell(k.maxDrawdown, ddValue)}
+        {ddDays !== null ? cell(recovered ? k.recoveredIn : k.lasting, fmt(k.days, { n: ddDays })) : cell(k.avgR, formatR(s.avgR))}
+        {s.rCount > 0 && cell(k.avgWinR, formatR(rwl.avgWinR))}
+        {s.rCount > 0 && cell(k.avgLossR, formatR(rwl.avgLossR))}
+      </div>
+    </section>
+  )
+}
+
+/** Вариант f: три мини-панели с картинками — разброс сделок, глубина просадки, R выигрыша против R проигрыша */
+function KeysPanels({ summary: s, rwl, ddValue, ddDays, recovered }: KeysProps) {
+  const t = useT()
+  const k = t.dashboard.kpi
+  const shown = useShown()
+  const lo = Math.min(0, s.worst ?? 0)
+  const hi = Math.max(0, s.best ?? 0)
+  const pos = (v: number) => `${((v - lo) / (hi - lo || 1)) * 100}%`
+  const dd = s.maxDrawdownPct ?? 0
+  const win = Math.abs(rwl.avgWinR ?? 0)
+  const loss = Math.abs(rwl.avgLossR ?? 0)
+  const panel = 'rounded-md bg-surface-2/50 p-3'
+  return (
+    <section data-shot="keys" className="rise card-lift flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 [--i:3]">
+      <h2 className="font-semibold">{k.keyNumbers}</h2>
+      {/* разброс: от худшей до лучшей сделки, отметка — матожидание */}
+      <div className={panel}>
+        <div className="flex items-baseline justify-between text-xs text-muted">
+          <span>{k.worstTrade}</span>
+          <span>{k.expectancy}</span>
+          <span>{k.bestTrade}</span>
+        </div>
+        <div className="relative mt-3 h-2 rounded-full bg-surface-2">
+          <i className="absolute inset-y-0 rounded-l-full bg-muted/45" style={{ left: 0, width: pos(0) }} />
+          <i className="absolute inset-y-0 rounded-r-full bg-primary/70" style={{ left: pos(0), right: 0 }} />
+          <i className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-surface bg-primary" style={{ left: pos(s.expectancy ?? 0) }} />
+        </div>
+        <div className="num mt-2 flex items-baseline justify-between text-sm font-semibold">
+          <span className="text-muted">{formatPnl(s.worst)}</span>
+          <span>{formatPnl(s.expectancy)}</span>
+          <span>{formatPnl(s.best)}</span>
+        </div>
+      </div>
+      {/* просадка: глубина от 0 до 50 % */}
+      <div className={panel}>
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="text-xs text-muted">{k.maxDrawdown}</span>
+          <span className="num text-lg font-semibold">{ddValue}</span>
+        </div>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-2">
+          <i className="block h-full rounded-full bg-primary transition-[width] duration-[900ms] ease-out" style={{ width: shown ? `${Math.min(1, dd / 0.5) * 100}%` : 0 }} />
+        </div>
+        {ddDays !== null && (
+          <div className="mt-2 text-xs text-muted">
+            {recovered ? k.recoveredIn : k.lasting} <span className="num font-semibold text-text">{fmt(k.days, { n: ddDays })}</span>
+          </div>
+        )}
+      </div>
+      {/* R: средний выигрыш против среднего проигрыша — одна полоса из двух частей */}
+      {s.rCount > 0 && (
+        <div className={panel}>
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-xs text-muted">{k.avgR}</span>
+            <span className="num text-lg font-semibold">{formatR(s.avgR)}</span>
+          </div>
+          <div className="mt-2 flex h-1.5 gap-0.5 overflow-hidden rounded-full">
+            <i className="block bg-primary" style={{ flex: win || 1 }} />
+            <i className="block bg-muted/45" style={{ flex: loss || 1 }} />
+          </div>
+          <div className="num mt-2 flex justify-between text-xs">
+            <span>
+              <span className="text-muted">{k.avgWinR} </span>
+              {formatR(rwl.avgWinR)}
+            </span>
+            <span>
+              <span className="text-muted">{k.avgLossR} </span>
+              {formatR(rwl.avgLossR)}
+            </span>
+          </div>
+        </div>
+      )}
     </section>
   )
 }

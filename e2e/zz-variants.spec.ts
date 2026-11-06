@@ -22,9 +22,8 @@ const trades = () => {
   })
 }
 const SHOTS: [string, string, string][] = [
-  ['kpi', 'a', '[data-shot="kpi"]'], ['kpi', 'b', '[data-shot="kpi"]'], ['kpi', 'c', '[data-shot="kpi"]'],
-  ['keys', 'a', '[data-shot="keys"]'], ['keys', 'b', '[data-shot="keys"]'], ['keys', 'c', '[data-shot="keys"]'],
-  ['bars', 'a', 'bars'], ['bars', 'b', 'bars'], ['bars', 'c', 'bars'], ['bars', 'd', 'bars'],
+  ['keys', 'd', '[data-shot="keys"]'], ['keys', 'e', '[data-shot="keys"]'], ['keys', 'f', '[data-shot="keys"]'],
+  ['page', 'a', 'page'],
 ]
 for (const [block, v, sel] of SHOTS) {
   test(`${block}-${v}`, async ({ page, db }) => {
@@ -35,7 +34,7 @@ for (const [block, v, sel] of SHOTS) {
     await fakeSupabase(page, db)
     await page.goto('dashboard')
     await page.waitForTimeout(2500)
-    const el = sel === 'bars' ? page.getByRole('heading', { name: 'PnL по дням' }).locator('xpath=ancestor::div[contains(@class,"rise")][1]') : page.locator(sel)
-    await el.screenshot({ path: `${OUT}/${block}-${v}.png` })
+    if (sel === 'page') await page.screenshot({ path: `${OUT}/${block}-${v}.png`, fullPage: true })
+    else await page.locator(sel).screenshot({ path: `${OUT}/${block}-${v}.png` })
   })
 }

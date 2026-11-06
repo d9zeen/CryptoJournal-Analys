@@ -28,10 +28,6 @@ import { useMediaQuery } from '@/lib/useMediaQuery'
 import { formatUnit, inUnit, shortDate, withTime, type EquityUnit, type TimedPoint } from './equityTime'
 import type { BarUnit, DayPnl, EquityPoint } from '@/lib/calc/stats'
 import { prefersReducedMotion } from '@/lib/motion'
-import { previewVariant } from '@/lib/designPreview'
-
-/* ВРЕМЕННО: варианты «PnL по дням» для выбора владельцем (см. lib/designPreview.ts) */
-const BARS = previewVariant('bars')
 
 const C = {
   profit: 'var(--color-profit)',
@@ -174,10 +170,10 @@ export function DailyPnlChart({ days, unit = 'day', height = HEIGHT }: { days: D
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={days} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-        <CartesianGrid stroke={C.grid} strokeDasharray={BARS === 'a' ? '3 3' : undefined} vertical={false} />
+        <CartesianGrid stroke={C.grid} vertical={false} />
         <XAxis dataKey="date" {...axisProps} tickFormatter={labels.tick} minTickGap={16} />
         <YAxis {...axisProps} width={56} tickFormatter={formatUsdShort} />
-        <ReferenceLine y={0} stroke={C.muted} strokeOpacity={BARS === 'a' ? 0.5 : 0.45} strokeDasharray={BARS === 'a' ? undefined : '4 4'} />
+        <ReferenceLine y={0} stroke={C.muted} strokeOpacity={0.45} strokeDasharray="4 4" />
         <Tooltip
           cursor={{ fill: C.grid, fillOpacity: 0.4 }}
           content={(props) => {
@@ -192,15 +188,11 @@ export function DailyPnlChart({ days, unit = 'day', height = HEIGHT }: { days: D
             )
           }}
         />
-        <Bar dataKey="pnl" radius={BARS === 'c' ? 2 : [4, 4, 0, 0]} maxBarSize={BARS === 'c' ? 10 : 28} {...anim()}>
-          {days.map((d) => {
-            const up = d.pnl >= 0
-            // a — зелёный / красный; b — фиолетовый / приглушённый серый; c — тонкие мягкие зелёный / красный; d — фиолетовый / фиолетовый контур
-            if (BARS === 'b') return <Cell key={d.date} fill={up ? C.primary : C.muted} fillOpacity={up ? 1 : 0.45} />
-            if (BARS === 'c') return <Cell key={d.date} fill={up ? C.profit : C.loss} fillOpacity={0.7} />
-            if (BARS === 'd') return <Cell key={d.date} fill={up ? C.primary : 'transparent'} stroke={up ? 'none' : C.primary} strokeWidth={1.2} />
-            return <Cell key={d.date} fill={up ? C.profit : C.loss} />
-          })}
+        {/* в тон кривой (выбор владельца 06.11.2026): прибыльный день — фиолетовый, убыточный — приглушённый серый */}
+        <Bar dataKey="pnl" radius={[4, 4, 0, 0]} maxBarSize={28} {...anim()}>
+          {days.map((d) => (
+            <Cell key={d.date} fill={d.pnl >= 0 ? C.primary : C.muted} fillOpacity={d.pnl >= 0 ? 1 : 0.45} />
+          ))}
         </Bar>
       </BarChart>
     </ResponsiveContainer>
