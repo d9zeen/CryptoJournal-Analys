@@ -23,14 +23,14 @@
   --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   /* Фон и поверхности (тёмная тема) */
-  --color-bg: #0a0c12;          /* фон страницы */
-  --color-surface: #11141c;     /* карточки, панели */
-  --color-surface-2: #181c27;   /* поля ввода, ховеры */
-  --color-border: #252a39;
+  --color-bg: #17181b;          /* фон страницы: графит, без синевы (выбран 06.11.2026) */
+  --color-surface: #1f2024;     /* карточки, панели */
+  --color-surface-2: #27292e;   /* поля ввода, ховеры */
+  --color-border: #33353b;
 
   /* Текст */
-  --color-text: #e8eaf3;
-  --color-muted: #a3a9bd;   /* подписи: светлее, чтобы читались на тёмном фоне */
+  --color-text: #ececef;
+  --color-muted: #a6a8b0;   /* подписи: светлее, чтобы читались на тёмном фоне */
 
   /* Акценты */
   --color-primary: #8d78ff;       /* фиолетовый: кнопки, ссылки */
