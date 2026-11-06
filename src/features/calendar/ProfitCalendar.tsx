@@ -55,8 +55,9 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
   const m = cal.month
 
   return (
-    // широкий экран: блок по центру с небольшими полями слева и справа (до 1760 px), высота — около 3/4 экрана
-    <div className="rise mx-auto grid w-full max-w-[1760px] gap-4 xl:h-[78dvh] xl:min-h-[640px] xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
+    // широкий экран (выбор владельца — вариант 2): высота ~86 % экрана, по краям небольшие поля (до 2000 px по центру);
+    // панель итогов справа той же высоты, что и календарь
+    <div className="rise mx-auto grid w-full max-w-[2000px] gap-4 xl:h-[86dvh] xl:min-h-[680px] xl:grid-cols-[minmax(0,1fr)_360px]">
       <section className="flex flex-col rounded-lg border border-border bg-surface p-4 sm:p-5 xl:h-full">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-baseline gap-3">
@@ -149,7 +150,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
     const wdMax = Math.max(1e-9, ...sum.weekdays.map((w) => Math.abs(w.pnl)))
     const dayShare = sum.upDays + sum.downDays ? sum.upDays / (sum.upDays + sum.downDays) : 0
     return (
-      <aside className="flex flex-col gap-3">
+      <aside className="flex flex-col gap-3 xl:h-full">
         <section className="rounded-lg border border-border bg-surface p-4">
           {/* «Результат» и цифра — соседи: так их читают экранные читалки и находит тест */}
           <div>
@@ -188,9 +189,9 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
               </dl>
             </section>
 
-            <section className="rounded-lg border border-border bg-surface p-4">
+            <section className="flex flex-col rounded-lg border border-border bg-surface p-4 xl:flex-1">
               <h2 className="text-xs text-muted">{c.byWeek}</h2>
-              <div className="mt-2 grid gap-1.5">
+              <div className="mt-2 grid gap-1.5 xl:flex-1 xl:content-evenly">
                 {sum.weeks.map((w, i) =>
                   w === null ? null : (
                     <div key={i} className="grid grid-cols-[72px_minmax(0,1fr)_auto] items-center gap-2 text-xs">
@@ -203,9 +204,10 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
               </div>
             </section>
 
-            <section className="rounded-lg border border-border bg-surface p-4">
+            {/* «По неделям» и «По дням недели» делят остаток высоты — панель доходит до низа календаря */}
+            <section className="flex flex-col rounded-lg border border-border bg-surface p-4 xl:flex-1">
               <h2 className="text-xs text-muted">{c.byWeekday}</h2>
-              <div className="mt-3 grid h-24 grid-cols-7 items-end gap-1.5">
+              <div className="mt-3 grid h-24 grid-cols-7 items-end gap-1.5 xl:mt-auto xl:h-40">
                 {sum.weekdays.map((w, i) => (
                   <div key={i} className="flex h-full flex-col items-center justify-end gap-1" title={w.count ? `${t.period.weekdaysShort[i]}: ${formatPnl(w.pnl)}` : undefined}>
                     <div className="flex w-full flex-1 items-end">
