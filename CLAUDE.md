@@ -57,13 +57,15 @@ src/
                        pnl.ts, plan.ts (новые/дубли/лимит), registry.ts (список бирж) + тесты
   lib/export/          выгрузка сделок в CSV (+ тесты); features/settings/dataApi.ts — выгрузка и удаление аккаунта
   components/ui/       базовые компоненты (Button, Input, Card, Alert, Spinner)
-  layout/AppLayout.tsx левая панель-меню (иконки, подпись при наведении) + шапка; на телефоне — нижнее меню с подписями
+  layout/AppLayout.tsx левая панель: на широком экране (lg) — логотип, пункты с подписями, внизу карточка тарифа с лимитом, тема, выход;
+                       на планшете — только иконки (подпись при наведении) + шапка; на телефоне — шапка и нижнее меню с подписями
   lib/sync/            подключения бирж по API: run.ts (общий движок), bybit.ts (closed-pnl), hyperliquid.ts (исполнения кошелька),
                        polymarket.ts (закрытые позиции по адресу; рынок prediction: цена исхода 0…1, проигрыш — выход 0, название — trades.title) + тесты
+  features/calendar/   вкладка «Календарь» (/calendar): календарь прибыли (ProfitCalendar, lib/calc/calendar.ts); на дашборде его больше нет
   features/landing/    главная для гостей «/» (вошедшего — в дашборд): живое демо на тех же виджетах (demo.ts), возможности, тарифы (PlansTable), вопросы
   features/<раздел>/   auth, dashboard, admin, connections (подключённые биржи, автосинхронизация) (админка: пользователи, Pro, сброс лимита), analysis (вкладка «Разбор»: таблицы по сетапам, ошибкам, парам, эмоциям, Long/Short), trades, import, settings
                        dashboard (в духе TradeZella): Widgets.tsx (ряд показателей со шкалами на SVG, «Оценка трейдера», «Ключевые цифры»),
-                       charts.tsx (Recharts, лениво: кривая капитала зелёная/красная от нуля, PnL по дням, радар оценки), ProfitCalendar (lib/calc/calendar.ts),
+                       charts.tsx (Recharts, лениво: кривая капитала зелёная/красная от нуля, PnL по дням, радар оценки); заголовка «Дашборд» на экране нет (sr-only),
                        EquityTableDialog (таблица сделок в <dialog>), equityTime.ts (время точек, $ / %)
 supabase/migrations/   SQL-миграции, нумерация 0001_..., 0002_...
 supabase/tests/        заглушка Supabase для чистого Postgres + тесты RLS (rls_test.sql);

@@ -72,7 +72,7 @@ export function AnalysisPage() {
           </div>
         </Card>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 min-[1700px]:grid-cols-3">
           <GroupTable title={c.setups} rows={toRows(stats.setups, names(setups), c.noSetup)} />
           <GroupTable
             title={c.mistakes}

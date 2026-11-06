@@ -1,5 +1,5 @@
 /**
- * «Календарь прибыли» на дашборде: месяц сеткой, по дням — PnL, сделки и винрейт; справа — итог недели; внизу — итог месяца.
+ * «Календарь прибыли» (отдельная вкладка /calendar): месяц сеткой, по дням — PnL, сделки и винрейт; справа — итог недели; внизу — итог месяца.
  * Свой месяц (стрелки), не зависит от фильтра периода. Дни соседних месяцев — заштрихованы, данные бледные.
  * На телефоне клетки компактные (PnL коротко), итог недели скрыт — итог месяца внизу.
  */
@@ -48,9 +48,9 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
   const m = cal.month
 
   return (
-    <Card className="rise !p-4 [--i:3]">
+    <Card className="rise !p-4 sm:!p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-semibold">{c.title}</h2>
+        <h1 className="text-lg font-semibold">{c.title}</h1>
         <div className="flex items-center gap-1 rounded-xl border border-border bg-surface-2/60 p-1">
           <NavBtn dir={-1} label={c.prev} onClick={() => shift(-1)} />
           <span className="min-w-36 text-center text-sm font-semibold">{monthLabel(view.y, view.m)}</span>
