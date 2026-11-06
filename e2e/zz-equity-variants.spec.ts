@@ -12,7 +12,7 @@ const PATH: [string, number][] = [
   ['2026-10-14', -4100], ['2026-10-17', 650], ['2026-10-19', -480], ['2026-10-21', -760], ['2026-10-25', -200], ['2026-10-29', -650],
   ['2026-11-01', -700], ['2026-11-04', -150],
 ]
-for (const v of ['a', 'b', 'c', 'd']) {
+for (const v of (process.env.EQ_VARIANTS ?? 'a,b,c,d').split(',')) {
   test(`equity-${v}`, async ({ page, db }) => {
     test.skip(!OUT)
     await page.setViewportSize({ width: 1440, height: 1100 })

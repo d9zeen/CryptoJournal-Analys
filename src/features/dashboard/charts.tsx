@@ -10,6 +10,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Line,
   PolarAngleAxis,
   PolarGrid,
   PolarRadiusAxis,
@@ -58,15 +59,28 @@ function Tip({ children }: { children: ReactNode }) {
 type TipProps<T> = { active?: boolean; payload?: ReadonlyArray<{ payload?: T }> }
 const pointOf = <T,>(p: TipProps<T>): T | undefined => (p.active ? p.payload?.[0]?.payload : undefined)
 
-type EqRow = TimedPoint & { v: number; trade: number; fromPeak: number; i: number }
+type EqRow = TimedPoint & { v: number; trade: number; fromPeak: number; i: number; peak: number }
 
 /** Как выглядит кривая капитала. Варианты для выбора владельцем (временно переключаются через localStorage «cj-eq-variant»). */
-export type EquityVariant = { color: 'profit' | 'primary'; glow: boolean; axis: 'time' | 'trade' }
+export type EquityVariant = {
+  color: 'profit' | 'primary'
+  glow: boolean
+  axis: 'time' | 'trade'
+  /** заливка под линией: градиент, ровная слабая или без заливки */
+  fill?: 'gradient' | 'flat' | 'none'
+  /** линия пика (максимум счёта) и затенённая просадка между пиком и кривой */
+  peak?: boolean
+  /** итог на плашке у конца линии, как цена на графике биржи */
+  tag?: boolean
+}
 export const EQUITY_VARIANTS: Record<string, EquityVariant> = {
   a: { color: 'profit', glow: false, axis: 'time' },
   b: { color: 'profit', glow: true, axis: 'time' },
   c: { color: 'profit', glow: false, axis: 'trade' },
   d: { color: 'primary', glow: false, axis: 'trade' },
+  e: { color: 'primary', glow: false, axis: 'trade', fill: 'flat', tag: true },
+  f: { color: 'primary', glow: false, axis: 'trade', fill: 'flat', tag: true, peak: true },
+  g: { color: 'primary', glow: false, axis: 'trade', fill: 'none', tag: true, peak: true },
 }
 function currentVariant(): EquityVariant {
   try {
@@ -90,7 +104,7 @@ export function EquityChart({ points, unit, balance, height = HEIGHT + 40 }: { p
     return withTime(points).map((p, i) => {
       const v = inUnit(p.cum, unit, balance)
       peak = Math.max(peak, v)
-      return { ...p, i, v, trade: inUnit(p.pnl, unit, balance), fromPeak: v - peak }
+      return { ...p, i, v, peak, trade: inUnit(p.pnl, unit, balance), fromPeak: v - peak }
     })
   }, [points, unit, balance])
   const last = data[data.length - 1]
@@ -103,8 +117,8 @@ export function EquityChart({ points, unit, balance, height = HEIGHT + 40 }: { p
         <AreaChart data={data} margin={{ top: 22, right: wide ? 104 : 16, bottom: 0, left: 0 }}>
           <defs>
             <linearGradient id={`${id}f`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset={0} stopColor={color} stopOpacity={0.26} />
-              <stop offset={1} stopColor={color} stopOpacity={0} />
+              <stop offset={0} stopColor={color} stopOpacity={variant.fill === 'flat' ? 0.1 : 0.26} />
+              <stop offset={1} stopColor={color} stopOpacity={variant.fill === 'flat' ? 0.1 : 0} />
             </linearGradient>
             {/* мягкое свечение линии её же цветом */}
             <filter id={`${id}g`} x="-5%" y="-20%" width="110%" height="140%">
@@ -148,12 +162,19 @@ export function EquityChart({ points, unit, balance, height = HEIGHT + 40 }: { p
               )
             }}
           />
+          {variant.peak && (
+            <>
+              {/* просадка: полоса между пиком и кривой */}
+              <Area type="monotone" dataKey={(d: EqRow) => [d.v, d.peak]} stroke="none" fill={C.muted} fillOpacity={0.12} isAnimationActive={false} activeDot={false} />
+              <Line type="monotone" dataKey="peak" stroke={C.muted} strokeOpacity={0.55} strokeWidth={1} strokeDasharray="3 4" dot={false} activeDot={false} isAnimationActive={false} />
+            </>
+          )}
           <Area
             type="monotone"
             dataKey="v"
             baseValue="dataMin"
             stroke={color}
-            fill={`url(#${id}f)`}
+            fill={variant.fill === 'none' || variant.peak ? 'none' : `url(#${id}f)`}
             strokeWidth={2}
             dot={false}
             activeDot={{ r: 5, fill: color, stroke: 'var(--color-surface)', strokeWidth: 2 }}
@@ -167,7 +188,14 @@ export function EquityChart({ points, unit, balance, height = HEIGHT + 40 }: { p
               fill={color}
               stroke="var(--color-surface)"
               strokeWidth={2}
-              label={{
+              label={
+                variant.tag && wide
+                  ? (props: unknown) => {
+                      // viewBox точки — квадрат вокруг неё: правый край и середина по высоте
+                      const vb = (props as { viewBox?: { x?: number; y?: number; width?: number; height?: number } }).viewBox
+                      return <PriceTag x={(vb?.x ?? 0) + (vb?.width ?? 0)} y={(vb?.y ?? 0) + (vb?.height ?? 0) / 2} text={formatUnit(last.v, unit)} color={color} />
+                    }
+                  : {
                 value: formatUnit(last.v, unit),
                 position: wide ? 'right' : 'top',
                 offset: 10,
@@ -176,12 +204,26 @@ export function EquityChart({ points, unit, balance, height = HEIGHT + 40 }: { p
                 fontWeight: 600,
                 fontFamily: 'var(--font-sans)',
                 ...(wide ? {} : { textAnchor: 'end' }),
-              }}
+              }
+              }
             />
           )}
         </AreaChart>
       </ResponsiveContainer>
     </div>
+  )
+}
+
+/** Итог на плашке справа от последней точки — как текущая цена на графике биржи */
+function PriceTag({ x, y, text, color }: { x: number; y: number; text: string; color: string }) {
+  const w = text.length * 7 + 16
+  return (
+    <g>
+      <rect x={x + 10} y={y - 11} width={w} height={22} rx={4} fill={color} />
+      <text x={x + 10 + w / 2} y={y + 4} textAnchor="middle" fontSize={12} fontWeight={600} fontFamily="var(--font-sans)" fill="var(--color-on-primary)">
+        {text}
+      </text>
+    </g>
   )
 }
 
