@@ -6,6 +6,7 @@ import { lazy, Suspense, useMemo } from 'react'
 import { Link } from 'react-router'
 import { plural, useT } from '@/i18n'
 import { Logo } from '@/components/Logo'
+import { useAuth } from '@/features/auth/AuthProvider'
 import { PlansTable } from '@/features/plans/PlansPage'
 import { KpiRow, ScoreCard } from '@/features/dashboard/Widgets'
 import { formatPnl, pnlClass } from '@/lib/format'
@@ -25,6 +26,7 @@ export function LandingPage() {
   const t = useT()
   const l = t.landing
   const demo = useMemo(() => demoAccount(), [])
+  const { user } = useAuth()
 
   return (
     <div className="min-h-dvh">
@@ -46,14 +48,23 @@ export function LandingPage() {
             </a>
           </nav>
           <div className="flex items-center gap-2">
-            <Link to="/login" className={`${btnSecondary} !px-3 !py-2`}>
-              {l.login}
-            </Link>
-            <span className="hidden sm:contents">
-              <Link to="/register" className={`${btnPrimary} !px-3 !py-2`}>
-                {l.start}
+            {user ? (
+              // уже вошёл (смотрит /welcome) — одна кнопка в дневник
+              <Link to="/dashboard" className={`${btnPrimary} !px-3 !py-2`}>
+                {l.open}
               </Link>
-            </span>
+            ) : (
+              <>
+                <Link to="/login" className={`${btnSecondary} !px-3 !py-2`}>
+                  {l.login}
+                </Link>
+                <span className="hidden sm:contents">
+                  <Link to="/register" className={`${btnPrimary} !px-3 !py-2`}>
+                    {l.start}
+                  </Link>
+                </span>
+              </>
+            )}
           </div>
         </div>
       </header>

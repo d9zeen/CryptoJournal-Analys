@@ -58,6 +58,8 @@ function Home() {
 
 const router = createBrowserRouter([
   { path: '/', element: <Home /> },
+  // главная «как её видит гость» — открывается всегда, даже если уже вошёл (посмотреть / показать другим)
+  { path: '/welcome', element: <LandingPage /> },
   // Только для незалогиненных
   {
     element: <GuestOnly />,
