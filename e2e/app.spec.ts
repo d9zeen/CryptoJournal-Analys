@@ -234,3 +234,21 @@ test('страница тарифов: Basic, Pro, Pro Plus; текущий та
   await page.getByRole('button', { name: 'Хочу этот тариф' }).click()
   await expect(page.getByText(/напиши администратору сайта/)).toBeVisible()
 })
+
+test('главная: гость видит страницу о сервисе с живым демо, вошедший — сразу дашборд', async ({ page, db }) => {
+  await fakeSupabase(page, db, { signedIn: false })
+  await page.goto('')
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('в одном дневнике')
+  await expect(page.getByText('Реализованный PnL')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Тарифы' })).toBeVisible()
+  await page.getByRole('link', { name: 'Войти' }).first().click()
+  await expect(page).toHaveURL(/\/login$/)
+})
+
+test('главная для вошедшего — дашборд', async ({ page, db }) => {
+  db.trades = Array.from({ length: 3 }, (_, i) => makeTrade(i))
+  await fakeSupabase(page, db)
+  await page.goto('')
+  await expect(page).toHaveURL(/\/dashboard$/)
+  await expect(page.getByText('Оценка трейдера', { exact: true })).toBeVisible()
+})

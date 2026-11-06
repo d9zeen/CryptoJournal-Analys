@@ -2,8 +2,26 @@
  * Графики дашборда (Recharts). Файл грузится отдельно (lazy), чтобы не утяжелять первый экран.
  * Цвета — только CSS-переменные из theme.css.
  */
-import { useMemo, type ReactNode } from 'react'
-import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { useId, useMemo, type ReactNode } from 'react'
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  PolarAngleAxis,
+  PolarGrid,
+  PolarRadiusAxis,
+  Radar,
+  RadarChart,
+  ReferenceDot,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { fmt, useT } from '@/i18n'
 import { formatDateTime, formatDay, formatDayShort, formatNumber, formatPnl, formatUsdShort, pnlClass } from '@/lib/format'
 import { useMediaQuery } from '@/lib/useMediaQuery'
@@ -43,10 +61,11 @@ const pointOf = <T,>(p: TipProps<T>): T | undefined => (p.active ? p.payload?.[0
 type EqRow = TimedPoint & { v: number; trade: number; fromPeak: number }
 
 /**
- * Кривая капитала: гладкая линия цветом текста, без заливки и свечения.
+ * Кривая капитала (как «Daily net cumulative P&L» в TradeZella): выше нуля — зелёная с заливкой, ниже — красная.
+ * Цвет меняется ровно на нуле: градиент с границей в точке, где ось Y проходит через 0.
  * Ось X — даты (расстояние между точками = реальное время), подпись итога у последней точки.
  */
-export function EquityChart({ points, unit, balance }: { points: EquityPoint[]; unit: EquityUnit; balance: number | null }) {
+export function EquityChart({ points, unit, balance, height = HEIGHT + 40 }: { points: EquityPoint[]; unit: EquityUnit; balance: number | null; height?: number }) {
   const t = useT()
   const wide = useMediaQuery('(min-width: 640px)')
   const data = useMemo<EqRow[]>(() => {
@@ -58,11 +77,31 @@ export function EquityChart({ points, unit, balance }: { points: EquityPoint[]; 
     })
   }, [points, unit, balance])
   const last = data[data.length - 1]
+  const id = useId().replace(/:/g, '')
+  // где по высоте проходит ноль (0 — наверху, 1 — внизу)
+  const zero = useMemo(() => {
+    const vs = data.map((d) => d.v)
+    const hi = Math.max(0, ...vs)
+    const lo = Math.min(0, ...vs)
+    return hi - lo > 0 ? hi / (hi - lo) : 1
+  }, [data])
   const yTick = (v: number) => (unit === 'usd' ? formatUsdShort(v) : `${formatNumber(v, 0)} %`)
   return (
     <div>
-      <ResponsiveContainer width="100%" height={HEIGHT + 40}>
-        <LineChart data={data} margin={{ top: 22, right: wide ? 104 : 16, bottom: 0, left: 0 }}>
+      <ResponsiveContainer width="100%" height={height}>
+        <AreaChart data={data} margin={{ top: 22, right: wide ? 104 : 16, bottom: 0, left: 0 }}>
+          <defs>
+            <linearGradient id={`${id}f`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset={0} stopColor={C.profit} stopOpacity={0.32} />
+              <stop offset={zero} stopColor={C.profit} stopOpacity={0.04} />
+              <stop offset={zero} stopColor={C.loss} stopOpacity={0.04} />
+              <stop offset={1} stopColor={C.loss} stopOpacity={0.32} />
+            </linearGradient>
+            <linearGradient id={`${id}s`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset={zero} stopColor={C.profit} />
+              <stop offset={zero} stopColor={C.loss} />
+            </linearGradient>
+          </defs>
           <CartesianGrid stroke={C.grid} vertical={false} />
           <XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} {...axisProps} tickFormatter={shortDate} minTickGap={40} />
           <YAxis {...axisProps} width={60} tickFormatter={yTick} />
@@ -92,10 +131,12 @@ export function EquityChart({ points, unit, balance }: { points: EquityPoint[]; 
               )
             }}
           />
-          <Line
+          <Area
             type="monotone"
             dataKey="v"
-            stroke="var(--color-text)"
+            baseValue={0}
+            stroke={`url(#${id}s)`}
+            fill={`url(#${id}f)`}
             strokeWidth={2}
             dot={false}
             activeDot={{ r: 5, fill: 'var(--color-text)', stroke: 'var(--color-surface)', strokeWidth: 2 }}
@@ -121,7 +162,7 @@ export function EquityChart({ points, unit, balance }: { points: EquityPoint[]; 
               }}
             />
           )}
-        </LineChart>
+        </AreaChart>
       </ResponsiveContainer>
     </div>
   )
@@ -135,11 +176,11 @@ function barLabels(unit: BarUnit, t: ReturnType<typeof useT>) {
   return { tick: formatDayShort, title: formatDay }
 }
 
-export function DailyPnlChart({ days, unit = 'day' }: { days: DayPnl[]; unit?: BarUnit }) {
+export function DailyPnlChart({ days, unit = 'day', height = HEIGHT }: { days: DayPnl[]; unit?: BarUnit; height?: number }) {
   const t = useT()
   const labels = barLabels(unit, t)
   return (
-    <ResponsiveContainer width="100%" height={HEIGHT}>
+    <ResponsiveContainer width="100%" height={height}>
       <BarChart data={days} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
         <CartesianGrid stroke={C.grid} strokeDasharray="3 3" vertical={false} />
         <XAxis dataKey="date" {...axisProps} tickFormatter={labels.tick} minTickGap={16} />
@@ -165,6 +206,20 @@ export function DailyPnlChart({ days, unit = 'day' }: { days: DayPnl[]; unit?: B
           ))}
         </Bar>
       </BarChart>
+    </ResponsiveContainer>
+  )
+}
+
+/** Радар «Оценки трейдера»: шесть показателей по 0…100 */
+export function ScoreRadar({ data }: { data: { name: string; score: number }[] }) {
+  return (
+    <ResponsiveContainer width="100%" height={220}>
+      <RadarChart data={data} outerRadius="72%" margin={{ top: 4, right: 24, bottom: 4, left: 24 }}>
+        <PolarGrid stroke={C.grid} />
+        <PolarAngleAxis dataKey="name" tick={{ fill: C.muted, fontSize: 10 }} />
+        <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
+        <Radar dataKey="score" stroke={C.primary} fill={C.primary} fillOpacity={0.28} strokeWidth={2} {...anim()} />
+      </RadarChart>
     </ResponsiveContainer>
   )
 }

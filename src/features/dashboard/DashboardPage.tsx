@@ -21,11 +21,13 @@ import {
   summarize,
   type StatTrade,
 } from '@/lib/calc/stats'
-import { SummaryStrip } from './SummaryStrip'
+import { KeyNumbers, KpiRow, ScoreCard } from './Widgets'
+import { traderScore } from '@/lib/calc/score'
 import { ProfitCalendar } from './ProfitCalendar'
 import { EquityTableDialog } from './EquityTableDialog'
 import type { EquityUnit } from './equityTime'
 import { Segmented } from '@/components/ui/Segmented'
+import { useMediaQuery } from '@/lib/useMediaQuery'
 
 // Recharts тяжёлый — грузим графики отдельным файлом
 const EquityChart = lazy(() => import('./charts').then((m) => ({ default: m.EquityChart })))
@@ -55,7 +57,7 @@ export function DashboardPage() {
       equity: downsampleEquity(curve),
       period: drawdownPeriod(curve),
       rwl: rWinLoss(closed),
-      bars: pnlBars(pnlByDay(closed, tz)),
+      days: pnlByDay(closed, tz),
     }
   }, [trades, profile?.starting_balance, tz])
 
@@ -64,8 +66,12 @@ export function DashboardPage() {
   const [eqUnitRaw, setEqUnit] = useState<EquityUnit>('usd')
   const eqUnit: EquityUnit = balance ? eqUnitRaw : 'usd' // % без депозита не посчитать
   const [tableOpen, setTableOpen] = useState(false)
+  // на широком экране графики стоят рядом с «Оценкой» и «Ключевыми цифрами» — делаем их выше, без пустоты снизу
+  const wide = useMediaQuery('(min-width: 1024px)')
 
   const s = stats.summary
+  const score = useMemo(() => traderScore(stats.summary, stats.days), [stats])
+  const bars = useMemo(() => pnlBars(stats.days), [stats.days])
 
   return (
     <div className="flex flex-col gap-4">
@@ -92,11 +98,12 @@ export function DashboardPage() {
         </Card>
       ) : (
         <>
-          {/* «Лента»: PnL с мини-кривой, винрейт, profit factor, средний R */}
-          <SummaryStrip summary={s} curve={stats.curve} period={stats.period} startingBalance={balance} rwl={stats.rwl} />
+          {/* верхний ряд: PnL, винрейт сделок, profit factor, винрейт дней, выигрыш / проигрыш */}
+          <KpiRow summary={s} score={score} startingBalance={balance} />
 
-          <div className="grid gap-3 xl:grid-cols-2">
-            <Card className="rise !p-4 [--i:1]">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] xl:grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)]">
+            <ScoreCard score={score} trades={s.closed} />
+            <Card className="rise !p-4 [--i:2]">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h2 className="font-semibold">{ch.equity}</h2>
@@ -120,12 +127,16 @@ export function DashboardPage() {
               </div>
               <div className="mt-3 -ml-2">
                 <Suspense fallback={<div className="flex h-[260px] items-center justify-center text-sm text-muted">{t.common.loading}</div>}>
-                  <EquityChart points={stats.equity} unit={eqUnit} balance={balance} />
+                  <EquityChart points={stats.equity} unit={eqUnit} balance={balance} height={wide ? 420 : 260} />
                 </Suspense>
               </div>
             </Card>
-            <ChartCard i={2} title={stats.bars.unit === 'month' ? t.dashboard.charts.monthly : stats.bars.unit === 'week' ? t.dashboard.charts.weekly : t.dashboard.charts.daily}>
-              <DailyPnlChart days={stats.bars.bars} unit={stats.bars.unit} />
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] xl:grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)]">
+            <KeyNumbers summary={s} curve={stats.curve} period={stats.period} rwl={stats.rwl} />
+            <ChartCard i={4} title={bars.unit === 'month' ? t.dashboard.charts.monthly : bars.unit === 'week' ? t.dashboard.charts.weekly : t.dashboard.charts.daily}>
+              <DailyPnlChart days={bars.bars} unit={bars.unit} height={wide ? 300 : 220} />
             </ChartCard>
           </div>
 

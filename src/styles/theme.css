@@ -94,22 +94,12 @@
   }
 }
 
-/* Мини-кривая: прорисовка слева направо, точки появляются */
-@utility reveal {
-  animation: reveal 1.1s cubic-bezier(0.3, 0.7, 0.2, 1) both;
+/* Бегущая строка бирж на главной: список продублирован, едем на половину ширины и начинаем заново */
+@utility marquee {
+  animation: marquee 40s linear infinite;
 }
-@utility pop {
-  animation: pop 0.35s cubic-bezier(0.3, 1.6, 0.5, 1) both;
-  animation-delay: var(--d, 1s);
-}
-@keyframes reveal {
-  from { clip-path: inset(0 100% 0 0); }
-  to { clip-path: inset(0 0 0 0); }
-}
-/* scale, а не transform: сдвиг точки задают классы -translate-* (в Tailwind v4 это отдельное свойство translate) */
-@keyframes pop {
-  from { scale: 0; }
-  to { scale: 1; }
+@keyframes marquee {
+  to { translate: -50% 0; }
 }
 
 /* Лесенка появления: style={{ '--i': номер }} задаёт задержку */
