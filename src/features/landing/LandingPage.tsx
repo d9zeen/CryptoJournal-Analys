@@ -4,7 +4,7 @@
  */
 import { lazy, Suspense, useMemo } from 'react'
 import { Link } from 'react-router'
-import { useT } from '@/i18n'
+import { plural, useT } from '@/i18n'
 import { Logo } from '@/components/Logo'
 import { PlansTable } from '@/features/plans/PlansPage'
 import { KpiRow, ScoreCard } from '@/features/dashboard/Widgets'
@@ -277,18 +277,46 @@ function LeaksVisual() {
   )
 }
 
+/** «+248 $» / «−61 $» — целые доллары, чтобы влезало в клетку календаря */
+const wholeUsd = (n: number) => `${n > 0 ? '+' : '−'}${Math.round(Math.abs(n))} $`
+
 function CalendarVisual() {
-  // 4 недели × 7 дней: + прибыль, − убыток, 0 — нет сделок (выходные чаще пустые)
-  const days = [1, -1, 1, 1, 0, 0, 0, 1, 1, -1, 1, -1, 0, 0, -1, 1, 1, 1, 1, 0, 1, 1, -1, 1, 1, 1, 0, 0]
+  const t = useT()
+  // выдуманный месяц: 1-е число — среда; [число, PnL, сделок]; дни без сделок — 0
+  const pnl: Record<number, [number, number]> = {
+    1: [248.4, 3], 2: [-61.2, 1], 3: [119.75, 2], 6: [312.1, 4], 7: [-88.5, 2], 8: [54.3, 1], 9: [-140.2, 3],
+    10: [205.6, 2], 13: [-35.9, 1], 14: [176.4, 3], 15: [92.2, 2], 16: [410.7, 5], 17: [-72.6, 2], 20: [138.9, 2],
+    21: [64.1, 1], 22: [-118.3, 2], 23: [227.5, 3], 24: [41.8, 1], 27: [-54.4, 1], 28: [189.3, 2],
+  }
+  const lead = [29, 30] // хвост прошлого месяца (Пн, Вт)
+  const cells: ({ day: number; out: true } | { day: number; out?: false })[] = [
+    ...lead.map((day) => ({ day, out: true as const })),
+    ...Array.from({ length: 30 }, (_, i) => ({ day: i + 1 })),
+    ...[1, 2, 3].map((day) => ({ day, out: true as const })),
+  ]
   return (
-    <div className="rounded-xl border border-border bg-surface p-4">
-      <div className="grid grid-cols-7 gap-1.5">
-        {days.map((d, i) => (
-          <div
-            key={i}
-            className={`aspect-square rounded-md border ${d > 0 ? 'border-profit/40 bg-profit/15' : d < 0 ? 'border-loss/40 bg-loss/15' : 'border-border bg-surface-2/50'}`}
-          />
+    <div className="rounded-xl border border-border bg-surface p-3 sm:p-4">
+      <div className="mb-2 grid grid-cols-7 gap-1 text-center text-[11px] text-muted sm:gap-1.5">
+        {t.period.weekdaysShort.map((w) => (
+          <span key={w}>{w}</span>
         ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
+        {cells.map((c, i) => {
+          const d = c.out ? undefined : pnl[c.day]
+          const tone = !d ? (c.out ? 'cal-hatch border-transparent' : 'border-border bg-surface-2/50') : d[0] > 0 ? 'border-profit/30 bg-profit/12' : 'border-loss/30 bg-loss/12'
+          return (
+            <div key={i} className={`relative flex min-h-12 flex-col items-center justify-center rounded-md border px-0.5 pt-3 pb-1 sm:min-h-16 ${tone}`}>
+              <span className={`absolute top-0.5 right-1 text-[9px] sm:text-[10px] ${c.out ? 'text-muted/60' : 'text-muted'}`}>{c.day}</span>
+              {d && (
+                <>
+                  <span className={`num text-[10px] leading-tight font-semibold sm:text-xs ${d[0] > 0 ? 'text-profit' : 'text-loss'}`}>{wholeUsd(d[0])}</span>
+                  <span className="hidden text-[10px] text-muted sm:block">{plural(d[1], t.dashboard.calendar.tradesN)}</span>
+                </>
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )

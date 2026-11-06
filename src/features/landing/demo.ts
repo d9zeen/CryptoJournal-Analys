@@ -6,13 +6,29 @@ import { closedTrades, downsampleEquity, equityCurve, pnlByDay, summarize, type 
 import { traderScore } from '@/lib/calc/score'
 
 const SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'TONUSDT']
+
+/** Простой генератор случайных чисел с зерном (mulberry32): одни и те же «случайные» сделки при каждом открытии */
+function seeded(seed: number) {
+  let a = seed >>> 0
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0
+    let t = a
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
 const DAY = 86_400_000
 
 export function demoAccount(now = Date.now()) {
   const start = now - 61 * DAY
+  const rnd = seeded(20261106)
   const trades: StatTrade[] = Array.from({ length: 60 }, (_, i) => {
-    const w = Math.sin(i * 1.7) + 0.35
-    const pnl = Math.round(w * 180 * 100) / 100
+    // как у живого трейдера: ~58 % сделок в плюс, прибыль крупнее убытка, в середине — серия неудач (просадка)
+    const slump = i >= 24 && i <= 33
+    const win = rnd() < (slump ? 0.25 : 0.62)
+    const size = win ? 40 + rnd() * 230 : 30 + rnd() * (slump ? 190 : 120)
+    const pnl = Math.round((win ? size : -size) * 100) / 100
     const exit = new Date(start + i * DAY + 14 * 3_600_000).toISOString()
     return {
       id: `demo-${i}`,

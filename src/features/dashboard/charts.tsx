@@ -2,7 +2,7 @@
  * Графики дашборда (Recharts). Файл грузится отдельно (lazy), чтобы не утяжелять первый экран.
  * Цвета — только CSS-переменные из theme.css.
  */
-import { useId, useMemo, type ReactNode } from 'react'
+import { useId, useMemo, type CSSProperties, type ReactNode } from 'react'
 import {
   Area,
   AreaChart,
@@ -61,7 +61,8 @@ const pointOf = <T,>(p: TipProps<T>): T | undefined => (p.active ? p.payload?.[0
 type EqRow = TimedPoint & { v: number; trade: number; fromPeak: number }
 
 /**
- * Кривая капитала (как «Daily net cumulative P&L» в TradeZella): выше нуля — зелёная с заливкой, ниже — красная.
+ * Кривая капитала (как «Daily net cumulative P&L» в TradeZella): выше нуля — неоново-зелёная с заливкой, ниже — красная.
+ * Линия ломаная (type="linear"): видна каждая сделка, без сглаживания.
  * Цвет меняется ровно на нуле: градиент с границей в точке, где ось Y проходит через 0.
  * Ось X — даты (расстояние между точками = реальное время), подпись итога у последней точки.
  */
@@ -87,7 +88,7 @@ export function EquityChart({ points, unit, balance, height = HEIGHT + 40 }: { p
   }, [data])
   const yTick = (v: number) => (unit === 'usd' ? formatUsdShort(v) : `${formatNumber(v, 0)} %`)
   return (
-    <div>
+    <div className="equity-glow" style={{ '--eq-glow': `url(#${id}g)` } as CSSProperties}>
       <ResponsiveContainer width="100%" height={height}>
         <AreaChart data={data} margin={{ top: 22, right: wide ? 104 : 16, bottom: 0, left: 0 }}>
           <defs>
@@ -101,6 +102,15 @@ export function EquityChart({ points, unit, balance, height = HEIGHT + 40 }: { p
               <stop offset={zero} stopColor={C.profit} />
               <stop offset={zero} stopColor={C.loss} />
             </linearGradient>
+            {/* неон: размытая копия линии её же цветом под самой линией */}
+            <filter id={`${id}g`} x="-5%" y="-20%" width="110%" height="140%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
           </defs>
           <CartesianGrid stroke={C.grid} vertical={false} />
           <XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} {...axisProps} tickFormatter={shortDate} minTickGap={40} />
@@ -132,7 +142,7 @@ export function EquityChart({ points, unit, balance, height = HEIGHT + 40 }: { p
             }}
           />
           <Area
-            type="monotone"
+            type="linear"
             dataKey="v"
             baseValue={0}
             stroke={`url(#${id}s)`}

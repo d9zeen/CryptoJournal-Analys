@@ -38,8 +38,8 @@
   --color-on-primary: #ffffff;
   --color-accent: #4ee6c2;        /* мятный: данные, графики */
 
-  /* Торговые цвета — как в стаканах бирж, без неона */
-  --color-profit: #2ebd85;      /* прибыль, long */
+  /* Торговые цвета: прибыль — фирменная неоновая мята, убыток — красный как в стаканах бирж */
+  --color-profit: #4dffb0;      /* прибыль, long */
   --color-loss: #f6465d;        /* убыток, short */
   --color-warning: #f4b64a;
 
@@ -92,6 +92,11 @@
   &:hover {
     border-color: color-mix(in srgb, var(--color-muted) 45%, var(--color-border));
   }
+}
+
+/* Кривая капитала: мягкое неоновое свечение линии её же цветом (фильтр <filter> в charts.tsx), только в тёмной теме */
+:root:not([data-theme='light']) .equity-glow .recharts-area-curve {
+  filter: var(--eq-glow);
 }
 
 /* Бегущая строка бирж на главной: список продублирован, едем на половину ширины и начинаем заново */
