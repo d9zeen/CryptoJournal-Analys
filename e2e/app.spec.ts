@@ -256,3 +256,11 @@ test('главная для вошедшего — дашборд', async ({ pag
   await expect(page).toHaveURL(/\/dashboard$/)
   await expect(page.getByText('Оценка трейдера', { exact: true })).toBeVisible()
 })
+
+test('/welcome — главная для гостя открывается и после входа, кнопка ведёт в дневник', async ({ page, db }) => {
+  await fakeSupabase(page, db)
+  await page.goto('welcome')
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('в одном дневнике')
+  await page.getByRole('link', { name: 'Открыть дневник' }).click()
+  await expect(page).toHaveURL(/\/dashboard$/)
+})
