@@ -63,3 +63,54 @@ export function compactPnl(n: number): string {
   const s = a >= 1_000_000 ? `${(a / 1_000_000).toFixed(1)}M` : a >= 1000 ? `${(a / 1000).toFixed(1)}k` : a >= 100 ? a.toFixed(0) : a.toFixed(1)
   return `${n > 0 ? '+' : n < 0 ? '−' : ''}${s.replace(/\.0(?=[kM]?$)/, '')}`
 }
+
+export type MonthSummary = {
+  /** дни месяца со сделками */
+  tradedDays: number
+  upDays: number
+  downDays: number
+  best: CalDay | null
+  worst: CalDay | null
+  /** средний PnL на торговый день */
+  avgDay: number | null
+  /** PnL по неделям сетки (только дни этого месяца), null — в неделе нет дней месяца */
+  weeks: (CalCell | null)[]
+  /** PnL по дням недели Пн…Вс (только дни этого месяца) */
+  weekdays: CalCell[]
+  /** самый большой |PnL| дня в месяце — для яркости клеток */
+  maxAbsDay: number
+}
+
+/** Итоги месяца для боковой панели календаря: дни в плюс / минус, лучший и худший день, недели, дни недели */
+export function monthSummary(cal: ProfitCalendar): MonthSummary {
+  const days = cal.weeks.flatMap((w) => w.days).filter((d) => d.inMonth && d.count > 0)
+  const best = days.reduce<CalDay | null>((b, d) => (b === null || d.pnl > b.pnl ? d : b), null)
+  const worst = days.reduce<CalDay | null>((b, d) => (b === null || d.pnl < b.pnl ? d : b), null)
+  const weekdays = Array.from({ length: 7 }, empty)
+  const weeks = cal.weeks.map((w) => {
+    const inMonth = w.days.filter((d) => d.inMonth)
+    if (!inMonth.length) return null
+    const c = empty()
+    w.days.forEach((d, i) => {
+      if (!d.inMonth) return
+      c.pnl += d.pnl
+      c.count += d.count
+      c.wins += d.wins
+      weekdays[i].pnl += d.pnl
+      weekdays[i].count += d.count
+      weekdays[i].wins += d.wins
+    })
+    return c
+  })
+  return {
+    tradedDays: days.length,
+    upDays: days.filter((d) => d.pnl > 0).length,
+    downDays: days.filter((d) => d.pnl < 0).length,
+    best: best && best.pnl > 0 ? best : null,
+    worst: worst && worst.pnl < 0 ? worst : null,
+    avgDay: days.length ? cal.month.pnl / days.length : null,
+    weeks,
+    weekdays,
+    maxAbsDay: Math.max(0, ...days.map((d) => Math.abs(d.pnl))),
+  }
+}

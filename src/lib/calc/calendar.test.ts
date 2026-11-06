@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compactPnl, profitCalendar } from './calendar'
+import { compactPnl, monthSummary, profitCalendar } from './calendar'
 
 describe('profitCalendar', () => {
   // сентябрь 2026: 1-е — вторник, сетка с понедельника 31 августа
@@ -44,5 +44,42 @@ describe('compactPnl', () => {
     expect(compactPnl(-22.13)).toBe('−22.1')
     expect(compactPnl(2_000_000)).toBe('+2M')
     expect(compactPnl(0)).toBe('0')
+  })
+})
+
+describe('monthSummary', () => {
+  // сентябрь 2026 (1-е — вторник): 1-е −100, 2-е +300 (две сделки), 8-е −50; 1 октября — чужой месяц, не считается
+  const cal = profitCalendar(
+    [
+      { exit_at: '2026-09-01T10:00:00Z', pnl: -100 },
+      { exit_at: '2026-09-02T10:00:00Z', pnl: 200 },
+      { exit_at: '2026-09-02T12:00:00Z', pnl: 100 },
+      { exit_at: '2026-09-08T10:00:00Z', pnl: -50 },
+      { exit_at: '2026-10-01T10:00:00Z', pnl: 999 },
+    ],
+    2026,
+    8,
+    'UTC',
+  )
+  const s = monthSummary(cal)
+
+  it('дни в плюс / минус, лучший и худший день, средний за день', () => {
+    expect(s).toMatchObject({ tradedDays: 3, upDays: 1, downDays: 2, maxAbsDay: 300 })
+    expect(s.best).toMatchObject({ date: '2026-09-02', pnl: 300 })
+    expect(s.worst).toMatchObject({ date: '2026-09-01', pnl: -100 })
+    expect(s.avgDay).toBeCloseTo(50) // 150 / 3
+  })
+
+  it('недели и дни недели — только дни этого месяца', () => {
+    expect(s.weeks[0]).toMatchObject({ pnl: 200, count: 3 }) // 1–2 сентября; 31 августа не считается
+    expect(s.weeks[1]).toMatchObject({ pnl: -50, count: 1 })
+    expect(s.weeks[4]).toMatchObject({ pnl: 0, count: 0 }) // 28–30 сентября без сделок; 1 октября — чужой
+    expect(s.weekdays[1]).toMatchObject({ pnl: -150, count: 2 }) // вторники: 1 и 8 сентября
+    expect(s.weekdays[2]).toMatchObject({ pnl: 300 })
+  })
+
+  it('пустой месяц — без лучшего / худшего и среднего', () => {
+    const e = monthSummary(profitCalendar([], 2026, 8, 'UTC'))
+    expect(e).toMatchObject({ tradedDays: 0, best: null, worst: null, avgDay: null, maxAbsDay: 0 })
   })
 })
