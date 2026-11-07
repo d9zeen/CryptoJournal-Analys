@@ -1,3 +1,4 @@
+import { applyPalette } from '@/lib/palette'
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
@@ -35,6 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading,
     signOut: async () => {
       await supabase.auth.signOut()
+      applyPalette('classic') // своя палитра — только внутри аккаунта
       queryClient.clear() // не оставляем чужие данные в памяти
     },
   }

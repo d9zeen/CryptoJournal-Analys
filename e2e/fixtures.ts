@@ -26,6 +26,8 @@ export type FakeDb = {
   connCalls?: { fn: string; body: Record<string, unknown> }[]
   /** ответ Bybit на проверку ключа: 1 — только чтение */
   bybitReadOnly?: number
+  /** палитра в профиле (0015) */
+  palette?: string
 }
 
 export function makeTrade(i: number, over: Row = {}): Row {
@@ -105,7 +107,13 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
       const item = { symbol: 'ETHUSDT', orderId: 'bb-1', side: 'Buy', closedSize: '1', cumEntryValue: '3000', avgEntryPrice: '3000', cumExitValue: '2900', avgExitPrice: '2900', closedPnl: '98', leverage: '5', createdTime: String(Date.now() - 3_600_000), updatedTime: String(Date.now() - 3_600_000) }
       return json({ retCode: 0, retMsg: 'OK', result: { list: recent ? [item] : [], nextPageCursor: '' } })
     }
-    if (path === '/rest/v1/profiles') return json({ id: UID, display_name: null, plan: db.usage.plan, plan_until: null, timezone: 'Europe/Moscow', starting_balance: 5000, locale: 'ru' })
+    if (path === '/rest/v1/profiles') {
+      if (method === 'PATCH') {
+        const b = JSON.parse(req.postData() || '{}')
+        if (b.palette) db.palette = b.palette
+      }
+      return json({ id: UID, display_name: null, plan: db.usage.plan, plan_until: null, timezone: 'Europe/Moscow', starting_balance: 5000, locale: 'ru', palette: db.palette ?? 'classic' })
+    }
     if (['/rest/v1/setups', '/rest/v1/emotions', '/rest/v1/mistake_tags'].includes(path)) {
       const names = db.listNames ?? ['Пробой уровня']
       return json(names.map((name, i) => ({ id: i === 0 ? 's1' : `s${i + 1}`, user_id: UID, name, archived: false, sort_order: i, created_at: '' })))

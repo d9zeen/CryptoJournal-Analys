@@ -125,3 +125,30 @@ export function monthSummary(cal: ProfitCalendar): MonthSummary {
     maxAbsDay: Math.max(0, ...days.map((d) => Math.abs(d.pnl))),
   }
 }
+
+/** Строка панели «По неделям»: с какого по какое число месяца и итог за эти дни */
+export type WeekRow = { from: number; to: number; cell: CalCell }
+/**
+ * rows — как ряды календаря (Пн–Вс, крайние могут быть из 1–2 дней);
+ * merge — ряды, но крайний ряд короче 4 дней приклеен к соседнему;
+ * days — по числам месяца: 1–7, 8–14, 15–21, 22–28, 29–конец
+ */
+export type WeekMode = 'rows' | 'merge' | 'days'
+
+export function monthWeeks(cal: ProfitCalendar, mode: WeekMode): WeekRow[] {
+  const sumOf = (days: CalDay[]): CalCell => days.reduce((c, d) => ({ pnl: c.pnl + d.pnl, count: c.count + d.count, wins: c.wins + d.wins }), empty())
+  const row = (days: CalDay[]): WeekRow => ({ from: days[0].day, to: days[days.length - 1].day, cell: sumOf(days) })
+  if (mode === 'days') {
+    const all = cal.weeks.flatMap((w) => w.days).filter((d) => d.inMonth)
+    const chunks: CalDay[][] = []
+    for (const d of all) (chunks[Math.min(4, Math.floor((d.day - 1) / 7))] ??= []).push(d)
+    return chunks.filter(Boolean).map(row)
+  }
+  const groups = cal.weeks.map((w) => w.days.filter((d) => d.inMonth))
+  if (mode === 'merge' && groups.length > 1) {
+    if (groups[0].length < 4) groups.splice(0, 2, [...groups[0], ...groups[1]])
+    const n = groups.length
+    if (n > 1 && groups[n - 1].length < 4) groups.splice(n - 2, 2, [...groups[n - 2], ...groups[n - 1]])
+  }
+  return groups.map(row)
+}

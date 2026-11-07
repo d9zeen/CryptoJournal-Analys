@@ -54,6 +54,12 @@ update profiles set timezone = 'Asia/Almaty', starting_balance = 1000;
 select pg_temp.check((select timezone from profiles) = 'Asia/Almaty', 'A меняет часовой пояс и депозит');
 select pg_temp.expect_error($$update profiles set timezone = 'Mars/Base'$$, 'check constraint');
 select pg_temp.check(true, 'несуществующий часовой пояс отклоняется');
+-- Палитра (0015): на Basic — три бесплатные, остальные под замком
+select pg_temp.expect_error($$update profiles set palette = 'cyan_wine'$$, 'PALETTE_NEEDS_PRO');
+select pg_temp.check(true, 'на Basic платную палитру выбрать нельзя');
+update profiles set palette = 'sky_coral';
+select pg_temp.check((select palette from profiles) = 'sky_coral', 'на Basic бесплатная палитра сохраняется');
+update profiles set palette = 'classic';
 
 update trades set note = 'взлом' where id = 'bbbbbbbb-1111-0000-0000-000000000000';
 delete from trades where id = 'bbbbbbbb-1111-0000-0000-000000000000';
@@ -127,6 +133,10 @@ update profiles set plan = 'pro', plan_until = now() + interval '30 days' where 
 set role authenticated;
 insert into trades (exchange, symbol, side, entry_at, entry_price, size_usd) values ('okx', 'SOLUSDT', 'long', now(), 150, 100);
 select pg_temp.check((select trade_limit = 50 and plan = 'pro' from get_my_usage()), 'на Pro лимит 50 сделок в месяц');
+update profiles set palette = 'cyan_wine';
+select pg_temp.check((select palette from profiles) = 'cyan_wine', 'на Pro палитру выбрать можно');
+select pg_temp.expect_error($$update profiles set palette = 'rainbow'$$, 'check constraint');
+select pg_temp.check(true, 'неизвестная палитра отклоняется и на Pro');
 insert into trades (exchange, symbol, side, entry_at, entry_price, size_usd)
 select 'okx', 'SOLUSDT', 'long', now(), 150, 100 from generate_series(1, 19);
 select pg_temp.check((select trades_created from get_my_usage()) = 50, 'на Pro счётчик дошёл до 50');

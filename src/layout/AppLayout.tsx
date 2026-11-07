@@ -5,7 +5,9 @@ import { Logo, LogoMark } from '@/components/Logo'
 import { setTheme, useTheme } from '@/lib/theme'
 import { useIsAdmin } from '@/features/admin/api'
 import { useAutoSync } from '@/features/connections/api'
-import { useUsage } from '@/features/settings/api'
+import { useProfile, useUsage } from '@/features/settings/api'
+import { applyPalette, canUsePalette, isPalette } from '@/lib/palette'
+import { useEffect } from 'react'
 
 function useNavItems() {
   const t = useT()
@@ -36,6 +38,7 @@ export function AppLayout() {
   const { user, signOut } = useAuth()
   const items = useNavItems()
   useAutoSync() // подключённые биржи подтягивают сделки сами
+  usePaletteSync()
 
   return (
     <div className="min-h-dvh pb-20 md:pb-0 md:pl-[72px] lg:pl-[232px]">
@@ -207,4 +210,14 @@ function ThemeToggle() {
       )}
     </button>
   )
+}
+
+/** Палитра прибыли / убытка из профиля; платная на Basic (Pro закончился) — классическая */
+function usePaletteSync() {
+  const { data: profile } = useProfile()
+  const { data: usage } = useUsage()
+  useEffect(() => {
+    if (!profile || !usage) return
+    applyPalette(isPalette(profile.palette) && canUsePalette(profile.palette, usage.plan) ? profile.palette : 'classic')
+  }, [profile, usage])
 }

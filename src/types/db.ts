@@ -13,6 +13,8 @@ export type Profile = {
   timezone: string
   starting_balance: number | null
   locale: 'ru' | 'en'
+  /** палитра прибыли / убытка (0015), см. src/lib/palette.ts */
+  palette: string
   created_at: string
   updated_at: string
 }

@@ -41,9 +41,10 @@
   /* Торговые цвета: прибыль — фирменная неоновая мята, убыток — красный как в стаканах бирж */
   --color-profit: #4dffb0;      /* прибыль, long */
   --color-loss: #f6465d;        /* убыток, short */
-  /* «Плюс» и «минус» в картинках (календарь, W / L) — своя пара, не зелёный / красный бирж */
-  --color-up: #5ee0f0;   /* циан — победа / день в плюс (выбор владельца 07.11.2026) */
-  --color-down: #b85c66; /* винный — поражение / день в минус */
+  /* «Плюс» и «минус» в картинках (календарь, W / L) = цвета прибыли и убытка. По умолчанию зелёный и красный;
+     Pro / Pro Plus меняют их палитрой (data-palette на <html>, ниже) */
+  --color-up: var(--color-profit);
+  --color-down: var(--color-loss);
   --color-warning: #f4b64a;
 
 
@@ -76,9 +77,86 @@
   --color-accent: #0b9f84;
   --color-profit: #0a9b6a;
   --color-loss: #dc2f4a;
-  --color-up: #0a8a9c;
-  --color-down: #8f3a45;
   --color-warning: #b0700a;
+}
+
+/*
+ * Палитры «плюса» и «минуса» (Pro / Pro Plus, полоска под календарём — features/palette/PaletteStrip.tsx; список — src/lib/palette.ts).
+ * Меняют цвета прибыли / убытка по всему сайту: PnL, календарь, W / L. Без палитры — зелёный и красный.
+ * data-palette стоит на <html>; на любом другом элементе — предпросмотр палитры внутри него (настройки).
+ */
+/* классика — те же цвета, что по умолчанию; нужна для предпросмотра, когда на сайте стоит другая палитра */
+[data-palette='classic'] {
+  --color-profit: #4dffb0;
+  --color-loss: #f6465d;
+}
+[data-theme='light'][data-palette='classic'],
+[data-theme='light'] [data-palette='classic'] {
+  --color-profit: #0a9b6a;
+  --color-loss: #dc2f4a;
+}
+[data-palette='cyan_wine'] { /* циан и винный */
+  --color-profit: #5ee0f0;
+  --color-loss: #b85c66;
+}
+[data-theme='light'][data-palette='cyan_wine'],
+[data-theme='light'] [data-palette='cyan_wine'] {
+  --color-profit: #0a8a9c;
+  --color-loss: #8f3a45;
+}
+[data-palette='teal_salmon'] { /* бирюза и лосось */
+  --color-profit: #45d0bc;
+  --color-loss: #ff8a70;
+}
+[data-theme='light'][data-palette='teal_salmon'],
+[data-theme='light'] [data-palette='teal_salmon'] {
+  --color-profit: #0f8f7f;
+  --color-loss: #d4553a;
+}
+[data-palette='sky_coral'] { /* небесный и коралл */
+  --color-profit: #7cc7f2;
+  --color-loss: #ff7f6e;
+}
+[data-theme='light'][data-palette='sky_coral'],
+[data-theme='light'] [data-palette='sky_coral'] {
+  --color-profit: #1f78b4;
+  --color-loss: #cf4a3a;
+}
+[data-palette='gold_indigo'] { /* золото и индиго */
+  --color-profit: #e8c25a;
+  --color-loss: #8a8fe8;
+}
+[data-theme='light'][data-palette='gold_indigo'],
+[data-theme='light'] [data-palette='gold_indigo'] {
+  --color-profit: #a77d0c;
+  --color-loss: #4f55c4;
+}
+[data-palette='emerald_ruby'] { /* изумруд и рубин */
+  --color-profit: #3ecf8e;
+  --color-loss: #e0436b;
+}
+[data-theme='light'][data-palette='emerald_ruby'],
+[data-theme='light'] [data-palette='emerald_ruby'] {
+  --color-profit: #0f8a5a;
+  --color-loss: #b3264b;
+}
+[data-palette='aqua_tangerine'] { /* аква и мандарин */
+  --color-profit: #5fd4e6;
+  --color-loss: #ff9b4a;
+}
+[data-theme='light'][data-palette='aqua_tangerine'],
+[data-theme='light'] [data-palette='aqua_tangerine'] {
+  --color-profit: #0b8597;
+  --color-loss: #cc6410;
+}
+[data-palette='sage_terracotta'] { /* шалфей и терракота */
+  --color-profit: #8cc7a0;
+  --color-loss: #e07a52;
+}
+[data-theme='light'][data-palette='sage_terracotta'],
+[data-theme='light'] [data-palette='sage_terracotta'] {
+  --color-profit: #3f8a5c;
+  --color-loss: #c0552c;
 }
 
 /* Цифры: тем же шрифтом, что текст, но одной ширины — столбцы стоят ровно */

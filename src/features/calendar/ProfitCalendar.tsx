@@ -8,10 +8,11 @@ import { useMemo, useState, type CSSProperties } from 'react'
 import { fmt, plural, useT } from '@/i18n'
 import { useTrades } from '@/features/trades/api'
 import { closedTrades } from '@/lib/calc/stats'
-import { calendarSpan, compactPnl, monthSummary, profitCalendar, type CalCell, type CalDay } from '@/lib/calc/calendar'
+import { calendarSpan, compactPnl, monthSummary, monthWeeks, profitCalendar, type CalCell, type CalDay } from '@/lib/calc/calendar'
 import { formatDay, formatPercent, formatPnl } from '@/lib/format'
 import { parseYmd, ymd } from '@/lib/period'
 import { useMediaQuery } from '@/lib/useMediaQuery'
+import { PaletteStrip } from '@/features/palette/PaletteStrip'
 
 const monthTitle = new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' })
 /** «Ноябрь 2026» — без «г.» и без CSS capitalize (он делал «2026 Г.») */
@@ -55,7 +56,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
   return (
     // широкий экран (выбор владельца — вариант 2): высота ~86 % экрана, по краям небольшие поля (до 2000 px по центру);
     // панель итогов справа той же высоты, что и календарь
-    <div className="rise mx-auto grid w-full max-w-[2000px] gap-4 xl:h-[86dvh] xl:min-h-[680px] xl:grid-cols-[minmax(0,1fr)_360px]">
+    <div className="rise mx-auto grid w-full max-w-[2000px] gap-4 xl:min-h-[max(680px,86dvh)] xl:grid-cols-[minmax(0,1fr)_360px]">
       <section className="flex flex-col rounded-lg border border-border bg-surface p-4 sm:p-5 xl:h-full">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-baseline gap-3">
@@ -85,6 +86,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
           ))}
           <MonthTotal />
         </div>
+        <PaletteStrip />
       </section>
 
       <MonthPanel />
@@ -180,7 +182,11 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
 
   /** Итоги месяца: результат, торговые дни (плюс / минус), лучший и худший день, недели и дни недели полосками */
   function MonthPanel() {
-    const weekMax = Math.max(1e-9, ...sum.weeks.map((w) => Math.abs(w?.pnl ?? 0)))
+    // недели по рядам календаря, огрызки короче 4 дней приклеены к соседней (выбор владельца 07.11.2026)
+    const weeks = monthWeeks(cal, 'merge')
+    const mon = c.monthsShort[view.m]
+    const weekLabel = (from: number, to: number) => (from === to ? `${from} ${mon}` : `${from}–${to} ${mon}`)
+    const weekMax = Math.max(1e-9, ...weeks.map((w) => Math.abs(w.cell.pnl)))
     const wdMax = Math.max(1e-9, ...sum.weekdays.map((w) => Math.abs(w.pnl)))
     const dayShare = sum.upDays + sum.downDays ? sum.upDays / (sum.upDays + sum.downDays) : 0
     return (
@@ -226,15 +232,13 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
             <section className="flex flex-col rounded-lg border border-border bg-surface p-4 xl:flex-1">
               <h2 className="text-xs text-muted">{c.byWeek}</h2>
               <div className="mt-2 grid gap-1.5 xl:flex-1 xl:content-evenly">
-                {sum.weeks.map((w, i) =>
-                  w === null ? null : (
-                    <div key={i} className="grid grid-cols-[72px_minmax(0,1fr)_auto] items-center gap-2 text-xs">
-                      <span className="text-muted">{fmt(c.weekN, { n: i + 1 })}</span>
-                      <Bar value={w.pnl} max={weekMax} />
-                      <span className={`num w-20 text-right font-semibold ${w.pnl < 0 ? 'text-down' : ''}`}>{w.count ? formatPnl(w.pnl) : '—'}</span>
-                    </div>
-                  ),
-                )}
+                {weeks.map((w) => (
+                  <div key={w.from} className="grid grid-cols-[72px_minmax(0,1fr)_auto] items-center gap-2 text-xs">
+                    <span className="num text-muted">{weekLabel(w.from, w.to)}</span>
+                    <Bar value={w.cell.pnl} max={weekMax} />
+                    <span className={`num w-20 text-right font-semibold ${w.cell.pnl < 0 ? 'text-down' : ''}`}>{w.cell.count ? formatPnl(w.cell.pnl) : '—'}</span>
+                  </div>
+                ))}
               </div>
             </section>
 

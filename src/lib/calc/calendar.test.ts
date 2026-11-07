@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compactPnl, monthSummary, profitCalendar } from './calendar'
+import { compactPnl, monthSummary, monthWeeks, profitCalendar } from './calendar'
 
 describe('profitCalendar', () => {
   // сентябрь 2026: 1-е — вторник, сетка с понедельника 31 августа
@@ -95,5 +95,27 @@ describe('monthSummary', () => {
   it('пустой месяц — без лучшего / худшего и среднего', () => {
     const e = monthSummary(profitCalendar([], 2026, 8, 'UTC'))
     expect(e).toMatchObject({ tradedDays: 0, best: null, worst: null, avgDay: null, maxAbsDay: 0 })
+  })
+})
+
+describe('monthWeeks', () => {
+  // ноябрь 2026: 1-е — воскресенье, 30-е — понедельник → 6 рядов, крайние из одного дня
+  const nov = profitCalendar([{ exit_at: '2026-11-01T12:00:00Z', pnl: 10 }, { exit_at: '2026-11-30T12:00:00Z', pnl: -5 }], 2026, 10, 'UTC')
+  const span = (rows: { from: number; to: number }[]) => rows.map((r) => `${r.from}–${r.to}`)
+
+  it('rows — как ряды календаря', () => {
+    expect(span(monthWeeks(nov, 'rows'))).toEqual(['1–1', '2–8', '9–15', '16–22', '23–29', '30–30'])
+  })
+
+  it('merge — огрызки короче 4 дней приклеены к соседней неделе', () => {
+    const rows = monthWeeks(nov, 'merge')
+    expect(span(rows)).toEqual(['1–8', '9–15', '16–22', '23–30'])
+    expect(rows[0].cell.pnl).toBe(10)
+    expect(rows[3].cell.pnl).toBe(-5)
+  })
+
+  it('days — по числам месяца', () => {
+    expect(span(monthWeeks(nov, 'days'))).toEqual(['1–7', '8–14', '15–21', '22–28', '29–30'])
+    expect(span(monthWeeks(profitCalendar([], 2021, 1, 'UTC'), 'days'))).toEqual(['1–7', '8–14', '15–21', '22–28'])
   })
 })
