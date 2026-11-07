@@ -12,8 +12,8 @@ describe('profitCalendar', () => {
   ]
   const cal = profitCalendar(trades, 2026, 8, 'Europe/Moscow')
 
-  it('сетка 6 × 7 с понедельника, дни соседних месяцев помечены', () => {
-    expect(cal.weeks).toHaveLength(6)
+  it('сетка с понедельника только из недель этого месяца, дни соседних месяцев помечены', () => {
+    expect(cal.weeks).toHaveLength(5) // 31.08–06.09 … 28.09–04.10; неделя 5–11 октября не нужна
     expect(cal.weeks[0].days[0]).toMatchObject({ date: '2026-08-31', day: 31, inMonth: false })
     expect(cal.weeks[0].days[1]).toMatchObject({ date: '2026-09-01', inMonth: true, pnl: -226.36, count: 1, wins: 0 })
   })
@@ -28,11 +28,25 @@ describe('profitCalendar', () => {
     expect(oct1).toMatchObject({ inMonth: false, count: 2 })
   })
 
-  it('итог недели включает соседний месяц, итог месяца — только свои дни', () => {
-    expect(cal.weeks[4].total.count).toBe(2)
+  it('итоги недели и месяца — только свои дни', () => {
+    expect(cal.weeks[4].total.count).toBe(0) // 1 октября — чужой месяц
     expect(cal.month.count).toBe(3)
     expect(cal.month.pnl).toBeCloseTo(-226.36 + 137.2)
     expect(cal.month.wins).toBe(1)
+  })
+
+  it('лучшая и худшая сделка месяца — только свои дни', () => {
+    expect(cal.month.best).toBe(200)
+    expect(cal.month.worst).toBe(-226.36)
+    const empty = profitCalendar([], 2026, 8, 'UTC')
+    expect(empty.month).toMatchObject({ best: null, worst: null, count: 0 })
+  })
+
+  it('рядов столько, сколько недель у месяца: 4, 5 или 6', () => {
+    const nov = profitCalendar([], 2026, 10, 'UTC')
+    expect(nov.weeks).toHaveLength(6)
+    expect(profitCalendar([], 2026, 1, 'UTC').weeks).toHaveLength(5) // февраль 2026: 1-е — воскресенье
+    expect(profitCalendar([], 2021, 1, 'UTC').weeks).toHaveLength(4) // февраль 2021: с понедельника, ровно 4 недели
   })
 })
 

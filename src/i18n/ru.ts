@@ -427,6 +427,9 @@ export const ru = {
     },
     calendar: {
       title: 'Календарь прибыли',
+      monthTotal: 'Итог месяца',
+      maxWin: 'Max win',
+      maxLoss: 'Max loss',
       prev: 'Предыдущий месяц',
       next: 'Следующий месяц',
       week: 'Итого',
