@@ -91,6 +91,7 @@ export const ru = {
     loadFailed: 'Не удалось загрузить данные.',
     screenshotLimit: 'Не больше 10 скриншотов на одну сделку.',
     rowLimit: 'Достигнут максимум записей этого типа.',
+    paletteNeedsPro: 'Свои цвета доступны на тарифах Pro и Pro Plus.',
     mfaRequired: 'Нужно подтверждение кодом из приложения-аутентификатора. Выйди и войди снова.',
   },
   period: {
@@ -358,6 +359,20 @@ export const ru = {
       theme: 'Тема',
       dark: 'Тёмная',
       light: 'Светлая',
+      palette: 'Цвета прибыли и убытка',
+      paletteHint: 'Меняют плюс и минус по всему сайту: PnL, календарь, последние сделки. Сохраняется в профиле.',
+      paletteLocked: 'Свои цвета — на тарифах Pro и Pro Plus. На Basic — зелёный и красный.',
+      paletteUpgrade: 'Тарифы',
+      palettes: {
+        classic: 'Классика',
+        cyan_wine: 'Циан и винный',
+        teal_salmon: 'Бирюза и лосось',
+        sky_coral: 'Небесный и коралл',
+        gold_indigo: 'Золото и индиго',
+        emerald_ruby: 'Изумруд и рубин',
+        aqua_tangerine: 'Аква и мандарин',
+        sage_terracotta: 'Шалфей и терракота',
+      },
     },
     data: {
       title: 'Данные',

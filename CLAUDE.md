@@ -41,6 +41,8 @@ src/
                        text-profit, text-loss, font-display (заголовки), num (цифры моно), rise (появление, --i), card-lift.
                        Без свечений, пульсаций и градиентов — сайт не должен выглядеть «сгенерированным». Светлая тема — :root[data-theme='light'] в том же файле
   lib/theme.ts         светлая (по умолчанию) / тёмная тема (localStorage, ставится до отрисовки в main.tsx), useTheme / setTheme
+  lib/palette.ts       палитра прибыли / убытка (по умолчанию classic — зелёный / красный; остальные — Pro / Pro Plus, проверка и триггером 0015):
+                       data-palette на <html>, цвета в theme.css; --color-up / --color-down = profit / loss
   lib/motion.ts        prefersReducedMotion, useCountUp — анимации уважают «уменьшить движение»
   i18n/ru.ts           ВСЕ тексты интерфейса. Новый язык = файл с той же структурой (тип Dict)
   i18n/index.ts        useT(), fmt(), plural() — числа со словом («1 сделка / 2 сделки / 5 сделок»)
@@ -61,7 +63,7 @@ src/
                        на планшете — только иконки (подпись при наведении) + шапка; на телефоне — шапка и нижнее меню с подписями
   lib/sync/            подключения бирж по API: run.ts (общий движок), bybit.ts (closed-pnl), hyperliquid.ts (исполнения кошелька),
                        polymarket.ts (закрытые позиции по адресу; рынок prediction: цена исхода 0…1, проигрыш — выход 0, название — trades.title) + тесты
-  features/calendar/   вкладка «Календарь» (/calendar): карта месяца (плюс — --color-up циан, минус — --color-down винный, один ровный тон без яркости по сумме) + панель итогов
+  features/calendar/   вкладка «Календарь» (/calendar): карта месяца (плюс — --color-up, минус — --color-down, один ровный тон без яркости по сумме), под ней «Итог месяца» (max win / max loss) + панель итогов, «По неделям» — monthWeeks('merge')
                        (monthSummary в lib/calc/calendar.ts: дни в плюс / минус, лучший / худший день, недели, дни недели)
   features/landing/    главная для гостей «/» (вошедшего — в дашборд); «/welcome» — та же главная всегда, даже после входа: живое демо на тех же виджетах (demo.ts), возможности, тарифы (PlansTable), вопросы
   features/<раздел>/   auth, dashboard, admin, connections (подключённые биржи, автосинхронизация) (админка: пользователи, Pro, сброс лимита), analysis (вкладка «Разбор»: таблицы по сетапам, ошибкам, парам, эмоциям, Long/Short), trades, import, settings
@@ -105,7 +107,7 @@ docs/SECURITY.md       вся защита (база, сайт, сборка) + 
 | `VITE_SUPABASE_ANON_KEY` | anon key или publishable key (публичный) |
 | `BASE_PATH` | только при сборке для GitHub Pages: `/CryptoJournal-Analys/` (ставит workflow) |
 
-Проект Supabase: `cryptojournal`, ref `dkjavndvuulnzflowdhj` (Frankfurt), миграции 0001–0014 применены (0005 — админка, владелец добавлен в `admins`; 0006 — подключения бирж; 0007–0008 — синхронизация по расписанию; 0009 — админ без лимитов; 0010–0011 — Polymarket, рынок `prediction`, `trades.title`; 0012–0013 — тарифы Pro / Pro Plus; 0014 — выдача админки на сайте, 05.11.2026).
+Проект Supabase: `cryptojournal`, ref `dkjavndvuulnzflowdhj` (Frankfurt), миграции 0001–0014 применены (0015 — палитра profiles.palette, применить при выкладке) (0005 — админка, владелец добавлен в `admins`; 0006 — подключения бирж; 0007–0008 — синхронизация по расписанию; 0009 — админ без лимитов; 0010–0011 — Polymarket, рынок `prediction`, `trades.title`; 0012–0013 — тарифы Pro / Pro Plus; 0014 — выдача админки на сайте, 05.11.2026).
 Подключения бирж (как TradeZella): `features/connections` + `lib/sync` + серверная функция `supabase/functions/exchange-proxy` (выложена; при изменении — выложить заново через коннектор Supabase, verify_jwt = true). Секреты ключей — в Vault, браузер их не видит. Новые биржи: `connection_kind` в новой миграции + модуль в `lib/sync` + `CONNECTABLE`.
 Синхронизация по расписанию (Pro Plus, каждые 3 ч): pg_cron `cj-sync` → `dispatch_sync()` → pg_net → функция `sync-worker` (verify_jwt = false, проверяет секрет `cj_sync_secret` из Vault).
 Логика одна для браузера и сервера: `src/lib/sync/run.ts`; `supabase/functions/sync-worker/engine.js` собирается `npm run build:functions` (CI проверяет, что он свежий).

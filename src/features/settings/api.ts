@@ -16,7 +16,7 @@ export function useProfile() {
   })
 }
 
-export type ProfilePatch = Partial<Pick<Profile, 'display_name' | 'timezone' | 'starting_balance'>>
+export type ProfilePatch = Partial<Pick<Profile, 'display_name' | 'timezone' | 'starting_balance' | 'palette'>>
 
 export function useUpdateProfile() {
   const qc = useQueryClient()

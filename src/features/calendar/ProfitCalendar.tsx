@@ -8,7 +8,7 @@ import { useMemo, useState, type CSSProperties } from 'react'
 import { fmt, plural, useT } from '@/i18n'
 import { useTrades } from '@/features/trades/api'
 import { closedTrades } from '@/lib/calc/stats'
-import { calendarSpan, compactPnl, monthSummary, monthWeeks, profitCalendar, type CalCell, type CalDay, type WeekMode } from '@/lib/calc/calendar'
+import { calendarSpan, compactPnl, monthSummary, monthWeeks, profitCalendar, type CalCell, type CalDay } from '@/lib/calc/calendar'
 import { formatDay, formatPercent, formatPnl } from '@/lib/format'
 import { parseYmd, ymd } from '@/lib/period'
 import { useMediaQuery } from '@/lib/useMediaQuery'
@@ -180,8 +180,8 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
 
   /** Итоги месяца: результат, торговые дни (плюс / минус), лучший и худший день, недели и дни недели полосками */
   function MonthPanel() {
-    const mode = ((typeof location !== 'undefined' && new URLSearchParams(location.search).get('weeks')) || 'rows') as WeekMode
-    const weeks = monthWeeks(cal, mode)
+    // недели по рядам календаря, огрызки короче 4 дней приклеены к соседней (выбор владельца 07.11.2026)
+    const weeks = monthWeeks(cal, 'merge')
     const mon = c.monthsShort[view.m]
     const weekLabel = (from: number, to: number) => (from === to ? `${from} ${mon}` : `${from}–${to} ${mon}`)
     const weekMax = Math.max(1e-9, ...weeks.map((w) => Math.abs(w.cell.pnl)))

@@ -14,6 +14,7 @@ import { deleteMyAccount, downloadTradesCsv } from './dataApi'
 import { SecurityCard } from './SecurityCard'
 import { Segmented } from '@/components/ui/Segmented'
 import { setTheme, useTheme, type Theme } from '@/lib/theme'
+import { applyPalette, canChoosePalette, isPalette, PALETTES, type Palette } from '@/lib/palette'
 
 export function SettingsPage() {
   const t = useT()
@@ -25,6 +26,7 @@ export function SettingsPage() {
         <PlanCard />
         <AppearanceCard />
       </div>
+      <PaletteCard />
       <SecurityCard />
       <div className="grid gap-4 lg:grid-cols-3">
         <ListEditor kind="setups" />
@@ -53,6 +55,79 @@ function AppearanceCard() {
           { value: 'light', label: a.light },
         ]}
       />
+    </Card>
+  )
+}
+
+/** Палитра прибыли / убытка: образцы W / L и PnL в цветах палитры; выбирать — Pro и Pro Plus */
+function PaletteCard() {
+  const t = useT()
+  const a = t.settings.appearance
+  const { data: profile } = useProfile()
+  const { data: usage } = useUsage()
+  const update = useUpdateProfile()
+  const [error, setError] = useState<string | null>(null)
+  const allowed = canChoosePalette(usage?.plan)
+  const current: Palette = allowed && isPalette(profile?.palette) ? profile.palette : 'classic'
+
+  async function choose(p: Palette) {
+    if (!allowed || p === current) return
+    setError(null)
+    applyPalette(p) // сразу видно на сайте
+    try {
+      await update.mutateAsync({ palette: p })
+    } catch (e) {
+      applyPalette(current)
+      setError(dbErrorMessage(e, t))
+    }
+  }
+
+  return (
+    <Card data-shot="palette">
+      <h2 className="mb-1 font-medium">{a.palette}</h2>
+      <p className="mb-4 text-sm text-muted">{a.paletteHint}</p>
+      {!allowed && usage && (
+        <Alert tone="info">
+          {a.paletteLocked}{' '}
+          <Link to="/plans" className="font-semibold text-primary hover:underline">
+            {a.paletteUpgrade}
+          </Link>
+        </Alert>
+      )}
+      <div role="radiogroup" aria-label={a.palette} className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
+        {PALETTES.map((p) => {
+          const active = p === current
+          return (
+            <button
+              key={p}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              aria-label={a.palettes[p]}
+              disabled={!allowed && p !== 'classic'}
+              onClick={() => void choose(p)}
+              data-palette={p}
+              className={`flex flex-col gap-2 rounded-lg border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                active ? 'border-primary bg-primary/10' : 'border-border bg-surface-2/40 hover:border-muted'
+              }`}
+            >
+              <span className="flex gap-1.5">
+                <span className="num flex size-7 items-center justify-center rounded-md bg-profit/15 text-xs font-bold text-profit">W</span>
+                <span className="num flex size-7 items-center justify-center rounded-md bg-loss/15 text-xs font-bold text-loss">L</span>
+              </span>
+              <span className="num text-xs font-semibold">
+                <span className="text-profit">+120</span> <span className="text-loss">−80</span>
+              </span>
+              <span className="text-xs text-text/80">{a.palettes[p]}</span>
+            </button>
+          )
+        })}
+      </div>
+      {error && (
+        <div className="mt-3">
+          <Alert tone="error">{error}</Alert>
+        </div>
+      )}
     </Card>
   )
 }
