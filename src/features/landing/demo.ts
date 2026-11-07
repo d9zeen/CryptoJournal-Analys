@@ -2,7 +2,7 @@
  * Демо-счёт для главной страницы: 60 выдуманных сделок за два месяца (детерминированно — одинаково при каждом открытии).
  * Считается теми же функциями, что и настоящий дашборд.
  */
-import { closedTrades, downsampleEquity, equityCurve, pnlByDay, summarize, type StatTrade } from '@/lib/calc/stats'
+import { closedTrades, downsampleEquity, drawdownPeriod, equityCurve, pnlBars, pnlByDay, rWinLoss, summarize, type StatTrade } from '@/lib/calc/stats'
 import { traderScore } from '@/lib/calc/score'
 
 const SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'TONUSDT']
@@ -47,5 +47,15 @@ export function demoAccount(now = Date.now()) {
   const curve = equityCurve(closed)
   const summary = summarize(closed, 5000)
   const days = pnlByDay(closed, 'UTC')
-  return { summary, equity: downsampleEquity(curve), score: traderScore(summary, days), balance: 5000 }
+  return {
+    summary,
+    curve,
+    equity: downsampleEquity(curve),
+    score: traderScore(summary, days),
+    balance: 5000,
+    period: drawdownPeriod(curve),
+    rwl: rWinLoss(closed),
+    bars: pnlBars(days),
+    trades: closed,
+  }
 }

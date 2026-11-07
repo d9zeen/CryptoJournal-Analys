@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
-import { useNavigate } from 'react-router'
+import { useNavigate, useSearchParams } from 'react-router'
 import { fmt, useT } from '@/i18n'
 import { useTrades } from '@/features/trades/api'
 import { useProfile } from '@/features/settings/api'
@@ -27,6 +27,7 @@ import { EquityTableDialog } from './EquityTableDialog'
 import type { EquityUnit } from './equityTime'
 import { Segmented } from '@/components/ui/Segmented'
 import { useMediaQuery } from '@/lib/useMediaQuery'
+import { Welcome } from './Welcome'
 
 // Recharts тяжёлый — грузим графики отдельным файлом
 const EquityChart = lazy(() => import('./charts').then((m) => ({ default: m.EquityChart })))
@@ -69,6 +70,10 @@ export function DashboardPage() {
   const wide = useMediaQuery('(min-width: 1024px)')
 
   const s = stats.summary
+  // совсем новый пользователь (сделок нет вообще) — пример статистики и пути начать вместо пустой карточки
+  // ?welcome=1 — посмотреть стартовый экран, даже когда сделки уже есть (для владельца)
+  const [params] = useSearchParams()
+  const isNew = params.get('welcome') === '1' || (preset === 'all' && !isLoading && !error && (trades ?? []).length === 0)
   const score = useMemo(() => traderScore(stats.summary, stats.days), [stats])
   const bars = useMemo(() => pnlBars(stats.days), [stats.days])
 
@@ -76,7 +81,8 @@ export function DashboardPage() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold">{t.dashboard.title}</h1>
-        <PeriodFilter preset={preset} custom={custom} onPreset={setPreset} onCustom={setCustom} />
+        {/* у нового пользователя выбирать период не из чего */}
+        {!isNew && <PeriodFilter preset={preset} custom={custom} onPreset={setPreset} onCustom={setCustom} />}
       </div>
 
       {error && <Alert tone="error">{t.errors.loadFailed}</Alert>}
@@ -85,6 +91,8 @@ export function DashboardPage() {
 
       {isLoading ? (
         <p className="text-muted">{t.common.loading}</p>
+      ) : isNew ? (
+        <Welcome />
       ) : stats.closed.length === 0 ? (
         <Card className="text-center">
           <p className="text-muted">{t.dashboard.empty}</p>

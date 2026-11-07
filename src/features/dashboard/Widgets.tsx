@@ -46,13 +46,14 @@ function useShown(): boolean {
   return shown
 }
 
-const grow = 'transition-[stroke-dasharray,stroke-dashoffset] duration-[900ms] ease-out motion-reduce:transition-none'
+const growCls = 'transition-[stroke-dasharray,stroke-dashoffset] duration-[900ms] ease-out motion-reduce:transition-none'
 
 /* ---------- Шкалы ---------- */
 
-/** Полукруг: доля a (прибыль) слева, доля b (убыток) справа, между ними — зазор */
-function HalfGauge({ a, b }: { a: number; b: number }) {
-  const shown = useShown()
+/** Полукруг: доля a (прибыль) слева, доля b (убыток) справа, между ними — зазор. live — значение меняется каждый кадр (демо), без своей анимации */
+export function HalfGauge({ a, b, live }: { a: number; b: number; live?: boolean }) {
+  const shown = useShown() || !!live
+  const grow = live ? '' : growCls
   const sum = a + b
   const gap = a > 0 && b > 0 ? 3 : 0
   const pa = sum > 0 ? (a / sum) * (100 - gap) : 0
@@ -81,8 +82,9 @@ function HalfGauge({ a, b }: { a: number; b: number }) {
 }
 
 /** Кольцо: прибыль и убытки по кругу */
-function Ring({ a, b }: { a: number; b: number }) {
-  const shown = useShown()
+export function Ring({ a, b, live }: { a: number; b: number; live?: boolean }) {
+  const shown = useShown() || !!live
+  const grow = live ? '' : growCls
   const sum = a + b
   const gap = a > 0 && b > 0 ? 4 : 0
   const pa = sum > 0 ? (a / sum) * (100 - gap * 2) : 0
@@ -118,7 +120,7 @@ function PairBars({ win, loss }: { win: number; loss: number }) {
 
 /* ---------- Верхний ряд ---------- */
 
-function Widget({ label, hint, aside, children, className = '' }: { label: string; hint: string; aside?: ReactNode; children: ReactNode; className?: string }) {
+export function Widget({ label, hint, aside, children, className = '' }: { label: string; hint: string; aside?: ReactNode; children: ReactNode; className?: string }) {
   return (
     <section className={`card-lift flex min-w-0 flex-col gap-3 rounded-lg border border-border bg-surface p-4 ${className}`}>
       <div className="flex items-center justify-between gap-2">
@@ -135,7 +137,7 @@ function Widget({ label, hint, aside, children, className = '' }: { label: strin
   )
 }
 
-const big = 'num min-w-0 truncate text-xl leading-tight font-semibold sm:text-2xl'
+export const big = 'num min-w-0 truncate text-xl leading-tight font-semibold sm:text-2xl'
 
 export function KpiRow({ summary: s, score, startingBalance, equity = [] }: { summary: Summary; score: TraderScore; startingBalance: number | null; equity?: EquityPoint[] }) {
   const t = useT()
@@ -201,7 +203,7 @@ export function KpiRow({ summary: s, score, startingBalance, equity = [] }: { su
 }
 
 /** «Таблетки» с количеством под шкалой (в прибыль / в убыток) */
-function Counts({ a, b }: { a: number; b: number }) {
+export function Counts({ a, b }: { a: number; b: number }) {
   return (
     <div className="num flex gap-1.5 text-xs font-semibold">
       <span className={`rounded-md px-1.5 py-0.5 ${TONE.aPill}`}>{a}</span>
