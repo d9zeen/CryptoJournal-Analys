@@ -69,7 +69,11 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
           </div>
         </div>
 
-        <div className={`mt-4 grid flex-1 gap-1.5 ${wide ? 'grid-cols-[repeat(7,minmax(0,1fr))_minmax(0,1fr)] grid-rows-[auto_repeat(6,minmax(0,1fr))]' : 'grid-cols-7'} ${isLoading ? 'opacity-60' : ''}`}>
+        {/* рядов столько, сколько недель у месяца (4–6), под ними — итог месяца */}
+        <div
+          className={`mt-4 grid flex-1 gap-1.5 ${wide ? 'grid-cols-[repeat(7,minmax(0,1fr))_minmax(0,1fr)]' : 'grid-cols-7'} ${isLoading ? 'opacity-60' : ''}`}
+          style={wide ? { gridTemplateRows: `auto repeat(${cal.weeks.length}, minmax(0, 1fr)) auto` } : undefined}
+        >
           {t.period.weekdaysShort.map((w) => (
             <div key={w} className="pb-1 text-center text-xs text-muted">
               {w}
@@ -79,6 +83,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
           {cal.weeks.map((week) => (
             <Week key={week.days[0].date} days={week.days} total={week.total} />
           ))}
+          <MonthTotal />
         </div>
       </section>
 
@@ -108,7 +113,38 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
     )
   }
 
+  /** Строка «Итог месяца» под сеткой: результат, сделки, винрейт, самая прибыльная и самая убыточная сделка */
+  function MonthTotal() {
+    const items: { label: string; value: string; tone?: string }[] = [
+      { label: c.trades, value: String(m.count) },
+      { label: c.winrate, value: m.count ? formatPercent(m.wins / m.count, 0) : '—' },
+      { label: c.maxWin, value: m.best === null ? '—' : formatPnl(m.best), tone: m.best === null ? '' : 'text-up' },
+      { label: c.maxLoss, value: m.worst === null ? '—' : formatPnl(m.worst), tone: m.worst === null ? '' : 'text-down' },
+    ]
+    return (
+      <div
+        data-shot="month-total"
+        className={`flex flex-wrap items-center gap-x-6 gap-y-2 rounded-md border border-border bg-bg/40 px-4 py-3 ${wide ? 'col-span-8' : 'col-span-7 mt-1'}`}
+      >
+        <div className="flex items-baseline gap-3">
+          <span className="text-sm font-semibold">{c.monthTotal}</span>
+          <span className={`num text-lg font-semibold ${m.count === 0 ? 'text-muted' : m.pnl >= 0 ? 'text-up' : 'text-down'}`}>{m.count ? formatPnl(m.pnl) : '—'}</span>
+        </div>
+        <dl className="flex flex-wrap items-baseline gap-x-6 gap-y-1 text-sm sm:ml-auto">
+          {items.map((it) => (
+            <div key={it.label} className="flex items-baseline gap-2">
+              <dt className="text-xs text-muted">{it.label}</dt>
+              <dd className={`num font-semibold ${it.tone ?? ''}`}>{it.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    )
+  }
+
   function Day({ d }: { d: CalDay }) {
+    // дни соседних месяцев — пустое место: ряд просто заканчивается на последнем дне месяца
+    if (!d.inMonth) return <div aria-hidden className={wide ? 'min-h-24 xl:min-h-28' : 'min-h-14'} />
     const title = d.count ? `${d.date}: ${formatPnl(d.pnl)} · ${plural(d.count, c.tradesN)} · ${formatPercent(d.wins / d.count, 0)}` : d.date
     const style = d.inMonth ? heat(d.pnl) : undefined
     const base = !d.inMonth ? 'cal-hatch border-transparent' : style ? '' : 'border-border bg-surface-2/40'

@@ -1,6 +1,7 @@
 /**
- * Календарь прибыли: месяц сеткой 6 × 7 (неделя с понедельника), по каждому дню — PnL, число сделок и винрейт,
- * справа — итог недели (вместе с днями соседних месяцев, как они видны в сетке), внизу — итог месяца.
+ * Календарь прибыли: месяц сеткой по неделям с понедельника — только недели, где есть дни этого месяца (4–6 рядов),
+ * по каждому дню — PnL, число сделок и винрейт; справа — итог недели (только дни этого месяца), внизу — итог месяца
+ * с самой прибыльной и самой убыточной сделкой. Дни соседних месяцев в сетке пустые.
  * День сделки — дата закрытия в часовом поясе пользователя.
  */
 import { monthGrid, ymd } from '@/lib/period'
@@ -9,7 +10,9 @@ import { zonedParts } from '@/lib/tz'
 export type CalCell = { pnl: number; count: number; wins: number }
 export type CalDay = CalCell & { date: string; day: number; inMonth: boolean }
 export type CalWeek = { days: CalDay[]; total: CalCell }
-export type ProfitCalendar = { weeks: CalWeek[]; month: CalCell }
+/** Итог месяца: best / worst — самая прибыльная и самая убыточная сделка (null — таких нет) */
+export type CalMonth = CalCell & { best: number | null; worst: number | null }
+export type ProfitCalendar = { weeks: CalWeek[]; month: CalMonth }
 
 const empty = (): CalCell => ({ pnl: 0, count: 0, wins: 0 })
 const add = (c: CalCell, pnl: number) => {
@@ -21,11 +24,18 @@ const add = (c: CalCell, pnl: number) => {
 /** month — 0…11 */
 export function profitCalendar(closed: { exit_at: string; pnl: number }[], year: number, month: number, timeZone: string): ProfitCalendar {
   const byDate = new Map<string, CalCell>()
+  const ym = `${year}-${String(month + 1).padStart(2, '0')}`
+  let best: number | null = null
+  let worst: number | null = null
   for (const t of closed) {
     const { date } = zonedParts(t.exit_at, timeZone)
     const c = byDate.get(date) ?? empty()
     add(c, t.pnl)
     byDate.set(date, c)
+    if (date.startsWith(ym)) {
+      if (t.pnl > 0 && (best === null || t.pnl > best)) best = t.pnl
+      if (t.pnl < 0 && (worst === null || t.pnl < worst)) worst = t.pnl
+    }
   }
   const dates = monthGrid(year, month)
   const weeks: CalWeek[] = []
@@ -36,19 +46,20 @@ export function profitCalendar(closed: { exit_at: string; pnl: number }[], year:
       const date = ymd(d)
       const c = byDate.get(date) ?? empty()
       const inMonth = d.getMonth() === month
-      total.pnl += c.pnl
-      total.count += c.count
-      total.wins += c.wins
       if (inMonth) {
+        total.pnl += c.pnl
+        total.count += c.count
+        total.wins += c.wins
         monthCell.pnl += c.pnl
         monthCell.count += c.count
         monthCell.wins += c.wins
       }
       return { ...c, date, day: d.getDate(), inMonth }
     })
-    weeks.push({ days, total })
+    // неделя целиком из соседнего месяца не нужна: сетка заканчивается на последней неделе месяца
+    if (days.some((d) => d.inMonth)) weeks.push({ days, total })
   }
-  return { weeks, month: monthCell }
+  return { weeks, month: { ...monthCell, best, worst } }
 }
 
 /** Даты сетки — для запроса сделок: первый и последний день (YYYY-MM-DD) */
