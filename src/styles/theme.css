@@ -30,7 +30,7 @@
 
   /* Текст */
   --color-text: #ececef;
-  --color-muted: #a6a8b0;   /* подписи: светлее, чтобы читались на тёмном фоне */
+  --color-muted: #b6b8bf;   /* подписи: контраст ≥ 7:1 на всех поверхностях (WCAG AA с запасом) */
 
   /* Акценты */
   --color-primary: #8d78ff;       /* фиолетовый: кнопки, ссылки */
@@ -70,9 +70,9 @@
   --color-surface-2: #e6dfcf;
   --color-border: #d9d1bf;
   --color-text: #1f1b14;
-  --color-muted: #6d6555;
-  --color-primary: #6650ee;
-  --color-primary-hover: #5640e0;
+  --color-muted: #5a5346;         /* подписи: контраст ≥ 5.7:1 на всех поверхностях (WCAG AA) */
+  --color-primary: #5b45e6;       /* тот же фиолетовый, на тон темнее — текст-ссылки ≥ 4.5:1 на светлом фоне */
+  --color-primary-hover: #4c36d6;
   --color-on-primary: #ffffff;
   --color-accent: #0b9f84;
   --color-profit: #0a9b6a;
@@ -214,6 +214,16 @@
 }
 @keyframes vt-in {
   from { opacity: 0; transform: translateY(6px); }
+}
+/* смена темы — только растворение, страница не сдвигается (src/lib/theme.ts) */
+:root[data-vt='theme']::view-transition-old(root) {
+  animation: 280ms ease-out both vt-out;
+}
+:root[data-vt='theme']::view-transition-new(root) {
+  animation: 280ms ease-out both vt-fade;
+}
+@keyframes vt-fade {
+  from { opacity: 0; }
 }
 
 /* Кто попросил систему «уменьшить движение» — всё статично */

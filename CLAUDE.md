@@ -40,7 +40,7 @@ src/
                        border-border, text-text, text-muted, text-primary (фиолет: кнопки), text-accent (мята: данные),
                        text-profit, text-loss, font-display (заголовки), num (цифры моно), rise (появление, --i), card-lift.
                        Без свечений, пульсаций и градиентов — сайт не должен выглядеть «сгенерированным». Светлая тема — :root[data-theme='light'] в том же файле
-  lib/theme.ts         светлая (по умолчанию) / тёмная тема (localStorage, ставится до отрисовки в main.tsx), useTheme / setTheme
+  lib/theme.ts         тёмная (по умолчанию) / светлая тема (localStorage; до загрузки приложения — public/theme-init.js, без вспышки), useTheme / setTheme; кнопка — components/ThemeToggle.tsx
   lib/palette.ts       палитра прибыли / убытка (по умолчанию classic — зелёный / красный; classic, teal_salmon, sky_coral — всем, остальные 5 — Pro / Pro Plus, проверка и триггером 0015; выбор — полоска под календарём, features/palette):
                        data-palette на <html>, цвета в theme.css; --color-up / --color-down = profit / loss
   lib/motion.ts        prefersReducedMotion, useCountUp — анимации уважают «уменьшить движение»
