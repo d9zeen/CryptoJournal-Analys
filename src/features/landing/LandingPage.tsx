@@ -12,6 +12,7 @@ import { KpiRow, ScoreCard } from '@/features/dashboard/Widgets'
 import { formatPnl, pnlClass } from '@/lib/format'
 import { Reveal } from './Reveal'
 import { PlanCards } from './PlanCards'
+import { HeroCandles } from './HeroCandles'
 import { demoAccount } from './demo'
 
 const EquityChart = lazy(() => import('@/features/dashboard/charts').then((m) => ({ default: m.EquityChart })))
@@ -79,7 +80,13 @@ export function LandingPage() {
       <main>
         {/* первый экран */}
         <section className={`${wrap} pt-12 pb-10 sm:pt-20`}>
-          <div className="max-w-3xl">
+          <div className="relative">
+          {/* живой свечной график справа от заголовка, на фоне */}
+          <HeroCandles
+            className="hero-fade animate-word pointer-events-none absolute -top-10 -bottom-8 right-0 hidden w-[60%] md:block"
+            style={{ animationDelay: '500ms' }}
+          />
+          <div className="relative max-w-3xl">
             {/* заход на сайт: слова заголовка по очереди, затем подзаголовок, кнопки и превью */}
             <h1 className="text-4xl leading-[1.08] font-bold tracking-tight text-balance sm:text-5xl lg:text-6xl" aria-label={l.title}>
               {l.title.split(' ').map((w, i) => (
@@ -102,6 +109,7 @@ export function LandingPage() {
                 {l.login}
               </Link>
             </Reveal>
+          </div>
           </div>
 
           {/* живое превью дашборда */}

@@ -192,6 +192,14 @@
   }
 }
 
+/* Фоновый график на первом экране: растворяется к краям, слева — под текстом почти не виден */
+@utility hero-fade {
+  mask-image:
+    linear-gradient(to right, transparent, black 30%, black 88%, transparent),
+    linear-gradient(to bottom, transparent, black 18%, black 82%, transparent);
+  mask-composite: intersect;
+}
+
 /* Лесенка появления: style={{ '--i': номер }} задаёт задержку */
 @utility rise {
   animation: var(--animate-rise);
