@@ -305,22 +305,22 @@ test('ключевые цифры: последние 10 сделок буква
   await expect(form.getByLabel('Поражение')).toHaveCount(3)
 })
 
-test('палитра: на Basic заблокирована, на Pro выбирается и красит сайт', async ({ page, db }) => {
+test('палитра под календарём: на Basic заблокирована, ссылка на тарифы', async ({ page, db }) => {
   await fakeSupabase(page, db)
-  await page.goto('settings')
-  const card = page.locator('[data-shot="palette"]')
-  await expect(card.getByText('Свои цвета — на тарифах Pro и Pro Plus')).toBeVisible()
-  await expect(card.getByRole('radio', { name: 'Циан и винный' })).toBeDisabled()
+  await page.goto('calendar')
+  const strip = page.locator('[data-shot="palette"]')
+  await expect(strip.getByRole('link', { name: 'Свои цвета — Pro' })).toBeVisible()
+  await expect(strip.getByRole('radio', { name: 'Циан и винный' })).toBeDisabled()
   await expect(page.locator('html')).not.toHaveAttribute('data-palette', /.+/)
 })
 
-test('палитра на Pro: выбор сохраняется в профиле и ставится на страницу', async ({ page, db }) => {
+test('палитра на Pro: выбор под календарём сохраняется в профиле и ставится на страницу', async ({ page, db }) => {
   db.usage.plan = 'pro'
   await fakeSupabase(page, db)
-  await page.goto('settings')
-  const card = page.locator('[data-shot="palette"]')
-  await card.getByRole('radio', { name: 'Циан и винный' }).click()
+  await page.goto('calendar')
+  const strip = page.locator('[data-shot="palette"]')
+  await strip.getByRole('radio', { name: 'Циан и винный' }).click()
   await expect(page.locator('html')).toHaveAttribute('data-palette', 'cyan_wine')
   await expect.poll(() => db.palette).toBe('cyan_wine')
-  await expect(card.getByRole('radio', { name: 'Циан и винный' })).toHaveAttribute('aria-checked', 'true')
+  await expect(strip.getByRole('radio', { name: 'Циан и винный' })).toHaveAttribute('aria-checked', 'true')
 })

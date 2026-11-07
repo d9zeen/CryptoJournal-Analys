@@ -12,6 +12,7 @@ import { calendarSpan, compactPnl, monthSummary, monthWeeks, profitCalendar, typ
 import { formatDay, formatPercent, formatPnl } from '@/lib/format'
 import { parseYmd, ymd } from '@/lib/period'
 import { useMediaQuery } from '@/lib/useMediaQuery'
+import { PaletteStrip } from '@/features/palette/PaletteStrip'
 
 const monthTitle = new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' })
 /** «Ноябрь 2026» — без «г.» и без CSS capitalize (он делал «2026 Г.») */
@@ -85,6 +86,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
           ))}
           <MonthTotal />
         </div>
+        <PaletteStrip />
       </section>
 
       <MonthPanel />

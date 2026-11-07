@@ -359,10 +359,8 @@ export const ru = {
       theme: 'Тема',
       dark: 'Тёмная',
       light: 'Светлая',
-      palette: 'Цвета прибыли и убытка',
-      paletteHint: 'Меняют плюс и минус по всему сайту: PnL, календарь, последние сделки. Сохраняется в профиле.',
-      paletteLocked: 'Свои цвета — на тарифах Pro и Pro Plus. На Basic — зелёный и красный.',
-      paletteUpgrade: 'Тарифы',
+      palette: 'Цвета плюса и минуса',
+      paletteLocked: 'Свои цвета — Pro',
       palettes: {
         classic: 'Классика',
         cyan_wine: 'Циан и винный',
