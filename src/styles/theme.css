@@ -41,6 +41,7 @@
   /* Торговые цвета: прибыль — фирменная неоновая мята, убыток — красный как в стаканах бирж */
   --color-profit: #4dffb0;      /* прибыль, long */
   --color-loss: #f6465d;        /* убыток, short */
+  --color-down: #ff6b6b;        /* «минус» в картинках (календарь, W / L): заметный, но мягче красного стакана */
   --color-warning: #f4b64a;
 
 
@@ -73,6 +74,7 @@
   --color-accent: #0b9f84;
   --color-profit: #0a9b6a;
   --color-loss: #dc2f4a;
+  --color-down: #d64545;
   --color-warning: #b0700a;
 }
 

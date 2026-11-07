@@ -22,12 +22,12 @@ const monthLabel = (y: number, m: number) => {
 /** сделка могла открыться задолго до закрытия — грузим с запасом */
 const LOOKBACK_DAYS = 60
 
-/** Фон клетки: фиолетовый (плюс) или серый (минус), насыщенность 10…40 % по сумме дня */
+/** Фон клетки: фиолетовый (плюс) или цвет «минуса» (--color-down), насыщенность по сумме дня */
 function heat(pnl: number, maxAbs: number): CSSProperties | undefined {
   if (!pnl || !maxAbs) return undefined
   const k = Math.min(1, Math.abs(pnl) / maxAbs)
-  const color = pnl > 0 ? 'var(--color-primary)' : 'var(--color-muted)'
-  const pct = Math.round((pnl > 0 ? 10 : 8) + k * (pnl > 0 ? 30 : 20))
+  const color = pnl > 0 ? 'var(--color-primary)' : 'var(--color-down)'
+  const pct = Math.round(10 + k * 30)
   return { backgroundColor: `color-mix(in srgb, ${color} ${pct}%, transparent)`, borderColor: `color-mix(in srgb, ${color} ${pct + 15}%, transparent)` }
 }
 
@@ -62,7 +62,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-baseline gap-3">
             <h1 className="text-lg font-semibold">{c.title}</h1>
-            {m.count > 0 && <span className="num text-sm font-semibold text-muted">{formatPnl(m.pnl)}</span>}
+            {m.count > 0 && <span className={`num text-sm font-semibold ${m.pnl < 0 ? 'text-down' : 'text-muted'}`}>{formatPnl(m.pnl)}</span>}
           </div>
           <div className="flex items-center gap-1 rounded-lg border border-border bg-surface-2/60 p-1">
             <NavBtn dir={-1} label={c.prev} onClick={() => shift(-1)} />
@@ -98,7 +98,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
           <div className="flex min-h-24 flex-col items-center justify-center rounded-md border border-border bg-bg/40 px-1 py-2 text-center xl:min-h-28">
             {total.count > 0 ? (
               <>
-                <span className={`num truncate text-sm font-semibold ${total.pnl >= 0 ? 'text-text' : 'text-muted'}`}>{formatPnl(total.pnl)}</span>
+                <span className={`num truncate text-sm font-semibold ${total.pnl >= 0 ? 'text-text' : 'text-down'}`}>{formatPnl(total.pnl)}</span>
                 <span className="mt-0.5 truncate text-[11px] text-muted">{plural(total.count, c.tradesN)}</span>
               </>
             ) : (
@@ -179,12 +179,12 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
               </div>
               <div className="mt-2 flex h-1.5 gap-0.5 overflow-hidden rounded-full bg-surface-2">
                 <i className="block bg-primary" style={{ flex: dayShare }} />
-                <i className="block bg-muted/45" style={{ flex: 1 - dayShare }} />
+                <i className="block bg-down" style={{ flex: 1 - dayShare }} />
               </div>
               <div className="mt-1.5 text-xs text-muted">{fmt(c.daysUpDown, { up: sum.upDays, down: sum.downDays })}</div>
               <dl className="mt-4 grid gap-2 text-sm">
                 {sum.best && <Row label={c.bestDay} sub={formatDay(sum.best.date)} value={formatPnl(sum.best.pnl)} />}
-                {sum.worst && <Row label={c.worstDay} sub={formatDay(sum.worst.date)} value={formatPnl(sum.worst.pnl)} muted />}
+                {sum.worst && <Row label={c.worstDay} sub={formatDay(sum.worst.date)} value={formatPnl(sum.worst.pnl)} down={sum.worst.pnl < 0} />}
                 {sum.avgDay !== null && <Row label={c.avgDay} value={formatPnl(sum.avgDay)} />}
               </dl>
             </section>
@@ -197,7 +197,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
                     <div key={i} className="grid grid-cols-[72px_minmax(0,1fr)_auto] items-center gap-2 text-xs">
                       <span className="text-muted">{fmt(c.weekN, { n: i + 1 })}</span>
                       <Bar value={w.pnl} max={weekMax} />
-                      <span className={`num w-20 text-right font-semibold ${w.pnl < 0 ? 'text-muted' : ''}`}>{w.count ? formatPnl(w.pnl) : '—'}</span>
+                      <span className={`num w-20 text-right font-semibold ${w.pnl < 0 ? 'text-down' : ''}`}>{w.count ? formatPnl(w.pnl) : '—'}</span>
                     </div>
                   ),
                 )}
@@ -212,7 +212,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
                   <div key={i} className="flex h-full flex-col items-center justify-end gap-1" title={w.count ? `${t.period.weekdaysShort[i]}: ${formatPnl(w.pnl)}` : undefined}>
                     <div className="flex w-full flex-1 items-end">
                       <i
-                        className={`block w-full rounded-sm ${w.pnl >= 0 ? 'bg-primary' : 'bg-muted/45'}`}
+                        className={`block w-full rounded-sm ${w.pnl >= 0 ? 'bg-primary' : 'bg-down'}`}
                         style={{ height: w.count ? `${Math.max(6, (Math.abs(w.pnl) / wdMax) * 100)}%` : 2 }}
                       />
                     </div>
@@ -228,14 +228,14 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
   }
 }
 
-function Row({ label, sub, value, muted = false }: { label: string; sub?: string; value: string; muted?: boolean }) {
+function Row({ label, sub, value, down = false }: { label: string; sub?: string; value: string; down?: boolean }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
       <dt className="text-muted">
         {label}
         {sub && <span className="ml-1.5 text-xs text-muted/70">{sub}</span>}
       </dt>
-      <dd className={`num font-semibold ${muted ? 'text-muted' : ''}`}>{value}</dd>
+      <dd className={`num font-semibold ${down ? 'text-down' : ''}`}>{value}</dd>
     </div>
   )
 }
@@ -246,7 +246,7 @@ function Bar({ value, max }: { value: number; max: number }) {
   return (
     <div className="relative h-1.5 rounded-full bg-surface-2">
       <i className="absolute inset-y-[-3px] left-1/2 w-px bg-border" aria-hidden />
-      <i className={`absolute inset-y-0 rounded-full ${value < 0 ? 'right-1/2 bg-muted/50' : 'left-1/2 bg-primary'}`} style={{ width: `${w}%` }} />
+      <i className={`absolute inset-y-0 rounded-full ${value < 0 ? 'right-1/2 bg-down' : 'left-1/2 bg-primary'}`} style={{ width: `${w}%` }} />
     </div>
   )
 }
