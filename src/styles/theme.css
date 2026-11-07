@@ -42,8 +42,8 @@
   --color-profit: #4dffb0;      /* прибыль, long */
   --color-loss: #f6465d;        /* убыток, short */
   /* «Плюс» и «минус» в картинках (календарь, W / L) — своя пара, не зелёный / красный бирж */
-  --color-up: #8cc7a0;
-  --color-down: #e07a52;
+  --color-up: #5ee0f0;   /* циан — победа / день в плюс (выбор владельца 07.11.2026) */
+  --color-down: #b85c66; /* винный — поражение / день в минус */
   --color-warning: #f4b64a;
 
 
@@ -76,8 +76,8 @@
   --color-accent: #0b9f84;
   --color-profit: #0a9b6a;
   --color-loss: #dc2f4a;
-  --color-up: #3f8a5c;
-  --color-down: #c0552c;
+  --color-up: #0a8a9c;
+  --color-down: #8f3a45;
   --color-warning: #b0700a;
 }
 

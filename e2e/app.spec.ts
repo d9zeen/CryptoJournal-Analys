@@ -293,3 +293,14 @@ test('стартовый экран можно открыть и при сдел
   await page.goto('dashboard?welcome=1')
   await expect(page.getByText('Начни за 2 минуты')).toBeVisible()
 })
+
+test('ключевые цифры: последние 10 сделок буквами W / L и счёт побед / поражений', async ({ page, db }) => {
+  // makeTrade: каждая третья сделка (i % 3 === 0) — в минус; последние 10 из 12 — i = 2…11: 3 поражения (3, 6, 9)
+  db.trades = Array.from({ length: 12 }, (_, i) => makeTrade(i))
+  await fakeSupabase(page, db)
+  await page.goto('dashboard')
+  const form = page.locator('[data-shot="form"]')
+  await expect(form.getByText('Последние 10 сделок')).toBeVisible()
+  await expect(form.getByLabel('Победа')).toHaveCount(7)
+  await expect(form.getByLabel('Поражение')).toHaveCount(3)
+})
