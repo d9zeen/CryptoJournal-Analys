@@ -372,7 +372,7 @@ function signedPercent(fraction: number): string {
 
 const FORM_N = 10
 
-/** Последние 10 сделок буквами W / L, как форма команды (выбор владельца 07.11.2026): победа — фиолетовая, поражение — цветом «минуса» */
+/** Последние 10 сделок буквами W / L, как форма команды (выбор владельца 07.11.2026): победа — цветом «плюса» (--color-up), поражение — «минуса» (--color-down) */
 function FormPanel({ trades }: { trades: { pnl: number }[] }) {
   const t = useT()
   const f = t.dashboard.kpi.form
@@ -385,7 +385,7 @@ function FormPanel({ trades }: { trades: { pnl: number }[] }) {
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <span className="text-xs text-muted">{plural(form.items.length, f.title)}</span>
         <span className="num text-sm">
-          <span className="font-semibold text-primary">{form.wins}</span> <span className="text-muted">{plural(form.wins, f.wins)}</span>
+          <span className="font-semibold text-up">{form.wins}</span> <span className="text-muted">{plural(form.wins, f.wins)}</span>
           <span className="text-muted"> · </span>
           <span className="font-semibold text-down">{form.losses}</span> <span className="text-muted">{plural(form.losses, f.losses)}</span>
         </span>
@@ -397,14 +397,14 @@ function FormPanel({ trades }: { trades: { pnl: number }[] }) {
             title={label(o)}
             aria-label={label(o)}
             className={`num flex size-7 items-center justify-center rounded-md text-xs font-bold ${
-              o === 'win' ? 'bg-primary/15 text-primary' : o === 'loss' ? 'bg-down/15 text-down' : 'border border-dashed border-border text-muted'
+              o === 'win' ? 'bg-up/15 text-up' : o === 'loss' ? 'bg-down/15 text-down' : 'border border-dashed border-border text-muted'
             }`}
           >
             {o === 'win' ? f.winLetter : o === 'loss' ? f.lossLetter : f.evenLetter}
           </li>
         ))}
       </ol>
-      {streak && <p className={`mt-2 text-xs ${form.streak!.kind === 'win' ? 'text-primary' : 'text-down'}`}>{streak}</p>}
+      {streak && <p className={`mt-2 text-xs ${form.streak!.kind === 'win' ? 'text-up' : 'text-down'}`}>{streak}</p>}
     </div>
   )
 }

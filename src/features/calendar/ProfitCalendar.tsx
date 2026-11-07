@@ -22,13 +22,11 @@ const monthLabel = (y: number, m: number) => {
 /** сделка могла открыться задолго до закрытия — грузим с запасом */
 const LOOKBACK_DAYS = 60
 
-/** Фон клетки: фиолетовый (плюс) или цвет «минуса» (--color-down), насыщенность по сумме дня */
-function heat(pnl: number, maxAbs: number): CSSProperties | undefined {
-  if (!pnl || !maxAbs) return undefined
-  const k = Math.min(1, Math.abs(pnl) / maxAbs)
-  const color = pnl > 0 ? 'var(--color-primary)' : 'var(--color-down)'
-  const pct = Math.round(10 + k * 30)
-  return { backgroundColor: `color-mix(in srgb, ${color} ${pct}%, transparent)`, borderColor: `color-mix(in srgb, ${color} ${pct + 15}%, transparent)` }
+/** Фон клетки: «плюс» (--color-up) или «минус» (--color-down) — один ровный оттенок, без яркости по сумме (выбор владельца 07.11.2026) */
+function heat(pnl: number): CSSProperties | undefined {
+  if (!pnl) return undefined
+  const color = pnl > 0 ? 'var(--color-up)' : 'var(--color-down)'
+  return { backgroundColor: `color-mix(in srgb, ${color} 18%, transparent)`, borderColor: `color-mix(in srgb, ${color} 45%, transparent)` }
 }
 
 export function ProfitCalendar({ timeZone }: { timeZone: string }) {
@@ -112,7 +110,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
 
   function Day({ d }: { d: CalDay }) {
     const title = d.count ? `${d.date}: ${formatPnl(d.pnl)} · ${plural(d.count, c.tradesN)} · ${formatPercent(d.wins / d.count, 0)}` : d.date
-    const style = d.inMonth ? heat(d.pnl, sum.maxAbsDay) : undefined
+    const style = d.inMonth ? heat(d.pnl) : undefined
     const base = !d.inMonth ? 'cal-hatch border-transparent' : style ? '' : 'border-border bg-surface-2/40'
     return (
       <div
@@ -178,7 +176,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
                 <span className="num font-semibold">{sum.tradedDays}</span>
               </div>
               <div className="mt-2 flex h-1.5 gap-0.5 overflow-hidden rounded-full bg-surface-2">
-                <i className="block bg-primary" style={{ flex: dayShare }} />
+                <i className="block bg-up" style={{ flex: dayShare }} />
                 <i className="block bg-down" style={{ flex: 1 - dayShare }} />
               </div>
               <div className="mt-1.5 text-xs text-muted">{fmt(c.daysUpDown, { up: sum.upDays, down: sum.downDays })}</div>
@@ -212,7 +210,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
                   <div key={i} className="flex h-full flex-col items-center justify-end gap-1" title={w.count ? `${t.period.weekdaysShort[i]}: ${formatPnl(w.pnl)}` : undefined}>
                     <div className="flex w-full flex-1 items-end">
                       <i
-                        className={`block w-full rounded-sm ${w.pnl >= 0 ? 'bg-primary' : 'bg-down'}`}
+                        className={`block w-full rounded-sm ${w.pnl >= 0 ? 'bg-up' : 'bg-down'}`}
                         style={{ height: w.count ? `${Math.max(6, (Math.abs(w.pnl) / wdMax) * 100)}%` : 2 }}
                       />
                     </div>
@@ -246,7 +244,7 @@ function Bar({ value, max }: { value: number; max: number }) {
   return (
     <div className="relative h-1.5 rounded-full bg-surface-2">
       <i className="absolute inset-y-[-3px] left-1/2 w-px bg-border" aria-hidden />
-      <i className={`absolute inset-y-0 rounded-full ${value < 0 ? 'right-1/2 bg-down' : 'left-1/2 bg-primary'}`} style={{ width: `${w}%` }} />
+      <i className={`absolute inset-y-0 rounded-full ${value < 0 ? 'right-1/2 bg-down' : 'left-1/2 bg-up'}`} style={{ width: `${w}%` }} />
     </div>
   )
 }

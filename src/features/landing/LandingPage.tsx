@@ -328,13 +328,13 @@ function CalendarVisual() {
       <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
         {cells.map((c, i) => {
           const d = c.out ? undefined : pnl[c.day]
-          const tone = !d ? (c.out ? 'cal-hatch border-transparent' : 'border-border bg-surface-2/50') : d[0] > 0 ? 'border-primary/30 bg-primary/12' : 'border-down/30 bg-down/12'
+          const tone = !d ? (c.out ? 'cal-hatch border-transparent' : 'border-border bg-surface-2/50') : d[0] > 0 ? 'border-up/45 bg-up/18' : 'border-down/45 bg-down/18'
           return (
             <div key={i} className={`relative flex min-h-12 flex-col items-center justify-center rounded-md border px-0.5 pt-3 pb-1 sm:min-h-16 ${tone}`}>
               <span className={`absolute top-0.5 right-1 text-[9px] sm:text-[10px] ${c.out ? 'text-muted/60' : 'text-muted'}`}>{c.day}</span>
               {d && (
                 <>
-                  <span className={`num text-[10px] leading-tight font-semibold sm:text-xs ${d[0] > 0 ? 'text-primary' : 'text-down'}`}>{wholeUsd(d[0])}</span>
+                  <span className={`num text-[10px] leading-tight font-semibold sm:text-xs ${d[0] > 0 ? 'text-up' : 'text-down'}`}>{wholeUsd(d[0])}</span>
                   <span className="hidden text-[10px] text-muted sm:block">{plural(d[1], t.dashboard.calendar.tradesN)}</span>
                 </>
               )}
