@@ -91,7 +91,7 @@ export const ru = {
     loadFailed: 'Не удалось загрузить данные.',
     screenshotLimit: 'Не больше 10 скриншотов на одну сделку.',
     rowLimit: 'Достигнут максимум записей этого типа.',
-    paletteNeedsPro: 'Свои цвета доступны на тарифах Pro и Pro Plus.',
+    paletteNeedsPro: 'Эта палитра доступна на тарифах Pro и Pro Plus.',
     mfaRequired: 'Нужно подтверждение кодом из приложения-аутентификатора. Выйди и войди снова.',
   },
   period: {
@@ -360,7 +360,7 @@ export const ru = {
       dark: 'Тёмная',
       light: 'Светлая',
       palette: 'Цвета плюса и минуса',
-      paletteLocked: 'Свои цвета — Pro',
+      paletteLocked: 'Ещё 5 палитр — в Pro',
       palettes: {
         classic: 'Классика',
         cyan_wine: 'Циан и винный',

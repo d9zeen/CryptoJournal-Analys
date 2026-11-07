@@ -41,7 +41,7 @@ src/
                        text-profit, text-loss, font-display (заголовки), num (цифры моно), rise (появление, --i), card-lift.
                        Без свечений, пульсаций и градиентов — сайт не должен выглядеть «сгенерированным». Светлая тема — :root[data-theme='light'] в том же файле
   lib/theme.ts         светлая (по умолчанию) / тёмная тема (localStorage, ставится до отрисовки в main.tsx), useTheme / setTheme
-  lib/palette.ts       палитра прибыли / убытка (по умолчанию classic — зелёный / красный; остальные — Pro / Pro Plus, проверка и триггером 0015):
+  lib/palette.ts       палитра прибыли / убытка (по умолчанию classic — зелёный / красный; classic, teal_salmon, sky_coral — всем, остальные 5 — Pro / Pro Plus, проверка и триггером 0015; выбор — полоска под календарём, features/palette):
                        data-palette на <html>, цвета в theme.css; --color-up / --color-down = profit / loss
   lib/motion.ts        prefersReducedMotion, useCountUp — анимации уважают «уменьшить движение»
   i18n/ru.ts           ВСЕ тексты интерфейса. Новый язык = файл с той же структурой (тип Dict)

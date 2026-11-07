@@ -305,13 +305,16 @@ test('ключевые цифры: последние 10 сделок буква
   await expect(form.getByLabel('Поражение')).toHaveCount(3)
 })
 
-test('палитра под календарём: на Basic заблокирована, ссылка на тарифы', async ({ page, db }) => {
+test('палитра под календарём на Basic: три бесплатные, остальные под замком', async ({ page, db }) => {
   await fakeSupabase(page, db)
   await page.goto('calendar')
   const strip = page.locator('[data-shot="palette"]')
-  await expect(strip.getByRole('link', { name: 'Свои цвета — Pro' })).toBeVisible()
+  await expect(strip.getByRole('link', { name: 'Ещё 5 палитр — в Pro' })).toBeVisible()
   await expect(strip.getByRole('radio', { name: 'Циан и винный' })).toBeDisabled()
   await expect(page.locator('html')).not.toHaveAttribute('data-palette', /.+/)
+  await strip.getByRole('radio', { name: 'Бирюза и лосось' }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-palette', 'teal_salmon')
+  await expect.poll(() => db.palette).toBe('teal_salmon')
 })
 
 test('палитра на Pro: выбор под календарём сохраняется в профиле и ставится на страницу', async ({ page, db }) => {

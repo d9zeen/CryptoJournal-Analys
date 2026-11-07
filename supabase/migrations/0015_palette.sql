@@ -1,7 +1,7 @@
 -- =====================================================================
 -- 0015 — Палитра «плюса» и «минуса» (цвета прибыли и убытка на сайте).
 --  * по умолчанию у всех 'classic' — зелёный и красный;
---  * выбрать другую могут только Pro и Pro Plus (и админ): проверка триггером в базе,
+--  * classic, teal_salmon, sky_coral — всем; остальные — только Pro и Pro Plus (и админ): проверка триггером в базе,
 --    в браузере — то же самое (полоска под календарём «Цвета плюса и минуса»);
 --  * список палитр — src/lib/palette.ts и src/styles/theme.css (data-palette).
 -- =====================================================================
@@ -20,7 +20,7 @@ set search_path = ''
 as $$
 begin
   if new.palette is distinct from old.palette
-     and new.palette <> 'classic'
+     and new.palette not in ('classic', 'teal_salmon', 'sky_coral')
      and coalesce(public.effective_plan(new.id), 'free') not in ('pro', 'pro_plus') then
     raise exception 'PALETTE_NEEDS_PRO' using errcode = 'P0001';
   end if;

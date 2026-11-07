@@ -6,7 +6,7 @@ import { setTheme, useTheme } from '@/lib/theme'
 import { useIsAdmin } from '@/features/admin/api'
 import { useAutoSync } from '@/features/connections/api'
 import { useProfile, useUsage } from '@/features/settings/api'
-import { applyPalette, canChoosePalette, isPalette } from '@/lib/palette'
+import { applyPalette, canUsePalette, isPalette } from '@/lib/palette'
 import { useEffect } from 'react'
 
 function useNavItems() {
@@ -212,12 +212,12 @@ function ThemeToggle() {
   )
 }
 
-/** Палитра прибыли / убытка из профиля; на Basic (или если Pro закончился) — классическая */
+/** Палитра прибыли / убытка из профиля; платная на Basic (Pro закончился) — классическая */
 function usePaletteSync() {
   const { data: profile } = useProfile()
   const { data: usage } = useUsage()
   useEffect(() => {
     if (!profile || !usage) return
-    applyPalette(canChoosePalette(usage.plan) && isPalette(profile.palette) ? profile.palette : 'classic')
+    applyPalette(isPalette(profile.palette) && canUsePalette(profile.palette, usage.plan) ? profile.palette : 'classic')
   }, [profile, usage])
 }
