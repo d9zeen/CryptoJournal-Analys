@@ -6,7 +6,8 @@
  * Роли акцентов: primary (фиолетовый) — кнопки, ссылки, навигация;
  * accent (мятный) — данные и графики; profit / loss — только прибыль и убыток.
  *
- * Тема: тёмная по умолчанию, светлая — атрибут data-theme="light" на <html> (src/lib/theme.ts).
+ * Тема: светлая по умолчанию — атрибут data-theme="light" на <html> (ставят public/theme-init.js и src/lib/theme.ts);
+ * без атрибута — тёмная (значения в @theme ниже).
  */
 @import 'tailwindcss';
 
@@ -29,8 +30,9 @@
   --color-border: #33353b;
 
   /* Текст */
-  --color-text: #ececef;
-  --color-muted: #b6b8bf;   /* подписи: контраст ≥ 7:1 на всех поверхностях (WCAG AA с запасом) */
+  /* тёмная тема: основной текст мягкий светлый, не чисто белый — не «режет» на графите (07.11.2026) */
+  --color-text: #e8e6e1;
+  --color-muted: #c0bdb6;   /* подписи: тёплый светло-серый, контраст ≥ 8:1 на всех поверхностях */
 
   /* Акценты */
   --color-primary: #8d78ff;       /* фиолетовый: кнопки, ссылки */
@@ -193,6 +195,10 @@
   }
   body {
     @apply bg-bg text-text font-sans antialiased;
+  }
+  /* Тёмная тема: светлый текст на тёмном выглядит тоньше — чуть плотнее начертание (вёрстку не сдвигает) */
+  html:not([data-theme='light']) body {
+    font-weight: 450;
   }
   h1 {
     @apply font-bold tracking-tight;

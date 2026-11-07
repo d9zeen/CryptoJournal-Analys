@@ -1,5 +1,6 @@
 /**
- * Тема оформления: тёмная (по умолчанию, решение владельца 07.11.2026) или светлая.
+ * Тема оформления: светлая (по умолчанию, решение владельца 07.11.2026) или тёмная.
+ * На странице светлая — атрибут data-theme="light" на <html>; без атрибута — тёмная (базовые цвета theme.css).
  * Хранится в браузере (localStorage) — у каждого устройства своя, в базу не пишем.
  * Цвета обеих тем — в src/styles/theme.css.
  * До загрузки приложения тему ставит public/theme-init.js (иначе при светлой теме мигал бы тёмный фон) —
@@ -14,9 +15,9 @@ const listeners = new Set<() => void>()
 
 export function readTheme(): Theme {
   try {
-    return localStorage.getItem(KEY) === 'light' ? 'light' : 'dark'
+    return localStorage.getItem(KEY) === 'dark' ? 'dark' : 'light'
   } catch {
-    return 'dark' // приватный режим / запрет хранилища
+    return 'light' // приватный режим / запрет хранилища
   }
 }
 

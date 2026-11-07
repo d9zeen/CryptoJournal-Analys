@@ -123,7 +123,7 @@ export function LandingPage() {
             <h2 id="exchanges-title" className="text-2xl font-bold tracking-tight sm:text-3xl">
               {l.exchanges.title}
             </h2>
-            <p className="mt-2 text-text/80">{l.exchanges.hint}</p>
+            <p className="mt-2 text-text/90">{l.exchanges.hint}</p>
             <div className="mt-6 grid gap-4 md:grid-cols-3">
               {WAYS.map((w, i) => (
                 <Reveal key={w.key} delay={120 + i * 90} className="flex flex-col rounded-lg border border-border bg-bg/60 p-4 sm:p-5">
@@ -135,11 +135,11 @@ export function LandingPage() {
                       </li>
                     ))}
                   </ul>
-                  <p className="mt-3 text-sm leading-relaxed text-text/80">{l.exchanges.ways[w.key].text}</p>
+                  <p className="mt-3 text-sm leading-relaxed text-text/90">{l.exchanges.ways[w.key].text}</p>
                 </Reveal>
               ))}
             </div>
-            <p className="mt-4 text-sm text-text/80">{l.exchanges.soon}</p>
+            <p className="mt-4 text-sm text-text/90">{l.exchanges.soon}</p>
           </Reveal>
         </section>
 
@@ -172,7 +172,7 @@ export function LandingPage() {
                 <Reveal as="li" key={k} delay={i * 90} className="border-t-2 border-primary pt-5">
                   <div className="num text-sm font-semibold text-primary">0{i + 1}</div>
                   <h3 className="mt-2 text-lg font-semibold">{l.steps[k].title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-text/80">{l.steps[k].text}</p>
+                  <p className="mt-2 text-sm leading-relaxed text-text/90">{l.steps[k].text}</p>
                 </Reveal>
               ))}
             </ol>
@@ -183,7 +183,7 @@ export function LandingPage() {
         <section id="pricing" className={`${wrap} scroll-mt-20 py-16 sm:py-24`}>
           <Reveal>
             <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">{l.pricingTitle}</h2>
-            <p className="mt-3 text-text/80">{l.pricingHint}</p>
+            <p className="mt-3 text-text/90">{l.pricingHint}</p>
           </Reveal>
           <Reveal delay={90} className="mt-8">
             <PlansTable
@@ -211,7 +211,7 @@ export function LandingPage() {
                       +
                     </span>
                   </summary>
-                  <p className="mt-3 max-w-2xl text-sm leading-relaxed text-text/80">{l.faq.items[k].a}</p>
+                  <p className="mt-3 max-w-2xl text-sm leading-relaxed text-text/90">{l.faq.items[k].a}</p>
                 </Reveal>
               ))}
             </div>
@@ -242,7 +242,7 @@ function Feature({ title, text, flip = false, children }: { title: string; text:
     <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-16">
       <Reveal className={flip ? 'lg:order-2' : ''}>
         <h3 className="text-2xl font-bold tracking-tight">{title}</h3>
-        <p className="mt-3 max-w-lg leading-relaxed text-text/80">{text}</p>
+        <p className="mt-3 max-w-lg leading-relaxed text-text/90">{text}</p>
       </Reveal>
       <Reveal delay={90}>{children}</Reveal>
     </div>
