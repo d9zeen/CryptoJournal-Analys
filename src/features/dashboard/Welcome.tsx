@@ -11,7 +11,7 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { formatDayShort, formatPercent, formatPnl, formatRatio, formatUsd, formatUsdShort, pnlClass } from '@/lib/format'
 import { prefersReducedMotion } from '@/lib/motion'
-import { demoAccount } from '@/features/landing/demo'
+import { DEMO_TRADES, demoAccount } from '@/features/landing/demo'
 import { useConnections } from '@/features/connections/api'
 import { useProfile } from '@/features/settings/api'
 import { exchangeName } from '@/lib/exchanges'
@@ -19,14 +19,13 @@ import type { ClosedTrade } from '@/lib/calc/stats'
 import { big, Counts, HalfGauge, Ring, Widget } from './Widgets'
 
 export function Welcome() {
-  const trades = useMemo(() => demoAccount().trades, [])
   return (
     <div className="grid gap-4 lg:grid-cols-[340px_minmax(0,1fr)] xl:grid-cols-[400px_minmax(0,1fr)] lg:items-start">
       <div className="flex flex-col gap-4">
         <StartSteps />
         <KeySafety />
       </div>
-      <LiveExample trades={trades} />
+      <LiveExample />
     </div>
   )
 }
@@ -147,6 +146,7 @@ function useDemoPosition(total: number) {
   const [state, setState] = useState(() => ({
     pos: prefersReducedMotion() ? total : START,
     alpha: 1,
+    cycle: 0,
   }))
   useEffect(() => {
     if (prefersReducedMotion()) return
@@ -159,6 +159,7 @@ function useDemoPosition(total: number) {
     const tick = (now: number) => {
       if (start < 0) start = now
       if (visible) {
+        const cycle = Math.floor((now - start) / (run + HOLD))
         const el = (now - start) % (run + HOLD)
         const raw = START + Math.min(run, el) / PER_TRADE
         const k = Math.floor(raw)
@@ -169,6 +170,7 @@ function useDemoPosition(total: number) {
         setState({
           pos: k >= total ? total : k + (1 - Math.pow(1 - f, 3)),
           alpha,
+          cycle,
         })
       }
       frame = requestAnimationFrame(tick)
@@ -182,11 +184,22 @@ function useDemoPosition(total: number) {
   return { ref, ...state }
 }
 
-function LiveExample({ trades }: { trades: ClosedTrade[] }) {
+/** Сделки примера: на каждый круг — новые (своё зерно), и только счёт, который в итоге в плюсе */
+function demoTrades(seed: number): ClosedTrade[] {
+  for (let s = seed; ; s++) {
+    const trades = demoAccount(Date.now(), s).trades
+    if (trades.reduce((a, tr) => a + tr.pnl, 0) > 800) return trades
+  }
+}
+
+function LiveExample() {
   const t = useT()
   const w = t.dashboard.welcome
   const k = t.dashboard.kpi
-  const { ref, pos, alpha } = useDemoPosition(trades.length)
+  const { ref, pos, alpha, cycle } = useDemoPosition(DEMO_TRADES)
+  // зерно — своё при каждом открытии и новое на каждом круге: пары, направления и суммы не повторяются
+  const [seed] = useState(() => Math.floor(Math.random() * 1e9))
+  const trades = useMemo(() => demoTrades(seed + cycle * 7919), [seed, cycle])
 
   const cum = useMemo(() => {
     let c = 0
