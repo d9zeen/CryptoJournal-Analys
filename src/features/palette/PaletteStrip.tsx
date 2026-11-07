@@ -1,6 +1,6 @@
 /**
  * Палитра прибыли / убытка — компактная полоска под календарём (выбор владельца 07.11.2026: не отдельная карточка в настройках).
- * На палитру — плашка W / L в её цветах и название. Три палитры — всем; остальные на Basic под замком (ссылка на тарифы).
+ * На палитру — плашка W / L в её цветах (без подписей — выбор владельца; название только во всплывающей подсказке). Три палитры — всем; остальные на Basic под замком (ссылка на тарифы).
  */
 import { useState } from 'react'
 import { Link } from 'react-router'
@@ -58,7 +58,7 @@ export function PaletteStrip() {
               disabled={locked}
               onClick={() => void choose(p)}
               data-palette={p}
-              className={`relative flex w-[78px] flex-col items-center gap-1 rounded-md border px-1.5 py-1.5 transition-colors disabled:cursor-not-allowed ${
+              className={`relative flex items-center rounded-md border px-1.5 py-1.5 transition-colors disabled:cursor-not-allowed ${
                 active ? 'border-primary bg-primary/10' : 'border-border bg-surface-2/40 hover:border-muted'
               }`}
             >
@@ -72,7 +72,6 @@ export function PaletteStrip() {
                 <span className="num flex size-6 items-center justify-center rounded bg-profit/15 text-[11px] font-bold text-profit">W</span>
                 <span className="num flex size-6 items-center justify-center rounded bg-loss/15 text-[11px] font-bold text-loss">L</span>
               </span>
-              <span className={`text-center text-[10px] leading-tight ${locked ? 'text-muted' : 'text-text/80'}`}>{a.palettes[p]}</span>
             </button>
           )
         })}
