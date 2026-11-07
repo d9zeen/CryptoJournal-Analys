@@ -4,9 +4,9 @@
  * Шкалы — свой лёгкий SVG (pathLength = 100), при первом показе плавно заполняются.
  */
 import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { fmt, useT } from '@/i18n'
+import { fmt, plural, useT } from '@/i18n'
 import { formatNumber, formatPercent, formatPnl, formatR, formatRatio, formatUsd } from '@/lib/format'
-import type { DrawdownPeriod, EquityPoint, Summary } from '@/lib/calc/stats'
+import { recentForm, type DrawdownPeriod, type EquityPoint, type Outcome, type Summary } from '@/lib/calc/stats'
 import { SCORE_MIN_TRADES, type TraderScore } from '@/lib/calc/score'
 import { prefersReducedMotion, useCountUp } from '@/lib/motion'
 import { daysBetween, withTime } from './equityTime'
@@ -270,8 +270,13 @@ export function KeyNumbers({
     return daysBetween(tp[period.peak].t, tp[period.recovery ?? tp.length - 1].t)
   }, [curve, period])
   const ddValue = s.maxDrawdown <= 0 ? '—' : s.maxDrawdownPct !== null ? `−${formatPercent(s.maxDrawdownPct)}` : `−${formatUsd(s.maxDrawdown)}`
-  // выбор владельца 06.11.2026: три мини-панели (разброс сделок, просадка, R)
-  return <KeysPanels summary={s} rwl={rwl} ddValue={ddValue} ddDays={ddDays} recovered={period !== null && period.recovery !== null} />
+  // выбор владельца 06.11.2026: три мини-панели (разброс сделок, просадка, R) + «форма» последних сделок
+  const formVariant = (typeof location !== 'undefined' ? new URLSearchParams(location.search).get('form') : null) ?? 'a'
+  return (
+    <KeysPanels summary={s} rwl={rwl} ddValue={ddValue} ddDays={ddDays} recovered={period !== null && period.recovery !== null}>
+      <FormPanel trades={curve.slice(1)} variant={formVariant} />
+    </KeysPanels>
+  )
 }
 
 type KeysProps = {
@@ -280,10 +285,11 @@ type KeysProps = {
   ddValue: string
   ddDays: number | null
   recovered: boolean
+  children?: ReactNode
 }
 
 /** «Ключевые цифры»: три мини-панели с картинками — разброс сделок, глубина просадки, R выигрыша против R проигрыша */
-function KeysPanels({ summary: s, rwl, ddValue, ddDays, recovered }: KeysProps) {
+function KeysPanels({ summary: s, rwl, ddValue, ddDays, recovered, children }: KeysProps) {
   const t = useT()
   const k = t.dashboard.kpi
   const shown = useShown()
@@ -297,6 +303,7 @@ function KeysPanels({ summary: s, rwl, ddValue, ddDays, recovered }: KeysProps) 
   return (
     <section data-shot="keys" className="rise card-lift flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 [--i:3]">
       <h2 className="font-semibold">{k.keyNumbers}</h2>
+      {children}
       {/* разброс: от худшей до лучшей сделки, отметка — матожидание */}
       <div className={panel}>
         <div className="flex items-baseline justify-between text-xs text-muted">
@@ -360,4 +367,116 @@ function KeysPanels({ summary: s, rwl, ddValue, ddDays, recovered }: KeysProps) 
 function signedPercent(fraction: number): string {
   const s = formatPercent(Math.abs(fraction))
   return fraction > 0 ? `+${s}` : fraction < 0 ? `−${s}` : s
+}
+
+/* ---------- «Форма»: последние сделки — только победы и поражения ---------- */
+
+const FORM_SIZES = [5, 10, 20] as const
+
+function FormPanel({ trades, variant }: { trades: { pnl: number }[]; variant: string }) {
+  const t = useT()
+  const f = t.dashboard.kpi.form
+  const [size, setSize] = useState<(typeof FORM_SIZES)[number]>(10)
+  const n = variant === 'c' ? size : 10
+  const form = useMemo(() => recentForm(trades, n), [trades, n])
+  if (!form.items.length) return null
+  const title = plural(form.items.length, f.title)
+  const streak = form.streak && form.streak.length >= 2 ? plural(form.streak.length, form.streak.kind === 'win' ? f.streakWin : f.streakLoss) : null
+  const label = (o: Outcome) => (o === 'win' ? f.win : o === 'loss' ? f.loss : f.even)
+  const panel = 'rounded-md bg-surface-2/50 p-3'
+
+  if (variant === 'b') {
+    return (
+      <div className={panel}>
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="text-xs text-muted">{title}</span>
+          <span className="num text-sm">
+            <span className="font-semibold">{form.wins}</span> <span className="text-muted">{plural(form.wins, f.wins)}</span> · <span className="font-semibold">{form.losses}</span>{' '}
+            <span className="text-muted">{plural(form.losses, f.losses)}</span>
+          </span>
+        </div>
+        <ol className="mt-2.5 flex flex-wrap gap-1.5">
+          {form.items.map((o, i) => (
+            <li
+              key={i}
+              title={label(o)}
+              className={`num flex size-7 items-center justify-center rounded-md text-xs font-bold ${o === 'win' ? 'bg-primary/15 text-primary' : o === 'loss' ? 'bg-surface-2 text-muted' : 'border border-dashed border-border text-muted'}`}
+            >
+              {o === 'win' ? f.winLetter : o === 'loss' ? f.lossLetter : f.evenLetter}
+            </li>
+          ))}
+        </ol>
+        {streak && <p className="mt-2 text-xs text-muted">{streak}</p>}
+      </div>
+    )
+  }
+
+  if (variant === 'c') {
+    const total = form.wins + form.losses || 1
+    return (
+      <div className={panel}>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs text-muted">{title}</span>
+          <div role="radiogroup" className="flex rounded-md bg-surface-2 p-0.5 text-xs">
+            {FORM_SIZES.map((v) => (
+              <button
+                key={v}
+                type="button"
+                role="radio"
+                aria-checked={v === size}
+                onClick={() => setSize(v)}
+                className={`num rounded px-2 py-0.5 font-semibold ${v === size ? 'bg-surface text-text' : 'text-muted hover:text-text'}`}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="num mt-2 flex items-baseline justify-between text-sm">
+          <span>
+            <span className="text-lg font-semibold">{form.wins}</span> <span className="text-xs text-muted">{plural(form.wins, f.wins)}</span>
+          </span>
+          <span>
+            <span className="text-xs text-muted">{plural(form.losses, f.losses)}</span> <span className="text-lg font-semibold text-muted">{form.losses}</span>
+          </span>
+        </div>
+        <div className="mt-1.5 flex h-2 gap-0.5 overflow-hidden rounded-full">
+          {form.wins > 0 && <i className="block bg-primary" style={{ flex: form.wins / total }} />}
+          {form.losses > 0 && <i className="block bg-muted/45" style={{ flex: form.losses / total }} />}
+        </div>
+        <ol className="mt-2 flex gap-1">
+          {form.items.map((o, i) => (
+            <li key={i} title={label(o)} className={`size-2 rounded-full ${o === 'win' ? 'bg-primary' : o === 'loss' ? 'bg-muted/45' : 'border border-muted/60'}`} />
+          ))}
+        </ol>
+        {streak && <p className="mt-2 text-xs text-muted">{streak}</p>}
+      </div>
+    )
+  }
+
+  // А: ряд одинаковых плиток — фиолетовая победа, серое поражение, самая новая справа
+  return (
+    <div className={panel}>
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-xs text-muted">{title}</span>
+        <span className="num text-lg font-semibold">
+          {form.wins}
+          <span className="text-muted"> : {form.losses}</span>
+        </span>
+      </div>
+      <ol className="mt-2 flex gap-1">
+        {form.items.map((o, i) => (
+          <li
+            key={i}
+            title={label(o)}
+            className={`h-6 flex-1 rounded-sm ${o === 'win' ? 'bg-primary' : o === 'loss' ? 'bg-muted/40' : 'cal-hatch border border-border'}`}
+          />
+        ))}
+      </ol>
+      <div className="mt-2 flex justify-between text-xs text-muted">
+        <span>{streak ?? ''}</span>
+        <span>{f.newer}</span>
+      </div>
+    </div>
+  )
 }
