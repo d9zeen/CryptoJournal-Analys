@@ -6,6 +6,7 @@ import { lazy, Suspense, useMemo } from 'react'
 import { Link } from 'react-router'
 import { plural, useT } from '@/i18n'
 import { Logo } from '@/components/Logo'
+import { ThemeToggle } from '@/components/ThemeToggle'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { PlansTable } from '@/features/plans/PlansPage'
 import { KpiRow, ScoreCard } from '@/features/dashboard/Widgets'
@@ -53,6 +54,7 @@ export function LandingPage() {
             </a>
           </nav>
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             {user ? (
               // уже вошёл (смотрит /welcome) — одна кнопка в дневник
               <Link to="/dashboard" className={`${btnPrimary} !px-3 !py-2`}>
@@ -77,21 +79,22 @@ export function LandingPage() {
       <main>
         {/* первый экран */}
         <section className={`${wrap} pt-12 pb-10 sm:pt-20`}>
-          <div className="rise max-w-3xl">
-            <h1 className="text-4xl leading-[1.08] font-bold tracking-tight text-balance sm:text-5xl lg:text-6xl">{l.title}</h1>
-            <div className="mt-8 flex flex-wrap items-center gap-3">
+          <div className="max-w-3xl">
+            <Reveal>
+              <h1 className="text-4xl leading-[1.08] font-bold tracking-tight text-balance sm:text-5xl lg:text-6xl">{l.title}</h1>
+            </Reveal>
+            <Reveal delay={90} className="mt-8 flex flex-wrap items-center gap-3">
               <Link to="/register" className={`${btnPrimary} !px-5 !py-3`}>
                 {l.start}
               </Link>
               <Link to="/login" className={`${btnSecondary} !px-5 !py-3`}>
                 {l.login}
               </Link>
-              <span className="text-sm text-text/80">{l.note}</span>
-            </div>
+            </Reveal>
           </div>
 
           {/* живое превью дашборда */}
-          <div className="rise mt-12 rounded-xl border border-border bg-surface/40 p-2 sm:p-3 [--i:2]">
+          <Reveal delay={180} className="mt-12 rounded-xl border border-border bg-surface/40 p-2 sm:p-3">
             <div className="flex items-center gap-1.5 px-2 pt-1 pb-2.5">
               <i className="size-2.5 rounded-full bg-border" />
               <i className="size-2.5 rounded-full bg-border" />
@@ -111,7 +114,7 @@ export function LandingPage() {
                 </div>
               </div>
             </div>
-          </div>
+          </Reveal>
         </section>
 
         {/* биржи: отдельная плашка — как подключается каждая */}
@@ -122,8 +125,8 @@ export function LandingPage() {
             </h2>
             <p className="mt-2 text-text/80">{l.exchanges.hint}</p>
             <div className="mt-6 grid gap-4 md:grid-cols-3">
-              {WAYS.map((w) => (
-                <div key={w.key} className="flex flex-col rounded-lg border border-border bg-bg/60 p-4 sm:p-5">
+              {WAYS.map((w, i) => (
+                <Reveal key={w.key} delay={120 + i * 90} className="flex flex-col rounded-lg border border-border bg-bg/60 p-4 sm:p-5">
                   <h3 className="font-semibold">{l.exchanges.ways[w.key].title}</h3>
                   <ul className="mt-3 flex flex-wrap gap-1.5">
                     {w.names.map((n) => (
@@ -133,16 +136,18 @@ export function LandingPage() {
                     ))}
                   </ul>
                   <p className="mt-3 text-sm leading-relaxed text-text/80">{l.exchanges.ways[w.key].text}</p>
-                </div>
+                </Reveal>
               ))}
             </div>
-            <p className="mt-4 text-sm text-text/70">{l.exchanges.soon}</p>
+            <p className="mt-4 text-sm text-text/80">{l.exchanges.soon}</p>
           </Reveal>
         </section>
 
         {/* возможности: строки «текст — картинка», через одну меняются местами */}
         <section id="features" className={`${wrap} scroll-mt-20 py-16 sm:py-24`}>
-          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">{l.features.title}</h2>
+          <Reveal as="h2" className="text-3xl font-bold tracking-tight sm:text-4xl">
+            {l.features.title}
+          </Reveal>
           <div className="mt-12 grid gap-16 sm:gap-24">
             <Feature title={l.features.sync.title} text={l.features.sync.text}>
               <SyncVisual />
@@ -159,10 +164,12 @@ export function LandingPage() {
         {/* шаги */}
         <section className="border-t border-border bg-surface/40 py-16 sm:py-20">
           <div className={wrap}>
-            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">{l.steps.title}</h2>
+            <Reveal as="h2" className="text-3xl font-bold tracking-tight sm:text-4xl">
+              {l.steps.title}
+            </Reveal>
             <ol className="mt-10 grid gap-8 md:grid-cols-3">
               {(['a', 'b', 'c'] as const).map((k, i) => (
-                <Reveal as="li" key={k} delay={i * 120} className="border-t-2 border-primary pt-5">
+                <Reveal as="li" key={k} delay={i * 90} className="border-t-2 border-primary pt-5">
                   <div className="num text-sm font-semibold text-primary">0{i + 1}</div>
                   <h3 className="mt-2 text-lg font-semibold">{l.steps[k].title}</h3>
                   <p className="mt-2 text-sm leading-relaxed text-text/80">{l.steps[k].text}</p>
@@ -174,9 +181,11 @@ export function LandingPage() {
 
         {/* тарифы */}
         <section id="pricing" className={`${wrap} scroll-mt-20 py-16 sm:py-24`}>
-          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">{l.pricingTitle}</h2>
-          <p className="mt-3 text-text/80">{l.pricingHint}</p>
-          <Reveal className="mt-8">
+          <Reveal>
+            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">{l.pricingTitle}</h2>
+            <p className="mt-3 text-text/80">{l.pricingHint}</p>
+          </Reveal>
+          <Reveal delay={90} className="mt-8">
             <PlansTable
               action={(plan) => (
                 <Link to="/register" className={`${plan.id === 'pro_plus' ? btnPrimary : btnSecondary} w-full !px-2`}>
@@ -190,10 +199,12 @@ export function LandingPage() {
         {/* вопросы */}
         <section id="faq" className="scroll-mt-20 border-t border-border py-16 sm:py-24">
           <div className={`${wrap} grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]`}>
-            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">{l.faq.title}</h2>
+            <Reveal as="h2" className="text-3xl font-bold tracking-tight sm:text-4xl">
+              {l.faq.title}
+            </Reveal>
             <div className="divide-y divide-border border-y border-border">
-              {(['a', 'b', 'c', 'd'] as const).map((k) => (
-                <details key={k} className="group py-4">
+              {(['a', 'b', 'c', 'd'] as const).map((k, i) => (
+                <Reveal as="details" key={k} delay={i * 70} className="group py-4">
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-semibold">
                     {l.faq.items[k].q}
                     <span className="text-xl leading-none text-muted transition-transform group-open:rotate-45" aria-hidden>
@@ -201,7 +212,7 @@ export function LandingPage() {
                     </span>
                   </summary>
                   <p className="mt-3 max-w-2xl text-sm leading-relaxed text-text/80">{l.faq.items[k].a}</p>
-                </details>
+                </Reveal>
               ))}
             </div>
           </div>
@@ -233,7 +244,7 @@ function Feature({ title, text, flip = false, children }: { title: string; text:
         <h3 className="text-2xl font-bold tracking-tight">{title}</h3>
         <p className="mt-3 max-w-lg leading-relaxed text-text/80">{text}</p>
       </Reveal>
-      <Reveal delay={120}>{children}</Reveal>
+      <Reveal delay={90}>{children}</Reveal>
     </div>
   )
 }
