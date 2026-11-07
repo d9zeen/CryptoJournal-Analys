@@ -307,6 +307,10 @@ export const ru = {
       serverSync: 'Сделки подтягиваются сами каждые 3 часа — даже когда сайт закрыт',
     },
     compare: 'Сравнить тарифы',
+    best: 'Всё включено',
+    month: '/ мес',
+    tradesLine: '{n} сделок в месяц',
+    tradesUnlimitedLine: 'Сделки без лимита',
     needPlan: 'Доступно на тарифе {plan}.',
   },
   admin: {

@@ -6,7 +6,20 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { prefersReducedMotion } from '@/lib/motion'
 
-export function Reveal({ children, className = '', delay = 0, as: Tag = 'div' }: { children: ReactNode; className?: string; delay?: number; as?: 'div' | 'section' | 'li' | 'h2' | 'details' }) {
+/** zoom — ещё и лёгкое «приближение» 97 % → 100 % (большое превью дашборда на первом экране) */
+export function Reveal({
+  children,
+  className = '',
+  delay = 0,
+  zoom = false,
+  as: Tag = 'div',
+}: {
+  children: ReactNode
+  className?: string
+  delay?: number
+  zoom?: boolean
+  as?: 'div' | 'section' | 'li' | 'h2' | 'details'
+}) {
   const ref = useRef<HTMLElement | null>(null)
   const [shown, setShown] = useState(() => prefersReducedMotion() || typeof IntersectionObserver === 'undefined')
   useEffect(() => {
@@ -28,7 +41,7 @@ export function Reveal({ children, className = '', delay = 0, as: Tag = 'div' }:
       ref={(el: HTMLElement | null) => {
         ref.current = el
       }}
-      className={`transition-[opacity,translate] duration-[550ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${shown ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'} ${className}`}
+      className={`transition-[opacity,translate,scale] ease-[cubic-bezier(0.22,1,0.36,1)] ${zoom ? 'duration-[900ms]' : 'duration-[550ms]'} ${shown ? 'translate-y-0 scale-100 opacity-100' : `translate-y-4 opacity-0 ${zoom ? 'scale-[0.97]' : ''}`} ${className}`}
       style={{ transitionDelay: `${delay}ms` } as CSSProperties}
     >
       {children}

@@ -2,16 +2,16 @@
  * Главная для тех, кто ещё не вошёл: что это, живой дашборд демо-счёта, возможности, шаги, тарифы, вопросы.
  * Превью — настоящие виджеты дашборда на выдуманных сделках (demo.ts), а не картинка.
  */
-import { lazy, Suspense, useMemo } from 'react'
+import { Fragment, lazy, Suspense, useMemo } from 'react'
 import { Link } from 'react-router'
 import { plural, useT } from '@/i18n'
 import { Logo } from '@/components/Logo'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { useAuth } from '@/features/auth/AuthProvider'
-import { PlansTable } from '@/features/plans/PlansPage'
 import { KpiRow, ScoreCard } from '@/features/dashboard/Widgets'
 import { formatPnl, pnlClass } from '@/lib/format'
 import { Reveal } from './Reveal'
+import { PlanCards } from './PlanCards'
 import { demoAccount } from './demo'
 
 const EquityChart = lazy(() => import('@/features/dashboard/charts').then((m) => ({ default: m.EquityChart })))
@@ -37,7 +37,7 @@ export function LandingPage() {
   return (
     <div className="min-h-dvh">
       {/* шапка */}
-      <header className="sticky top-0 z-20 border-b border-border bg-bg/85 backdrop-blur">
+      <header className="animate-drop sticky top-0 z-20 border-b border-border bg-bg/85 backdrop-blur">
         <div className={`${wrap} flex h-14 items-center justify-between gap-4`}>
           <Link to="/" aria-label={t.app.name}>
             <Logo />
@@ -80,13 +80,21 @@ export function LandingPage() {
         {/* первый экран */}
         <section className={`${wrap} pt-12 pb-10 sm:pt-20`}>
           <div className="max-w-3xl">
-            <Reveal>
-              <h1 className="text-4xl leading-[1.08] font-bold tracking-tight text-balance sm:text-5xl lg:text-6xl">{l.title}</h1>
-            </Reveal>
-            <Reveal delay={60}>
+            {/* заход на сайт: слова заголовка по очереди, затем подзаголовок, кнопки и превью */}
+            <h1 className="text-4xl leading-[1.08] font-bold tracking-tight text-balance sm:text-5xl lg:text-6xl" aria-label={l.title}>
+              {l.title.split(' ').map((w, i) => (
+                <Fragment key={i}>
+                  {i > 0 && ' '}
+                  <span aria-hidden className="animate-word inline-block" style={{ animationDelay: `${150 + i * 70}ms` }}>
+                    {w}
+                  </span>
+                </Fragment>
+              ))}
+            </h1>
+            <Reveal delay={550}>
               <p className="mt-5 max-w-xl text-lg leading-relaxed text-balance text-text/90 sm:text-xl">{l.subtitle}</p>
             </Reveal>
-            <Reveal delay={120} className="mt-8 flex flex-wrap items-center gap-3">
+            <Reveal delay={680} className="mt-8 flex flex-wrap items-center gap-3">
               <Link to="/register" className={`${btnPrimary} !px-5 !py-3`}>
                 {l.start}
               </Link>
@@ -97,7 +105,7 @@ export function LandingPage() {
           </div>
 
           {/* живое превью дашборда */}
-          <Reveal delay={180} className="mt-12 rounded-xl border border-border bg-surface/40 p-2 sm:p-3">
+          <Reveal delay={820} zoom className="mt-12 rounded-xl border border-border bg-surface/40 p-2 sm:p-3">
             <div className="flex items-center gap-1.5 px-2 pt-1 pb-2.5">
               <i className="size-2.5 rounded-full bg-border" />
               <i className="size-2.5 rounded-full bg-border" />
@@ -188,15 +196,15 @@ export function LandingPage() {
             <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">{l.pricingTitle}</h2>
             <p className="mt-3 text-text/90">{l.pricingHint}</p>
           </Reveal>
-          <Reveal delay={90} className="mt-8">
-            <PlansTable
+          <div className="mt-10">
+            <PlanCards
               action={(plan) => (
-                <Link to="/register" className={`${plan.id === 'pro_plus' ? btnPrimary : btnSecondary} w-full !px-2`}>
+                <Link to="/register" className={`${plan.id === 'pro_plus' ? btnPrimary : btnSecondary} w-full !py-3`}>
                   {l.pick}
                 </Link>
               )}
             />
-          </Reveal>
+          </div>
         </section>
 
         {/* вопросы */}
