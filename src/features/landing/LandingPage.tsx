@@ -83,7 +83,10 @@ export function LandingPage() {
             <Reveal>
               <h1 className="text-4xl leading-[1.08] font-bold tracking-tight text-balance sm:text-5xl lg:text-6xl">{l.title}</h1>
             </Reveal>
-            <Reveal delay={90} className="mt-8 flex flex-wrap items-center gap-3">
+            <Reveal delay={60}>
+              <p className="mt-5 max-w-xl text-lg leading-relaxed text-balance text-text/90 sm:text-xl">{l.subtitle}</p>
+            </Reveal>
+            <Reveal delay={120} className="mt-8 flex flex-wrap items-center gap-3">
               <Link to="/register" className={`${btnPrimary} !px-5 !py-3`}>
                 {l.start}
               </Link>
