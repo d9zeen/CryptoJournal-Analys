@@ -46,10 +46,15 @@
 
   /* Анимации */
   --animate-rise: rise 0.3s ease-out both;
+  --animate-fly-in: fly-in 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; /* сделка «прилетает» в демо первого входа */
   --animate-flash: flash 1.6s ease-out;
 
   @keyframes rise {
     from { opacity: 0.4; transform: translateY(3px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes fly-in {
+    from { opacity: 0; transform: translateX(-48px); }
     to { opacity: 1; transform: none; }
   }
   @keyframes flash {

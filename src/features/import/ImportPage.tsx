@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState, type DragEvent } from 'react'
-import { Link } from 'react-router'
+import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
+import { Link, useLocation } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { fmt, useT } from '@/i18n'
 import { useAuth } from '@/features/auth/AuthProvider'
@@ -49,6 +49,11 @@ export function ImportPage() {
   const [result, setResult] = useState<RunImportResult | null>(null)
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  // со стартового экрана «Подключить биржу» ведёт сюда с #connections — сразу показываем подключения
+  const { hash } = useLocation()
+  useEffect(() => {
+    if (hash === '#connections') document.getElementById('connections')?.scrollIntoView({ block: 'start' })
+  }, [hash])
 
   const table = useMemo(() => (file ? (typeof file.source === 'string' ? parseCsv(file.source) : file.source) : null), [file])
   const detected = useMemo(() => (table && file ? detectExchange(table.headers, file.name) : 'other'), [table, file])
@@ -157,7 +162,9 @@ export function ImportPage() {
       <div className="grid gap-4 xl:grid-cols-[400px_minmax(0,1fr)] xl:items-start">
         {/* Слева: подключения бирж, файл, подсказки, история */}
         <div className="flex flex-col gap-4">
-          <ConnectionsCard />
+          <div id="connections" className="scroll-mt-20">
+            <ConnectionsCard />
+          </div>
           <Card className="flex flex-col gap-4 !p-4">
             <label
               className={`flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-dashed px-4 py-10 text-center transition-colors ${dragging ? 'border-primary bg-primary/10' : 'border-border hover:border-muted'}`}
