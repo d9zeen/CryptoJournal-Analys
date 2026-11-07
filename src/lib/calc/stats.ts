@@ -335,3 +335,37 @@ export function pnlBars(days: DayPnl[], maxBars = 120): { unit: BarUnit; bars: D
   if (weeks.length <= maxBars) return { unit: 'week', bars: weeks }
   return { unit: 'month', bars: group((d) => `${d.slice(0, 7)}-01`) }
 }
+
+/** Итог одной сделки без денег: в плюс, в минус или в ноль */
+export type Outcome = 'win' | 'loss' | 'even'
+
+export type RecentForm = {
+  /** последние n сделок по порядку закрытия, самая новая — последней */
+  items: Outcome[]
+  wins: number
+  losses: number
+  even: number
+  /** текущая серия подряд с конца (сделки в ноль серию не прерывают и не считаются); null — серии нет */
+  streak: { kind: 'win' | 'loss'; length: number } | null
+}
+
+/** «Форма» за последние n сделок: сколько побед и поражений, без сумм. Порядок — как на кривой капитала. */
+export function recentForm(closed: { pnl: number }[], n: number): RecentForm {
+  const items: Outcome[] = closed.slice(-n).map((t) => (t.pnl > 0 ? 'win' : t.pnl < 0 ? 'loss' : 'even'))
+  let streak: RecentForm['streak'] = null
+  for (let i = closed.length - 1; i >= 0; i--) {
+    const p = closed[i].pnl
+    if (p === 0) continue
+    const kind = p > 0 ? 'win' : 'loss'
+    if (!streak) streak = { kind, length: 1 }
+    else if (streak.kind === kind) streak.length++
+    else break
+  }
+  return {
+    items,
+    wins: items.filter((o) => o === 'win').length,
+    losses: items.filter((o) => o === 'loss').length,
+    even: items.filter((o) => o === 'even').length,
+    streak,
+  }
+}

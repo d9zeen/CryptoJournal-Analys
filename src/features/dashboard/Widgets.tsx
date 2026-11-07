@@ -4,9 +4,9 @@
  * Шкалы — свой лёгкий SVG (pathLength = 100), при первом показе плавно заполняются.
  */
 import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { fmt, useT } from '@/i18n'
+import { fmt, plural, useT } from '@/i18n'
 import { formatNumber, formatPercent, formatPnl, formatR, formatRatio, formatUsd } from '@/lib/format'
-import type { DrawdownPeriod, EquityPoint, Summary } from '@/lib/calc/stats'
+import { recentForm, type DrawdownPeriod, type EquityPoint, type Outcome, type Summary } from '@/lib/calc/stats'
 import { SCORE_MIN_TRADES, type TraderScore } from '@/lib/calc/score'
 import { prefersReducedMotion, useCountUp } from '@/lib/motion'
 import { daysBetween, withTime } from './equityTime'
@@ -270,8 +270,12 @@ export function KeyNumbers({
     return daysBetween(tp[period.peak].t, tp[period.recovery ?? tp.length - 1].t)
   }, [curve, period])
   const ddValue = s.maxDrawdown <= 0 ? '—' : s.maxDrawdownPct !== null ? `−${formatPercent(s.maxDrawdownPct)}` : `−${formatUsd(s.maxDrawdown)}`
-  // выбор владельца 06.11.2026: три мини-панели (разброс сделок, просадка, R)
-  return <KeysPanels summary={s} rwl={rwl} ddValue={ddValue} ddDays={ddDays} recovered={period !== null && period.recovery !== null} />
+  // выбор владельца 06.11.2026: три мини-панели (разброс сделок, просадка, R) + «форма» последних сделок
+  return (
+    <KeysPanels summary={s} rwl={rwl} ddValue={ddValue} ddDays={ddDays} recovered={period !== null && period.recovery !== null}>
+      <FormPanel trades={curve.slice(1)} />
+    </KeysPanels>
+  )
 }
 
 type KeysProps = {
@@ -280,10 +284,11 @@ type KeysProps = {
   ddValue: string
   ddDays: number | null
   recovered: boolean
+  children?: ReactNode
 }
 
 /** «Ключевые цифры»: три мини-панели с картинками — разброс сделок, глубина просадки, R выигрыша против R проигрыша */
-function KeysPanels({ summary: s, rwl, ddValue, ddDays, recovered }: KeysProps) {
+function KeysPanels({ summary: s, rwl, ddValue, ddDays, recovered, children }: KeysProps) {
   const t = useT()
   const k = t.dashboard.kpi
   const shown = useShown()
@@ -297,6 +302,7 @@ function KeysPanels({ summary: s, rwl, ddValue, ddDays, recovered }: KeysProps) 
   return (
     <section data-shot="keys" className="rise card-lift flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 [--i:3]">
       <h2 className="font-semibold">{k.keyNumbers}</h2>
+      {children}
       {/* разброс: от худшей до лучшей сделки, отметка — матожидание */}
       <div className={panel}>
         <div className="flex items-baseline justify-between text-xs text-muted">
@@ -360,4 +366,45 @@ function KeysPanels({ summary: s, rwl, ddValue, ddDays, recovered }: KeysProps) 
 function signedPercent(fraction: number): string {
   const s = formatPercent(Math.abs(fraction))
   return fraction > 0 ? `+${s}` : fraction < 0 ? `−${s}` : s
+}
+
+/* ---------- «Форма»: последние сделки — только победы и поражения ---------- */
+
+const FORM_N = 10
+
+/** Последние 10 сделок буквами W / L, как форма команды (выбор владельца 07.11.2026): победа — цветом «плюса» (--color-up), поражение — «минуса» (--color-down) */
+function FormPanel({ trades }: { trades: { pnl: number }[] }) {
+  const t = useT()
+  const f = t.dashboard.kpi.form
+  const form = useMemo(() => recentForm(trades, FORM_N), [trades])
+  if (!form.items.length) return null
+  const streak = form.streak && form.streak.length >= 2 ? plural(form.streak.length, form.streak.kind === 'win' ? f.streakWin : f.streakLoss) : null
+  const label = (o: Outcome) => (o === 'win' ? f.win : o === 'loss' ? f.loss : f.even)
+  return (
+    <div data-shot="form" className="rounded-md bg-surface-2/50 p-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <span className="text-xs text-muted">{plural(form.items.length, f.title)}</span>
+        <span className="num text-sm">
+          <span className="font-semibold text-up">{form.wins}</span> <span className="text-muted">{plural(form.wins, f.wins)}</span>
+          <span className="text-muted"> · </span>
+          <span className="font-semibold text-down">{form.losses}</span> <span className="text-muted">{plural(form.losses, f.losses)}</span>
+        </span>
+      </div>
+      <ol className="mt-2.5 flex flex-wrap gap-1.5">
+        {form.items.map((o, i) => (
+          <li
+            key={i}
+            title={label(o)}
+            aria-label={label(o)}
+            className={`num flex size-7 items-center justify-center rounded-md text-xs font-bold ${
+              o === 'win' ? 'bg-up/15 text-up' : o === 'loss' ? 'bg-down/15 text-down' : 'border border-dashed border-border text-muted'
+            }`}
+          >
+            {o === 'win' ? f.winLetter : o === 'loss' ? f.lossLetter : f.evenLetter}
+          </li>
+        ))}
+      </ol>
+      {streak && <p className={`mt-2 text-xs ${form.streak!.kind === 'win' ? 'text-up' : 'text-down'}`}>{streak}</p>}
+    </div>
+  )
 }
