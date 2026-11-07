@@ -286,3 +286,10 @@ test('первый вход: биржа подключена, сделок ещ�
   await expect(page.getByText('Подключено: Bybit. Сделки появятся после синхронизации.')).toBeVisible()
   await expect(page.getByText('Шаг 3 из 3')).toBeVisible()
 })
+
+test('стартовый экран можно открыть и при сделках: ?welcome=1', async ({ page, db }) => {
+  db.trades = Array.from({ length: 3 }, (_, i) => makeTrade(i))
+  await fakeSupabase(page, db)
+  await page.goto('dashboard?welcome=1')
+  await expect(page.getByText('Начни за 2 минуты')).toBeVisible()
+})

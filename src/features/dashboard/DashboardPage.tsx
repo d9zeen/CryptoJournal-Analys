@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
-import { useNavigate } from 'react-router'
+import { useNavigate, useSearchParams } from 'react-router'
 import { fmt, useT } from '@/i18n'
 import { useTrades } from '@/features/trades/api'
 import { useProfile } from '@/features/settings/api'
@@ -71,7 +71,9 @@ export function DashboardPage() {
 
   const s = stats.summary
   // совсем новый пользователь (сделок нет вообще) — пример статистики и пути начать вместо пустой карточки
-  const isNew = preset === 'all' && !isLoading && !error && (trades ?? []).length === 0
+  // ?welcome=1 — посмотреть стартовый экран, даже когда сделки уже есть (для владельца)
+  const [params] = useSearchParams()
+  const isNew = params.get('welcome') === '1' || (preset === 'all' && !isLoading && !error && (trades ?? []).length === 0)
   const score = useMemo(() => traderScore(stats.summary, stats.days), [stats])
   const bars = useMemo(() => pnlBars(stats.days), [stats.days])
 
