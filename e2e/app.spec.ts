@@ -264,3 +264,25 @@ test('/welcome — главная для гостя открывается и п
   await page.getByRole('link', { name: 'Открыть дневник' }).click()
   await expect(page).toHaveURL(/\/dashboard$/)
 })
+
+test('первый вход: без сделок — шаги и живой пример; «Подключить биржу» ведёт к подключениям', async ({ page, db }) => {
+  db.trades = []
+  await fakeSupabase(page, db)
+  await page.goto('dashboard')
+  await expect(page.getByText('Начни за 2 минуты')).toBeVisible()
+  await expect(page.getByText('Так будет выглядеть твоя статистика')).toBeVisible()
+  // депозит в профиле уже указан — шаг отмечен; выбирать период пока не из чего
+  await expect(page.getByLabel('Готово')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Всё время' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Подключить биржу' }).click()
+  await expect(page).toHaveURL(/import#connections$/)
+})
+
+test('первый вход: биржа подключена, сделок ещё нет — шаг отмечен и видно, что подключено', async ({ page, db }) => {
+  db.trades = []
+  db.connections = [{ id: 'c1', exchange: 'bybit', label: null, api_key: 'xxxx', last_sync_at: null, cursor_at: null, last_error: null, key_expires_at: null, created_at: '2026-11-01T00:00:00Z' }]
+  await fakeSupabase(page, db)
+  await page.goto('dashboard')
+  await expect(page.getByText('Подключено: Bybit. Сделки появятся после синхронизации.')).toBeVisible()
+  await expect(page.getByText('Шаг 3 из 3')).toBeVisible()
+})

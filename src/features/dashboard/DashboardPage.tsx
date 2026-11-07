@@ -79,7 +79,8 @@ export function DashboardPage() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold">{t.dashboard.title}</h1>
-        <PeriodFilter preset={preset} custom={custom} onPreset={setPreset} onCustom={setCustom} />
+        {/* у нового пользователя выбирать период не из чего */}
+        {!isNew && <PeriodFilter preset={preset} custom={custom} onPreset={setPreset} onCustom={setCustom} />}
       </div>
 
       {error && <Alert tone="error">{t.errors.loadFailed}</Alert>}

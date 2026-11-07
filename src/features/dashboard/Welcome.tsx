@@ -12,6 +12,9 @@ import { Button } from '@/components/ui/Button'
 import { formatDayShort, formatPercent, formatPnl, formatRatio, formatUsd, formatUsdShort, pnlClass } from '@/lib/format'
 import { prefersReducedMotion } from '@/lib/motion'
 import { demoAccount } from '@/features/landing/demo'
+import { useConnections } from '@/features/connections/api'
+import { useProfile } from '@/features/settings/api'
+import { exchangeName } from '@/lib/exchanges'
 import type { ClosedTrade } from '@/lib/calc/stats'
 import { big, Counts, HalfGauge, Ring, Widget } from './Widgets'
 
@@ -19,7 +22,10 @@ export function Welcome() {
   const trades = useMemo(() => demoAccount().trades, [])
   return (
     <div className="grid gap-4 lg:grid-cols-[340px_minmax(0,1fr)] xl:grid-cols-[400px_minmax(0,1fr)] lg:items-start">
-      <StartSteps />
+      <div className="flex flex-col gap-4">
+        <StartSteps />
+        <KeySafety />
+      </div>
       <LiveExample trades={trades} />
     </div>
   )
@@ -31,6 +37,11 @@ function StartSteps() {
   const t = useT()
   const w = t.dashboard.welcome
   const navigate = useNavigate()
+  const { data: conns } = useConnections()
+  const { data: profile } = useProfile()
+  // шаги отмечаются по-настоящему: биржа подключена (сделки ещё в пути) / депозит указан
+  const done = [Boolean(conns?.length), Boolean(profile?.starting_balance && profile.starting_balance > 0), false]
+  const current = done.indexOf(false)
   const steps = [
     {
       ...w.steps.connect,
@@ -62,28 +73,60 @@ function StartSteps() {
     <Card className="rise !p-5">
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="font-semibold">{w.start}</h2>
-        <span className="text-xs text-muted">{fmt(w.stepsDone, { n: 1 })}</span>
+        <span className="text-xs text-muted">{fmt(w.stepsDone, { n: current + 1 })}</span>
       </div>
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-2">
-        <div className="h-full w-1/3 rounded-full bg-primary" />
+        <div
+          className="h-full rounded-full bg-primary transition-[width] duration-500"
+          style={{ width: `${Math.max(8, (100 * done.filter(Boolean).length) / 3)}%` }}
+        />
       </div>
       <ol className="mt-5 flex flex-col">
         {steps.map((s, i) => (
           <li key={s.title} className="relative flex gap-3.5 pb-6 last:pb-0">
             {i < steps.length - 1 && <span aria-hidden className="absolute top-9 bottom-1 left-[13px] w-px bg-border" />}
             <span
-              className={`num flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${i === 0 ? 'bg-primary text-on-primary' : 'border border-border bg-surface-2 text-muted'}`}
+              className={`num flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                done[i] ? 'bg-primary/15 text-primary' : i === current ? 'bg-primary text-on-primary' : 'border border-border bg-surface-2 text-muted'
+              }`}
             >
-              {i + 1}
+              {done[i] ? (
+                <svg viewBox="0 0 16 16" className="size-3.5" fill="none" stroke="currentColor" strokeWidth={2.2} aria-label={w.done}>
+                  <path d="M3.5 8.5l3 3 6-7" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              ) : (
+                i + 1
+              )}
             </span>
             <div className="min-w-0 pt-0.5">
-              <p className="font-semibold">{s.title}</p>
-              <p className="mt-0.5 text-sm text-text/80">{s.text}</p>
-              {s.actions}
+              <p className={`font-semibold ${done[i] ? 'text-muted line-through decoration-1' : ''}`}>{s.title}</p>
+              {!done[i] && <p className="mt-0.5 text-sm text-text/80">{s.text}</p>}
+              {i === 0 && done[0] && <p className="mt-0.5 text-sm text-text/80">{fmt(w.connected, { list: [...new Set(conns!.map((c) => exchangeName(c.exchange, t.exchange.other)))].join(', ') })}</p>}
+              {i === current && s.actions}
             </div>
           </li>
         ))}
       </ol>
+    </Card>
+  )
+}
+
+/** Частый вопрос до подключения: «а не украдут ли деньги по ключу?» — отвечаем сразу */
+function KeySafety() {
+  const t = useT()
+  const w = t.dashboard.welcome
+  return (
+    <Card className="rise flex gap-3 !p-4 [--i:1]">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-primary">
+        <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
+          <rect x="5" y="10.5" width="14" height="10" rx="2" />
+          <path d="M8.5 10.5V7.5a3.5 3.5 0 017 0v3" strokeLinecap="round" />
+        </svg>
+      </span>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold">{w.safeTitle}</p>
+        <p className="mt-0.5 text-sm text-text/80">{w.safeText}</p>
+      </div>
     </Card>
   )
 }
@@ -93,6 +136,7 @@ function StartSteps() {
 const PER_TRADE = 750 // мс на одну сделку
 const HOLD = 3000 // пауза на готовом примере перед повтором
 const START = 3 // сразу видно несколько сделок, а не пустой график
+const FADE = 400 // мс: затухание перед повтором и проявление
 
 /**
  * Позиция примера: сколько сделок «пришло» (дробное — следующая в пути).
@@ -100,7 +144,10 @@ const START = 3 // сразу видно несколько сделок, а н�
  */
 function useDemoPosition(total: number) {
   const ref = useRef<HTMLDivElement>(null)
-  const [pos, setPos] = useState(() => (prefersReducedMotion() ? total : START))
+  const [state, setState] = useState(() => ({
+    pos: prefersReducedMotion() ? total : START,
+    alpha: 1,
+  }))
   useEffect(() => {
     if (prefersReducedMotion()) return
     let visible = true
@@ -116,7 +163,13 @@ function useDemoPosition(total: number) {
         const raw = START + Math.min(run, el) / PER_TRADE
         const k = Math.floor(raw)
         const f = Math.min(1, (raw - k) * 1.5) // сделка «доезжает» за первые 2/3 своего времени
-        setPos(k >= total ? total : k + (1 - Math.pow(1 - f, 3)))
+        // в конце паузы пример мягко гаснет и проявляется заново — без резкого скачка назад
+        const end = run + HOLD - el
+        const alpha = Math.min(1, end / FADE, el / FADE)
+        setState({
+          pos: k >= total ? total : k + (1 - Math.pow(1 - f, 3)),
+          alpha,
+        })
       }
       frame = requestAnimationFrame(tick)
     }
@@ -126,14 +179,14 @@ function useDemoPosition(total: number) {
       io?.disconnect()
     }
   }, [total])
-  return { ref, pos }
+  return { ref, ...state }
 }
 
 function LiveExample({ trades }: { trades: ClosedTrade[] }) {
   const t = useT()
   const w = t.dashboard.welcome
   const k = t.dashboard.kpi
-  const { ref, pos } = useDemoPosition(trades.length)
+  const { ref, pos, alpha } = useDemoPosition(trades.length)
 
   const cum = useMemo(() => {
     let c = 0
@@ -165,7 +218,9 @@ function LiveExample({ trades }: { trades: ClosedTrade[] }) {
 
   return (
     <div ref={ref} className="relative">
-      <span className="absolute -top-2.5 left-4 z-10 rounded-md border border-border bg-surface-2 px-2 py-0.5 text-xs font-semibold text-muted">{w.example}</span>
+      <span className="absolute -top-2.5 left-4 z-10 rounded-md border border-border bg-surface-2 px-2 py-0.5 text-xs font-semibold text-muted">
+        {w.example}
+      </span>
       <div inert className="flex select-none flex-col gap-3 rounded-xl border border-dashed border-border p-3 sm:p-4">
         <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1 pt-1">
           <div className="min-w-0">
@@ -181,44 +236,46 @@ function LiveExample({ trades }: { trades: ClosedTrade[] }) {
           </span>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)]">
-          <Widget
-            label={k.totalPnl}
-            hint={k.hints.totalPnl}
-            className="col-span-2 md:col-span-1"
-            aside={<span className="num shrink-0 rounded-md bg-surface-2 px-2 py-0.5 text-xs text-muted">{fmt(k.trades, { n: count })}</span>}
-          >
-            <div className={`${big} text-[30px]`}>{formatPnl(pnl)}</div>
-          </Widget>
-          <Widget label={k.tradeWinrate} hint={k.hints.tradeWinrate}>
-            <div className="flex flex-col-reverse items-start gap-2 min-[420px]:flex-row min-[420px]:items-end min-[420px]:justify-between">
-              <div className={big}>{formatPercent(wins + losses ? wins / (wins + losses) : null, 0)}</div>
-              <HalfGauge a={wins} b={losses} live />
-            </div>
-            <Counts a={Math.round(wins)} b={Math.round(losses)} />
-          </Widget>
-          <Widget label={k.profitFactor} hint={k.hints.profitFactor}>
-            <div className="flex items-center justify-between gap-2">
-              <div className={big}>{formatRatio(gl > 0 ? gw / gl : null)}</div>
-              <Ring a={gw} b={gl} live />
-            </div>
-            <div className="num flex justify-between gap-2 text-xs">
-              <span>{formatUsd(gw)}</span>
-              <span className="text-muted">−{formatUsd(gl)}</span>
-            </div>
-          </Widget>
-        </div>
+        <div className="flex flex-col gap-3" style={{ opacity: alpha }}>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)]">
+            <Widget
+              label={k.totalPnl}
+              hint={k.hints.totalPnl}
+              className="col-span-2 md:col-span-1"
+              aside={<span className="num shrink-0 rounded-md bg-surface-2 px-2 py-0.5 text-xs text-muted">{fmt(k.trades, { n: count })}</span>}
+            >
+              <div className={`${big} text-[30px]`}>{formatPnl(pnl)}</div>
+            </Widget>
+            <Widget label={k.tradeWinrate} hint={k.hints.tradeWinrate}>
+              <div className="flex flex-col-reverse items-start gap-2 min-[420px]:flex-row min-[420px]:items-end min-[420px]:justify-between">
+                <div className={big}>{formatPercent(wins + losses ? wins / (wins + losses) : null, 0)}</div>
+                <HalfGauge a={wins} b={losses} live />
+              </div>
+              <Counts a={Math.round(wins)} b={Math.round(losses)} />
+            </Widget>
+            <Widget label={k.profitFactor} hint={k.hints.profitFactor}>
+              <div className="flex items-center justify-between gap-2">
+                <div className={big}>{formatRatio(gl > 0 ? gw / gl : null)}</div>
+                <Ring a={gw} b={gl} live />
+              </div>
+              <div className="num flex justify-between gap-2 text-xs">
+                <span>{formatUsd(gw)}</span>
+                <span className="text-muted">−{formatUsd(gl)}</span>
+              </div>
+            </Widget>
+          </div>
 
-        <div className="grid gap-3 2xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
-          <section className="rounded-lg border border-border bg-surface p-4">
-            <h3 className="font-semibold">{t.dashboard.charts.equity}</h3>
-            <p className="mt-0.5 text-xs text-muted">{t.dashboard.charts.equityHintUsd}</p>
-            <LiveCurve cum={cum} trades={trades} pos={pos} />
-          </section>
-          <section className="rounded-lg border border-border bg-surface p-4">
-            <h3 className="font-semibold">{w.recent}</h3>
-            <RecentTrades trades={trades} pos={pos} />
-          </section>
+          <div className="grid gap-3 2xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+            <section className="rounded-lg border border-border bg-surface p-4">
+              <h3 className="font-semibold">{t.dashboard.charts.equity}</h3>
+              <p className="mt-0.5 text-xs text-muted">{t.dashboard.charts.equityHintUsd}</p>
+              <LiveCurve cum={cum} trades={trades} pos={pos} />
+            </section>
+            <section className="rounded-lg border border-border bg-surface p-4">
+              <h3 className="font-semibold">{w.recent}</h3>
+              <RecentTrades trades={trades} pos={pos} />
+            </section>
+          </div>
         </div>
       </div>
     </div>
@@ -322,19 +379,7 @@ function LiveCurve({ cum, trades, pos }: { cum: number[]; trades: ClosedTrade[];
         ))}
         <path d={area} fill={`url(#${id}f)`} />
         <path d={line} fill="none" stroke="var(--color-primary)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-        {fresh && fade < 1 && (
-          <text
-            x={ex}
-            y={ey - 22 - fade * 18}
-            textAnchor="middle"
-            fontSize={12}
-            fontWeight={600}
-            opacity={1 - fade}
-            fill={fresh.pnl >= 0 ? 'var(--color-primary)' : 'var(--color-muted)'}
-          >
-            {formatPnl(fresh.pnl)}
-          </text>
-        )}
+        {fresh && fade < 1 && <FreshPill x={ex} y={ey - 26 - fade * 16} pnl={fresh.pnl} opacity={1 - fade} />}
         <circle cx={ex} cy={ey} r={4.5} fill="var(--color-primary)" stroke="var(--color-surface)" strokeWidth={2} />
         {R > 16 && (
           <text x={ex + 10} y={ey} dy="0.32em" fontSize={12} fontWeight={600} fill="var(--color-text)">
@@ -343,6 +388,20 @@ function LiveCurve({ cum, trades, pos }: { cum: number[]; trades: ClosedTrade[];
         )}
       </svg>
     </div>
+  )
+}
+
+/** Сумма только что пришедшей сделки — табличка над точкой, всплывает и тает */
+function FreshPill({ x, y, pnl, opacity }: { x: number; y: number; pnl: number; opacity: number }) {
+  const label = formatPnl(pnl)
+  const w = label.length * 7 + 16
+  return (
+    <g opacity={opacity} transform={`translate(${x.toFixed(1)} ${y.toFixed(1)})`}>
+      <rect x={-w / 2} y={-11} width={w} height={22} rx={6} fill="var(--color-surface)" stroke="var(--color-border)" />
+      <text textAnchor="middle" dy="0.35em" fontSize={12} fontWeight={600} fill={pnl >= 0 ? 'var(--color-primary)' : 'var(--color-muted)'}>
+        {label}
+      </text>
+    </g>
   )
 }
 
