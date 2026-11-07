@@ -6,7 +6,8 @@
  */
 import type { Plan } from '@/types/db'
 
-export const PALETTES = ['classic', 'cyan_wine', 'teal_salmon', 'sky_coral', 'gold_indigo', 'emerald_ruby', 'aqua_tangerine', 'sage_terracotta'] as const
+/** Порядок показа: сначала бесплатные, потом под замком до Pro */
+export const PALETTES = ['classic', 'teal_salmon', 'sky_coral', 'cyan_wine', 'gold_indigo', 'emerald_ruby', 'aqua_tangerine', 'sage_terracotta'] as const
 export type Palette = (typeof PALETTES)[number]
 
 const KEY = 'cj-palette'
