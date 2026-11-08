@@ -1,13 +1,13 @@
 /**
  * Виджеты дашборда в духе TradeZella: верхний ряд показателей со шкалами (полукруг, кольцо, полоска),
- * «Оценка трейдера» (радар + итог 0…100) и «Ключевые цифры».
+ * «Ключевые цифры» («Оценку трейдера» убрали 08.11.2026; расчёт traderScore остался — из него винрейт дней).
  * Шкалы — свой лёгкий SVG (pathLength = 100), при первом показе плавно заполняются.
  */
-import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { fmt, plural, useT } from '@/i18n'
 import { formatNumber, formatPercent, formatPnl, formatR, formatRatio, formatUsd } from '@/lib/format'
 import { recentForm, type DrawdownPeriod, type EquityPoint, type Outcome, type Summary } from '@/lib/calc/stats'
-import { SCORE_MIN_TRADES, type TraderScore } from '@/lib/calc/score'
+import type { TraderScore } from '@/lib/calc/score'
 import { prefersReducedMotion, useCountUp } from '@/lib/motion'
 import { daysBetween, withTime } from './equityTime'
 
@@ -33,7 +33,6 @@ function Sparkline({ points }: { points: EquityPoint[] }) {
   )
 }
 
-const ScoreRadar = lazy(() => import('./charts').then((m) => ({ default: m.ScoreRadar })))
 
 /** false на первом кадре, потом true — чтобы шкалы «доросли» до значения (без анимации — сразу true) */
 function useShown(): boolean {
@@ -209,44 +208,6 @@ export function Counts({ a, b }: { a: number; b: number }) {
       <span className={`rounded-md px-1.5 py-0.5 ${TONE.aPill}`}>{a}</span>
       <span className={`rounded-md px-1.5 py-0.5 ${TONE.bPill}`}>{b}</span>
     </div>
-  )
-}
-
-/* ---------- Оценка трейдера ---------- */
-
-export function ScoreCard({ score, trades }: { score: TraderScore; trades: number }) {
-  const t = useT()
-  const sc = t.dashboard.score
-  const shown = useShown()
-  const total = useCountUp(score.total)
-  const tone = 'bg-primary' // в тон кривой и шкал (раньше — зелёный / жёлтый / красный по уровню)
-  const data = score.parts.map((p) => ({ name: sc.parts[p.key], score: p.score }))
-  return (
-    <section className="rise card-lift flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 [--i:1]">
-      <div>
-        <h2 className="font-semibold">{sc.title}</h2>
-        <p className="mt-0.5 text-xs text-muted">{sc.hint}</p>
-      </div>
-      <Suspense fallback={<div className="h-[220px]" />}>
-        <ScoreRadar data={data} />
-      </Suspense>
-      <div className="flex items-end justify-between gap-3">
-        <div className="num text-4xl leading-none font-semibold">{Math.round(total)}</div>
-        <div className="text-xs text-muted">{sc.outOf}</div>
-      </div>
-      <div className="h-2 overflow-hidden rounded-full bg-surface-2">
-        <i className={`block h-full rounded-full ${tone} transition-[width] duration-[900ms] ease-out`} style={{ width: shown ? `${score.total}%` : 0 }} />
-      </div>
-      <ul className="grid gap-1 text-xs">
-        {score.parts.map((p) => (
-          <li key={p.key} className="flex items-baseline justify-between gap-3" title={sc.explain[p.key]}>
-            <span className="text-muted">{sc.parts[p.key]}</span>
-            <span className="num font-semibold">{p.score}</span>
-          </li>
-        ))}
-      </ul>
-      {trades < SCORE_MIN_TRADES && <p className="text-xs text-warning">{fmt(sc.few, { n: SCORE_MIN_TRADES })}</p>}
-    </section>
   )
 }
 

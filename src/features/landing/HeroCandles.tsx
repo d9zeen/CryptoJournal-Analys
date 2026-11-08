@@ -1,8 +1,8 @@
 /**
  * Фон первого экрана: живой свечной график, который бесконечно «едет»: справа рождаются новые свечи,
  * последняя свеча формируется на глазах, старые уезжают влево и растворяются.
- * Рисуется на <canvas> (requestAnimationFrame), цвета — из theme.css (--color-up / --color-down / --color-border),
- * при смене темы или палитры перечитываются; сетка — сплошные линии в обеих темах. Стоит на паузе, когда блок не виден или вкладка скрыта.
+ * Рисуется на <canvas> (requestAnimationFrame), цвета — из theme.css (--color-up / --color-down / --color-bg),
+ * при смене темы или палитры перечитываются. Без сетки; тела свечей непрозрачные (фитиль не просвечивает). Стоит на паузе, когда блок не виден или вкладка скрыта.
  * «Уменьшить движение» — один неподвижный кадр.
  */
 import { useEffect, useRef, type CSSProperties } from 'react'
@@ -33,8 +33,7 @@ function readColors() {
   const s = getComputedStyle(document.documentElement)
   const v = (n: string) => s.getPropertyValue(n).trim()
   const light = document.documentElement.dataset.theme === 'light'
-  // сетка на светлой — приглушённым текстовым цветом: цвет рамок на кремовом фоне почти не виден
-  return { up: v('--color-up'), down: v('--color-down'), grid: v(light ? '--color-muted' : '--color-border'), light }
+  return { up: v('--color-up'), down: v('--color-down'), bg: v('--color-bg'), light }
 }
 
 export function HeroCandles({ className = '', style }: { className?: string; style?: CSSProperties }) {
@@ -100,16 +99,7 @@ export function HeroCandles({ className = '', style }: { className?: string; sty
 
     const draw = () => {
       ctx.clearRect(0, 0, w, h)
-      // сетка: сплошные линии в обеих темах (выбор владельца 08.11.2026)
-      ctx.globalAlpha = colors.light ? 0.28 : 0.6
-      ctx.strokeStyle = colors.grid
-      ctx.lineWidth = 1
-      ctx.beginPath()
-      for (let gy = 0.5; gy < h; gy += 64) {
-        ctx.moveTo(0, Math.round(gy) + 0.5)
-        ctx.lineTo(w, Math.round(gy) + 0.5)
-      }
-      ctx.stroke()
+      // без сетки (решение владельца 08.11.2026): только свечи
 
       // последняя свеча формируется: от открытия к цели
       const k = live
@@ -138,9 +128,18 @@ export function HeroCandles({ className = '', style }: { className?: string; sty
         ctx.stroke()
         const top = y(Math.max(c.o, c.c))
         const bh = Math.max(2, Math.abs(y(c.o) - y(c.c)))
-        ctx.globalAlpha = up ? a.up : a.down
+        // тело непрозрачное: сначала закрываем фитиль цветом фона, потом красим полупрозрачным цветом свечи —
+        // фитиль не просвечивает сквозь тело
+        const bx = Math.round(x - BODY / 2)
+        ctx.globalAlpha = 1
+        ctx.fillStyle = colors.bg
         ctx.beginPath()
-        ctx.roundRect(Math.round(x - BODY / 2), top, BODY, bh, 1.5)
+        ctx.roundRect(bx, top, BODY, bh, 1.5)
+        ctx.fill()
+        ctx.globalAlpha = up ? a.up : a.down
+        ctx.fillStyle = up ? colors.up : colors.down
+        ctx.beginPath()
+        ctx.roundRect(bx, top, BODY, bh, 1.5)
         ctx.fill()
       })
 
