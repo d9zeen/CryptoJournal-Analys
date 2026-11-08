@@ -8,7 +8,7 @@ for (const theme of ['dark', 'light'] as const) {
       await page.setViewportSize({ width: vw, height: vh })
       await page.addInitScript((t) => {
         try {
-          localStorage.setItem('cj-theme', t)
+          localStorage.setItem('cj-theme-v2', t)
         } catch {
           /* нет хранилища */
         }
@@ -37,7 +37,7 @@ for (const theme of ['dark', 'light'] as const) {
     const page = await ctx.newPage()
     await page.addInitScript((t) => {
       try {
-        localStorage.setItem('cj-theme', t)
+        localStorage.setItem('cj-theme-v2', t)
       } catch {
         /* нет хранилища */
       }

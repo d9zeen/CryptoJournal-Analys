@@ -10,7 +10,8 @@ import { useSyncExternalStore } from 'react'
 
 export type Theme = 'dark' | 'light'
 
-const KEY = 'cj-theme'
+// v2: 08.11.2026 сброшен старый выбор (у многих осталась «тёмная» с тех пор, когда она была по умолчанию) — все снова начинают со светлой
+const KEY = 'cj-theme-v2'
 const listeners = new Set<() => void>()
 
 export function readTheme(): Theme {

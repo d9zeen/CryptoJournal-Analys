@@ -342,3 +342,10 @@ test('палитра на Pro: выбор под календарём сохра
   await expect.poll(() => db.palette).toBe('cyan_wine')
   await expect(strip.getByRole('radio', { name: 'Палитра 4' })).toHaveAttribute('aria-checked', 'true')
 })
+
+test('тема: старый сохранённый выбор «тёмная» (cj-theme) больше не действует — открывается светлая', async ({ page, db }) => {
+  await page.addInitScript(() => { try { localStorage.setItem('cj-theme', 'dark') } catch {} })
+  await fakeSupabase(page, db, { signedIn: false })
+  await page.goto('')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+})

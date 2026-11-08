@@ -2,7 +2,7 @@
  * Фон первого экрана: живой свечной график, который бесконечно «едет»: справа рождаются новые свечи,
  * последняя свеча формируется на глазах, старые уезжают влево и растворяются.
  * Рисуется на <canvas> (requestAnimationFrame), цвета — из theme.css (--color-up / --color-down / --color-border),
- * при смене темы или палитры перечитываются. Стоит на паузе, когда блок не виден или вкладка скрыта.
+ * при смене темы или палитры перечитываются; сетка — сплошные линии в обеих темах. Стоит на паузе, когда блок не виден или вкладка скрыта.
  * «Уменьшить движение» — один неподвижный кадр.
  */
 import { useEffect, useRef, type CSSProperties } from 'react'
@@ -32,7 +32,9 @@ function nextCandle(prev: number, rnd: () => number): Candle {
 function readColors() {
   const s = getComputedStyle(document.documentElement)
   const v = (n: string) => s.getPropertyValue(n).trim()
-  return { up: v('--color-up'), down: v('--color-down'), grid: v('--color-border'), light: document.documentElement.dataset.theme === 'light' }
+  const light = document.documentElement.dataset.theme === 'light'
+  // сетка на светлой — приглушённым текстовым цветом: цвет рамок на кремовом фоне почти не виден
+  return { up: v('--color-up'), down: v('--color-down'), grid: v(light ? '--color-muted' : '--color-border'), light }
 }
 
 export function HeroCandles({ className = '', style }: { className?: string; style?: CSSProperties }) {
@@ -98,18 +100,16 @@ export function HeroCandles({ className = '', style }: { className?: string; sty
 
     const draw = () => {
       ctx.clearRect(0, 0, w, h)
-      // сетка: на светлой — пунктир, чтобы не рябило на кремовом фоне
-      ctx.globalAlpha = colors.light ? 0.9 : 0.6
+      // сетка: сплошные линии в обеих темах (выбор владельца 08.11.2026)
+      ctx.globalAlpha = colors.light ? 0.28 : 0.6
       ctx.strokeStyle = colors.grid
       ctx.lineWidth = 1
-      ctx.setLineDash(colors.light ? [3, 5] : [])
       ctx.beginPath()
       for (let gy = 0.5; gy < h; gy += 64) {
         ctx.moveTo(0, Math.round(gy) + 0.5)
         ctx.lineTo(w, Math.round(gy) + 0.5)
       }
       ctx.stroke()
-      ctx.setLineDash([])
 
       // последняя свеча формируется: от открытия к цели
       const k = live
