@@ -21,7 +21,7 @@ import {
   summarize,
   type StatTrade,
 } from '@/lib/calc/stats'
-import { KeyNumbers, KpiRow, ScoreCard } from './Widgets'
+import { KeyNumbers, KpiRow } from './Widgets'
 import { traderScore } from '@/lib/calc/score'
 import { EquityTableDialog } from './EquityTableDialog'
 import type { EquityUnit } from './equityTime'
@@ -109,7 +109,8 @@ export function DashboardPage() {
           <KpiRow summary={s} score={score} startingBalance={balance} equity={stats.equity} />
 
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] xl:grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)]">
-            <ScoreCard score={score} trades={s.closed} />
+            {/* «Оценку трейдера» убрали (решение владельца 08.11.2026): слева — ключевые цифры */}
+            <KeyNumbers summary={s} curve={stats.curve} period={stats.period} rwl={stats.rwl} />
             <Card className="rise !p-4 [--i:2]">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -140,12 +141,9 @@ export function DashboardPage() {
             </Card>
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] xl:grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)]">
-            <KeyNumbers summary={s} curve={stats.curve} period={stats.period} rwl={stats.rwl} />
-            <ChartCard i={4} title={bars.unit === 'month' ? t.dashboard.charts.monthly : bars.unit === 'week' ? t.dashboard.charts.weekly : t.dashboard.charts.daily}>
-              <DailyPnlChart days={bars.bars} unit={bars.unit} height={wide ? 300 : 220} />
-            </ChartCard>
-          </div>
+          <ChartCard i={4} title={bars.unit === 'month' ? t.dashboard.charts.monthly : bars.unit === 'week' ? t.dashboard.charts.weekly : t.dashboard.charts.daily}>
+            <DailyPnlChart days={bars.bars} unit={bars.unit} height={wide ? 300 : 220} />
+          </ChartCard>
 
           <EquityTableDialog open={tableOpen} onClose={() => setTableOpen(false)} curve={stats.curve} unit={eqUnit} balance={balance} />
         </>

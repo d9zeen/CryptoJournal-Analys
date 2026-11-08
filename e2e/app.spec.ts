@@ -269,7 +269,7 @@ test('главная для вошедшего — дашборд', async ({ pag
   await fakeSupabase(page, db)
   await page.goto('')
   await expect(page).toHaveURL(/\/dashboard$/)
-  await expect(page.getByText('Оценка трейдера', { exact: true })).toBeVisible()
+  await expect(page.getByText('Ключевые цифры', { exact: true })).toBeVisible()
 })
 
 test('/welcome — главная для гостя открывается и после входа, кнопка ведёт в дневник', async ({ page, db }) => {

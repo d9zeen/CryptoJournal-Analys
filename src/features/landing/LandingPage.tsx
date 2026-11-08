@@ -8,9 +8,10 @@ import { plural, useT } from '@/i18n'
 import { Logo } from '@/components/Logo'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { useAuth } from '@/features/auth/AuthProvider'
-import { KpiRow, ScoreCard } from '@/features/dashboard/Widgets'
+import { KpiRow } from '@/features/dashboard/Widgets'
 import { formatPnl, pnlClass } from '@/lib/format'
 import { Reveal } from './Reveal'
+import { Rich } from './Rich'
 import { PlanCards } from './PlanCards'
 import { HeroCandles } from './HeroCandles'
 import { demoAccount } from './demo'
@@ -32,6 +33,7 @@ const wrap = 'mx-auto w-full max-w-[1320px] px-4 sm:px-6'
 export function LandingPage() {
   const t = useT()
   const l = t.landing
+  const accentWords = l.titleAccent.split(' ').length
   const demo = useMemo(() => demoAccount(), [])
   const { user } = useAuth()
 
@@ -89,17 +91,24 @@ export function LandingPage() {
           <div className="relative max-w-3xl">
             {/* заход на сайт: слова заголовка по очереди, затем подзаголовок, кнопки и превью */}
             <h1 className="text-4xl leading-[1.08] font-bold tracking-tight text-balance sm:text-5xl lg:text-6xl" aria-label={l.title}>
-              {l.title.split(' ').map((w, i) => (
+              {l.title.split(' ').map((w, i, all) => (
                 <Fragment key={i}>
                   {i > 0 && ' '}
-                  <span aria-hidden className="animate-word inline-block" style={{ animationDelay: `${150 + i * 70}ms` }}>
+                  {/* конец заголовка (фьючерсы, спот, Polymarket) — цветом кнопок */}
+                  <span
+                    aria-hidden
+                    className={`animate-word inline-block ${i >= all.length - accentWords ? 'text-primary' : ''}`}
+                    style={{ animationDelay: `${150 + i * 70}ms` }}
+                  >
                     {w}
                   </span>
                 </Fragment>
               ))}
             </h1>
             <Reveal delay={550}>
-              <p className="mt-5 max-w-xl text-lg leading-relaxed text-balance text-text/90 sm:text-xl">{l.subtitle}</p>
+              <p className="mt-4 max-w-xl text-lg leading-snug text-balance text-text/75 sm:text-xl">
+                <Rich text={l.subtitle} />
+              </p>
             </Reveal>
             <Reveal delay={680} className="mt-8 flex flex-wrap items-center gap-3">
               <Link to="/register" className={`${btnPrimary} !px-5 !py-3`}>
@@ -122,15 +131,10 @@ export function LandingPage() {
             </div>
             <div className="flex flex-col gap-3 rounded-lg bg-bg p-3 sm:p-4">
               <KpiRow summary={demo.summary} score={demo.score} startingBalance={demo.balance} equity={demo.equity} />
-              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)]">
-                <div className="hidden lg:block">
-                  <ScoreCard score={demo.score} trades={demo.summary.closed} />
-                </div>
-                <div className="rounded-lg border border-border bg-surface p-4">
-                  <Suspense fallback={<div className="h-[300px]" />}>
-                    <EquityChart points={demo.equity} unit="usd" balance={demo.balance} height={430} />
-                  </Suspense>
-                </div>
+              <div className="rounded-lg border border-border bg-surface p-4">
+                <Suspense fallback={<div className="h-[300px]" />}>
+                  <EquityChart points={demo.equity} unit="usd" balance={demo.balance} height={380} />
+                </Suspense>
               </div>
             </div>
           </Reveal>
@@ -154,7 +158,9 @@ export function LandingPage() {
                       </li>
                     ))}
                   </ul>
-                  <p className="mt-3 text-sm leading-relaxed text-text/90">{l.exchanges.ways[w.key].text}</p>
+                  <p className="mt-3 text-sm leading-relaxed text-text/75">
+                    <Rich text={l.exchanges.ways[w.key].text} />
+                  </p>
                 </Reveal>
               ))}
             </div>
@@ -191,7 +197,9 @@ export function LandingPage() {
                 <Reveal as="li" key={k} delay={i * 90} className="border-t-2 border-primary pt-5">
                   <div className="num text-sm font-semibold text-primary">0{i + 1}</div>
                   <h3 className="mt-2 text-lg font-semibold">{l.steps[k].title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-text/90">{l.steps[k].text}</p>
+                  <p className="mt-2 text-sm leading-relaxed text-text/75">
+                    <Rich text={l.steps[k].text} />
+                  </p>
                 </Reveal>
               ))}
             </ol>
@@ -261,7 +269,9 @@ function Feature({ title, text, flip = false, children }: { title: string; text:
     <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-16">
       <Reveal className={flip ? 'lg:order-2' : ''}>
         <h3 className="text-2xl font-bold tracking-tight">{title}</h3>
-        <p className="mt-3 max-w-lg leading-relaxed text-text/90">{text}</p>
+        <p className="mt-3 max-w-lg leading-relaxed text-text/75">
+          <Rich text={text} />
+        </p>
       </Reveal>
       <Reveal delay={90}>{children}</Reveal>
     </div>

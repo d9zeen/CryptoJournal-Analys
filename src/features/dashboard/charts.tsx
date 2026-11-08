@@ -10,11 +10,6 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  PolarAngleAxis,
-  PolarGrid,
-  PolarRadiusAxis,
-  Radar,
-  RadarChart,
   ReferenceDot,
   ReferenceLine,
   ResponsiveContainer,
@@ -199,16 +194,3 @@ export function DailyPnlChart({ days, unit = 'day', height = HEIGHT }: { days: D
   )
 }
 
-/** Радар «Оценки трейдера»: шесть показателей по 0…100 */
-export function ScoreRadar({ data }: { data: { name: string; score: number }[] }) {
-  return (
-    <ResponsiveContainer width="100%" height={220}>
-      <RadarChart data={data} outerRadius="66%" margin={{ top: 4, right: 40, bottom: 4, left: 40 }}>
-        <PolarGrid stroke={C.grid} />
-        <PolarAngleAxis dataKey="name" tick={{ fill: C.muted, fontSize: 10 }} />
-        <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
-        <Radar dataKey="score" stroke={C.primary} fill={C.primary} fillOpacity={0.28} strokeWidth={2} {...anim()} />
-      </RadarChart>
-    </ResponsiveContainer>
-  )
-}
