@@ -177,6 +177,21 @@ test.describe('оформление', () => {
     await page.getByRole('radio', { name: 'Светлая' }).click()
     await expect(html).toHaveAttribute('data-theme', 'light')
   })
+
+  test('главная: тема переключается в шапке, без вспышки после перезагрузки', async ({ page, db }) => {
+    await fakeSupabase(page, db, { signedIn: false })
+    await page.goto('')
+    const html = page.locator('html')
+    await expect(html).toHaveAttribute('data-theme', 'light') // светлая по умолчанию
+    await expect(page.getByText('карта не нужна')).toHaveCount(0)
+    await page.getByRole('button', { name: 'Тёмная тема' }).click()
+    await expect(html).not.toHaveAttribute('data-theme', 'light')
+    // выбор помнится и ставится ещё до загрузки приложения (public/theme-init.js)
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await expect(html).not.toHaveAttribute('data-theme', 'light')
+    await page.getByRole('button', { name: 'Светлая тема' }).click()
+    await expect(html).toHaveAttribute('data-theme', 'light')
+  })
 })
 
 test.describe('админка', () => {
