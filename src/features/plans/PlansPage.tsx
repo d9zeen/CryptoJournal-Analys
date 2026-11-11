@@ -75,7 +75,12 @@ export function PlansTable({ current, currentNote = null, billing }: { current?:
             </th>
             {PLANS.map((plan) => (
               <th key={plan.id} scope="col" className={`px-3 pt-4 pb-3 text-left align-top font-normal md:px-4 ${col(plan, 'top')}`}>
-                {plan.id === MAIN_PLAN && <span className="mb-2 inline-block rounded-full bg-primary px-2.5 py-0.5 text-xs font-semibold text-on-primary">{p.best}</span>}
+                {/* плашка над главным тарифом (с md; на телефоне колонка узкая — хватает рамки); у остальных — пустое место той же высоты */}
+                {plan.id === MAIN_PLAN ? (
+                  <span className="mb-2 hidden rounded-full bg-primary px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-on-primary md:inline-block">{p.best}</span>
+                ) : (
+                  <span className="mb-2 hidden h-[22px] md:block" aria-hidden />
+                )}
                 <h2 className="text-base font-bold">{p.names[plan.id]}</h2>
                 <div className="mt-0.5">
                   <PlanPrice plan={plan} billing={billing} />

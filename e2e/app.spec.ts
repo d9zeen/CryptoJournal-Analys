@@ -265,7 +265,7 @@ test('страница тарифов: Basic, Pro, Pro Plus; месяц / год
   await expect(head).toContainText('$10')
   await expect(head).toContainText('$15')
   await expect(page.getByText('Твой тариф')).toBeVisible()
-  await expect(page.getByText('Всё автоматически')).toBeVisible()
+  if (!phone) await expect(page.getByText('Всё автоматически')).toBeVisible()
   await expect(page.getByText('Сделок в месяц', { exact: true }).locator('visible=true')).toBeVisible()
   await expect(page.getByRole('row').filter({ hasText: 'без лимита' })).toContainText(/50.*без лимита.*без лимита/)
   await expect(page.getByText('Биржи и кошельки: Bybit по ключу, Hyperliquid по адресу').locator('visible=true')).toBeVisible()

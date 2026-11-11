@@ -31,7 +31,9 @@ export function PlanCards({ action }: { action: (plan: PlanInfo) => ReactNode })
   const [billing, setBilling] = useState<Billing>('month')
   return (
     <div className="flex flex-col gap-6">
-      <BillingToggle value={billing} onChange={setBilling} />
+      <div className="self-start">
+        <BillingToggle value={billing} onChange={setBilling} />
+      </div>
       <div className="grid gap-4 md:grid-cols-3 md:items-stretch">
         {PLANS.map((plan, i) => {
           const best = plan.id === MAIN_PLAN
