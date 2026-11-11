@@ -103,7 +103,7 @@ export function ConnectionsCard() {
           ))}
         </ul>
       )}
-      <p className="text-[11px] text-muted">{c.soon}</p>
+      <p className="text-xs text-muted">{t.exchange.soon}</p>
     </Card>
   )
 }

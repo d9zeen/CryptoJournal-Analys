@@ -1,5 +1,5 @@
 /**
- * Палитра прибыли / убытка — компактная полоска под календарём (выбор владельца 07.11.2026: не отдельная карточка в настройках).
+ * Палитра прибыли / убытка — компактная полоска в «Настройки → Оформление» (ревью 11.11.2026; раньше была под календарём).
  * На палитру — плашка W / L в её цветах (без подписей — выбор владельца; название только во всплывающей подсказке). Три палитры — всем; остальные на Basic под замком (ссылка на тарифы).
  */
 import { useState } from 'react'
@@ -34,7 +34,7 @@ export function PaletteStrip() {
 
   if (!usage) return null
   return (
-    <div data-shot="palette" className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+    <div data-shot="palette" className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
       <div className="flex flex-col gap-1">
         <span className="text-muted">{a.palette}</span>
         {anyLocked && (
@@ -69,8 +69,8 @@ export function PaletteStrip() {
                 </svg>
               )}
               <span className={`flex gap-1 ${locked ? 'opacity-45' : ''}`}>
-                <span className="num flex size-6 items-center justify-center rounded bg-profit/15 text-[11px] font-bold text-profit">W</span>
-                <span className="num flex size-6 items-center justify-center rounded bg-loss/15 text-[11px] font-bold text-loss">L</span>
+                <span className="num flex size-6 items-center justify-center rounded bg-profit/15 text-xs font-bold text-profit">W</span>
+                <span className="num flex size-6 items-center justify-center rounded bg-loss/15 text-xs font-bold text-loss">L</span>
               </span>
             </button>
           )

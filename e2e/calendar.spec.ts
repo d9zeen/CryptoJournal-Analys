@@ -19,15 +19,19 @@ test('календарь прибыли: дни, итоги и листание 
     return s.charAt(0).toUpperCase() + s.slice(1)
   }
   await expect(cal.getByText(label(now), { exact: true })).toBeVisible()
-  // итог месяца: 3 сделки, 1 в плюс, +50 $
-  // правая панель итогов (та же цифра есть и в строке «Итог месяца» под сеткой)
-  const panel = cal.locator('aside')
-  await expect(panel.getByText('Сделки', { exact: true }).locator('..')).toContainText('3')
-  await expect(panel.getByText('Винрейт', { exact: true }).locator('..')).toContainText('33')
-  await expect(panel.getByText('Результат', { exact: true }).locator('..')).toContainText('+50')
+  // итог месяца — строка под сеткой: 3 сделки, 1 в плюс, +50 $; в заголовке суммы нет, в клетке дня — без процента
+  const total = cal.locator('[data-shot="month-total"]')
+  await expect(total.getByText('Сделки', { exact: true }).locator('..')).toContainText('3')
+  await expect(total.getByText('Винрейт', { exact: true }).locator('..')).toContainText('33')
+  await expect(total).toContainText('+50,00 $')
+  await expect(cal.getByRole('heading', { name: 'Календарь прибыли', exact: true })).toBeVisible()
+  await expect(cal.getByText('Результат', { exact: true })).toHaveCount(0)
+  // число сделок в клетке видно на широком экране (на телефоне клетки узкие — только сумма)
+  if ((page.viewportSize()?.width ?? 0) >= 1024) await expect(cal.getByText('2 сделки', { exact: true }).first()).toBeVisible()
+  await expect(cal.getByText(/2 сделки · \d+ %/)).toHaveCount(0)
   await cal.getByRole('button', { name: 'Следующий месяц' }).click()
   await expect(cal.getByText(label(new Date(now.getFullYear(), now.getMonth() + 1, 1)), { exact: true })).toBeVisible()
-  await expect(panel.getByText('Сделки', { exact: true }).locator('..')).toContainText('0')
+  await expect(total.getByText('Сделки', { exact: true }).locator('..')).toContainText('0')
 })
 
 test('календарь: только недели месяца и строка «Итог месяца» с max win / max loss', async ({ page, db }) => {

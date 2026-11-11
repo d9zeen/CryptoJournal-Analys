@@ -51,13 +51,18 @@ describe('profitCalendar', () => {
 })
 
 describe('compactPnl', () => {
-  it('коротко для узких клеток', () => {
-    expect(compactPnl(1652.68)).toBe('+1.7k')
-    expect(compactPnl(-2236.3)).toBe('−2.2k')
+  it('по-русски для узких клеток: целые до 1000, «к» и «м» с запятой, минус «−»', () => {
+    expect(compactPnl(92.2)).toBe('+92')
+    expect(compactPnl(-94.9)).toBe('−95')
     expect(compactPnl(137.2)).toBe('+137')
-    expect(compactPnl(-22.13)).toBe('−22.1')
-    expect(compactPnl(2_000_000)).toBe('+2M')
+    expect(compactPnl(1652.68)).toBe('+1,7к')
+    expect(compactPnl(-2236.3)).toBe('−2,2к')
+    expect(compactPnl(2000)).toBe('+2к')
+    expect(compactPnl(999.6)).toBe('+1к')
+    expect(compactPnl(1_234_567)).toBe('+1,2м')
+    expect(compactPnl(-999_990)).toBe('−1м')
     expect(compactPnl(0)).toBe('0')
+    expect(compactPnl(0.3)).toBe('0')
   })
 })
 

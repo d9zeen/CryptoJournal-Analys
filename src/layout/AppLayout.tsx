@@ -9,6 +9,11 @@ import { useProfile, useUsage } from '@/features/settings/api'
 import { applyPalette, canUsePalette, isPalette } from '@/lib/palette'
 import { useEffect } from 'react'
 
+const SETTINGS_ICON =
+  'M12 15a3 3 0 100-6 3 3 0 000 6zm7.4-3a7.4 7.4 0 00-.1-1.3l2-1.6-2-3.4-2.4 1a7.6 7.6 0 00-2.2-1.3L14.3 2h-4l-.4 2.4a7.6 7.6 0 00-2.2 1.3l-2.4-1-2 3.4 2 1.6a7.4 7.4 0 000 2.6l-2 1.6 2 3.4 2.4-1c.7.5 1.4 1 2.2 1.3l.4 2.4h4l.4-2.4c.8-.3 1.5-.8 2.2-1.3l2.4 1 2-3.4-2-1.6c.1-.4.1-.9.1-1.3z'
+const PHONE_NAV = ['/dashboard', '/calendar', '/trades', '/analysis', '/import']
+const headerBtn = 'rounded-lg p-2 text-muted transition-colors hover:bg-surface-2 hover:text-text'
+
 function useNavItems() {
   const t = useT()
   const { data: isAdmin } = useIsAdmin()
@@ -18,7 +23,7 @@ function useNavItems() {
     { to: '/trades', label: t.nav.trades, icon: 'M4 6h16M4 12h16M4 18h10' },
     { to: '/analysis', label: t.nav.analysis, icon: 'M4 20V11m6 9V5m6 15v-6m5 6H3' },
     { to: '/import', label: t.nav.import, icon: 'M12 3v12m0 0l-4-4m4 4l4-4M4 17v3h16v-3' },
-    { to: '/settings', label: t.nav.settings, icon: 'M12 15a3 3 0 100-6 3 3 0 000 6zm7.4-3a7.4 7.4 0 00-.1-1.3l2-1.6-2-3.4-2.4 1a7.6 7.6 0 00-2.2-1.3L14.3 2h-4l-.4 2.4a7.6 7.6 0 00-2.2 1.3l-2.4-1-2 3.4 2 1.6a7.4 7.4 0 000 2.6l-2 1.6 2 3.4 2.4-1c.7.5 1.4 1 2.2 1.3l.4 2.4h4l.4-2.4c.8-.3 1.5-.8 2.2-1.3l2.4 1 2-3.4-2-1.6c.1-.4.1-.9.1-1.3z' },
+    { to: '/settings', label: t.nav.settings, icon: SETTINGS_ICON },
   ]
   // «Админка» — только у админа (доступ всё равно проверяет база)
   if (isAdmin) items.push({ to: '/admin', label: t.nav.admin, icon: 'M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3zm-3 9l2 2 4-4' })
@@ -37,6 +42,8 @@ export function AppLayout() {
   const t = useT()
   const { user, signOut } = useAuth()
   const items = useNavItems()
+  // нижнее меню телефона — 5 пунктов; настройки — шестерёнкой в шапке, админка — из настроек
+  const phoneItems = items.filter((i) => PHONE_NAV.includes(i.to))
   useAutoSync() // подключённые биржи подтягивают сделки сами
   usePaletteSync()
 
@@ -104,17 +111,26 @@ export function AppLayout() {
         </div>
       </aside>
 
-      {/* Верхняя панель — телефон и планшет; на широком экране всё это в левой панели */}
+      {/* Верхняя панель — телефон и планшет; на широком экране всё это в левой панели.
+          Телефон: логотип, «+» (новая сделка), тема, настройки (выход — внизу настроек). Планшет: тариф, тема, почта, выход. */}
       <header className="sticky top-0 z-10 border-b border-border bg-bg/90 backdrop-blur lg:hidden">
         <div className="mx-auto flex h-14 max-w-[1800px] items-center gap-6 px-4">
           <span className="md:hidden">
             <Logo />
           </span>
-          <div className="ml-auto flex items-center gap-2 sm:gap-3">
-            <PlanBadge />
+          <div className="ml-auto flex items-center gap-1 sm:gap-3 md:gap-2">
+            <NavLink to="/trades/new" aria-label={t.tradeForm.titleNew} title={t.tradeForm.titleNew} className={`${headerBtn} md:hidden`}>
+              <Icon d="M12 5v14M5 12h14" />
+            </NavLink>
+            <span className="hidden md:contents">
+              <PlanBadge />
+            </span>
             <ThemeToggle />
-            <span className="hidden max-w-48 truncate text-sm text-muted sm:inline">{user?.email}</span>
-            <button onClick={signOut} className="rounded-lg px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-text">
+            <NavLink to="/settings" aria-label={t.nav.settings} title={t.nav.settings} className={`${headerBtn} md:hidden`}>
+              <Icon d={SETTINGS_ICON} />
+            </NavLink>
+            <span className="hidden max-w-48 truncate text-sm text-muted md:inline">{user?.email}</span>
+            <button onClick={signOut} className="hidden rounded-lg px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-text md:inline-flex">
               {t.nav.logout}
             </button>
           </div>
@@ -129,14 +145,14 @@ export function AppLayout() {
       {/* Нижнее меню на телефоне: там нет наведения, поэтому подписи остаются */}
       <nav
         className="fixed inset-x-0 bottom-0 z-10 grid border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden"
-        style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
+        style={{ gridTemplateColumns: `repeat(${phoneItems.length}, minmax(0, 1fr))` }}
       >
-        {items.map((item) => (
+        {phoneItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             viewTransition
-            className={({ isActive }) => `flex min-w-0 flex-col items-center gap-1 py-2 text-[10px] transition-colors ${isActive ? 'text-primary' : 'text-muted'}`}
+            className={({ isActive }) => `flex min-w-0 flex-col items-center gap-1 py-2 text-xs transition-colors ${isActive ? 'text-primary' : 'text-muted'}`}
           >
             <Icon d={item.icon} />
             <span className="max-w-full truncate px-0.5">{item.label}</span>
@@ -160,7 +176,7 @@ function PlanCard() {
         <span className="font-semibold text-text">{t.plans.names[usage.plan]}</span>
         <span className="text-primary">{t.plans.title}</span>
       </div>
-      <div className="mt-2 text-[11px] text-muted">
+      <div className="mt-2 text-xs text-muted">
         {limit ? fmt(t.settings.usageFree, { used: usage.trades_created, limit }) : fmt(t.settings.usagePro, { used: usage.trades_created })}
       </div>
       {limit && (

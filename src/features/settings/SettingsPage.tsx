@@ -14,6 +14,8 @@ import { deleteMyAccount, downloadTradesCsv } from './dataApi'
 import { SecurityCard } from './SecurityCard'
 import { Segmented } from '@/components/ui/Segmented'
 import { setTheme, useTheme, type Theme } from '@/lib/theme'
+import { PaletteStrip } from '@/features/palette/PaletteStrip'
+import { useIsAdmin } from '@/features/admin/api'
 
 export function SettingsPage() {
   const t = useT()
@@ -32,6 +34,26 @@ export function SettingsPage() {
         <ListEditor kind="emotions" />
       </div>
       <DataCard />
+      <AccountRow />
+    </div>
+  )
+}
+
+/** Низ настроек: выход (на телефоне его больше нет в шапке) и, для админа, ссылка в админку (её нет в нижнем меню) */
+function AccountRow() {
+  const t = useT()
+  const { signOut } = useAuth()
+  const { data: isAdmin } = useIsAdmin()
+  return (
+    <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
+      {isAdmin && (
+        <Link to="/admin" className="rounded-lg border border-border bg-surface-2 px-4 py-2 text-sm font-medium text-text hover:border-muted/60 md:hidden">
+          {t.nav.admin}
+        </Link>
+      )}
+      <Button variant="secondary" onClick={signOut}>
+        {t.nav.logout}
+      </Button>
     </div>
   )
 }
@@ -53,6 +75,9 @@ function AppearanceCard() {
           { value: 'light', label: a.light },
         ]}
       />
+      <div className="mt-5">
+        <PaletteStrip />
+      </div>
     </Card>
   )
 }
@@ -62,7 +87,6 @@ function ProfileCard() {
   const { user } = useAuth()
   const { data: profile } = useProfile()
   const update = useUpdateProfile()
-  const [name, setName] = useState('')
   const [tz, setTz] = useState('UTC')
   const [balance, setBalance] = useState('')
   const [status, setStatus] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
@@ -74,7 +98,6 @@ function ProfileCard() {
 
   useEffect(() => {
     if (!profile) return
-    setName(profile.display_name ?? '')
     setTz(profile.timezone)
     setBalance(toInput(profile.starting_balance))
   }, [profile])
@@ -88,7 +111,7 @@ function ProfileCard() {
       return
     }
     try {
-      await update.mutateAsync({ display_name: name.trim() || null, timezone: tz, starting_balance: startingBalance })
+      await update.mutateAsync({ timezone: tz, starting_balance: startingBalance })
       setStatus({ tone: 'success', text: t.common.saved })
     } catch (error) {
       setStatus({ tone: 'error', text: dbErrorMessage(error, t) })
@@ -100,7 +123,6 @@ function ProfileCard() {
       <h2 className="mb-1 font-medium">{t.settings.profile}</h2>
       <p className="mb-4 text-sm text-muted">{user?.email}</p>
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
-        <TextField label={t.settings.displayName} value={name} maxLength={60} onChange={(e) => setName(e.target.value)} />
         <SelectField label={t.settings.timezone} hint={t.settings.timezoneHint} value={tz} onChange={(e) => setTz(e.target.value)}>
           {timezones.map((z) => (
             <option key={z} value={z}>

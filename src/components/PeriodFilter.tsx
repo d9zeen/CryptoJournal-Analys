@@ -13,7 +13,7 @@ type Props = {
 /**
  * Период: Неделя / Месяц / Всё время / Свой диапазон.
  * «Свой диапазон» открывает календарь; период меняется только после «Применить».
- * На кнопке — выбранные даты («1 окт. — 15 окт.»).
+ * На кнопке — выбранные даты («1 окт. — 15 окт.»); уже sm — только иконка (подпись в aria-label / title).
  */
 export function PeriodFilter({ preset, custom, onPreset, onCustom }: Props) {
   const t = useT()
@@ -42,12 +42,15 @@ export function PeriodFilter({ preset, custom, onPreset, onCustom }: Props) {
           aria-expanded={open}
           aria-haspopup="dialog"
           onClick={() => setOpen((o) => !o)}
+          aria-label={customLabel}
+          title={customLabel}
           className={item(preset === 'custom' || open)}
         >
           <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M7 3v3m10-3v3M4 9h16M5 5h14a1 1 0 011 1v13a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1z" />
           </svg>
-          {customLabel}
+          {/* на телефоне — только иконка календаря, иначе «Свой диапазон» не помещается в 390 px */}
+          <span className="hidden sm:inline">{customLabel}</span>
         </button>
       </div>
       {open && (

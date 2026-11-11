@@ -73,6 +73,9 @@ export function RegisterPage() {
             {t.auth.register.toLogin}
           </Link>
         </p>
+        <Link to="/privacy" className="text-center text-xs text-muted hover:text-text hover:underline">
+          {t.privacy.link}
+        </Link>
       </form>
     </AuthLayout>
   )

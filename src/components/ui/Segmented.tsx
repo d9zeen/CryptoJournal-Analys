@@ -1,4 +1,4 @@
-type Option<T extends string> = { value: T; label: string; tone?: 'profit' | 'loss' }
+type Option<T extends string> = { value: T; label: string }
 
 type Props<T extends string> = {
   value: T
@@ -16,7 +16,6 @@ export function Segmented<T extends string>({ value, options, onChange, label, d
       <div role="radiogroup" aria-label={label} className="flex rounded-lg border border-border bg-surface-2 p-1">
         {options.map((o) => {
           const active = o.value === value
-          const tone = o.tone === 'profit' ? 'bg-profit/15 text-profit' : o.tone === 'loss' ? 'bg-loss/15 text-loss' : 'bg-surface text-text'
           return (
             <button
               key={o.value}
@@ -25,7 +24,7 @@ export function Segmented<T extends string>({ value, options, onChange, label, d
               aria-checked={active}
               disabled={disabled}
               onClick={() => onChange(o.value)}
-              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed ${active ? tone : 'text-muted hover:text-text'}`}
+              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed ${active ? 'bg-surface text-text' : 'text-muted hover:text-text'}`}
             >
               {o.label}
             </button>

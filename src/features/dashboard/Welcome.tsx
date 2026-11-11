@@ -11,12 +11,13 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { formatDayShort, formatPercent, formatPnl, formatRatio, formatUsd, formatUsdShort, pnlClass } from '@/lib/format'
 import { prefersReducedMotion } from '@/lib/motion'
+import { SideBadge } from '@/components/SideBadge'
 import { DEMO_TRADES, demoAccount } from '@/features/landing/demo'
 import { useConnections } from '@/features/connections/api'
 import { useProfile } from '@/features/settings/api'
 import { exchangeName } from '@/lib/exchanges'
 import type { ClosedTrade } from '@/lib/calc/stats'
-import { big, Counts, HalfGauge, Ring, Widget } from './Widgets'
+import { big, Counts, HalfGauge, PfCaption, Widget } from './Widgets'
 
 export function Welcome() {
   return (
@@ -267,10 +268,8 @@ function LiveExample() {
               <Counts a={Math.round(wins)} b={Math.round(losses)} />
             </Widget>
             <Widget label={k.profitFactor} hint={k.hints.profitFactor}>
-              <div className="flex items-center justify-between gap-2">
-                <div className={big}>{formatRatio(gl > 0 ? gw / gl : null)}</div>
-                <Ring a={gw} b={gl} live />
-              </div>
+              <div className={big}>{formatRatio(gl > 0 ? gw / gl : null)}</div>
+              <PfCaption pf={gl > 0 && gw > 0 ? gw / gl : null} />
               <div className="num flex justify-between gap-2 text-xs">
                 <span>{formatUsd(gw)}</span>
                 <span className="text-muted">−{formatUsd(gl)}</span>
@@ -431,7 +430,6 @@ const ROWS = 5
 
 /** Последние сделки, как в списке «Сделки»: новая въезжает сверху, остальные плавно сдвигаются вниз */
 function RecentTrades({ trades, pos }: { trades: ClosedTrade[]; pos: number }) {
-  const t = useT()
   const n = Math.floor(pos)
   const e = pos - n
   const arriving = n < trades.length && e > 0
@@ -451,11 +449,7 @@ function RecentTrades({ trades, pos }: { trades: ClosedTrade[]; pos: number }) {
             <span className="flex min-w-0 items-center gap-2">
               <span className="num w-11 shrink-0 text-xs text-muted">{formatDayShort(tr.exit_at.slice(0, 10))}</span>
               <span className="truncate font-medium">{tr.symbol}</span>
-              <span
-                className={`rounded px-1.5 py-0.5 text-[11px] font-bold tracking-wide uppercase ${tr.side === 'long' ? 'bg-profit/15 text-profit' : 'bg-loss/15 text-loss'}`}
-              >
-                {t.side[tr.side]}
-              </span>
+              <SideBadge side={tr.side} />
             </span>
             <span className={`num shrink-0 font-semibold ${pnlClass(tr.pnl)}`}>{formatPnl(tr.pnl)}</span>
           </li>
