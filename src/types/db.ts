@@ -10,6 +10,8 @@ export type Profile = {
   display_name: string | null
   plan: Plan
   plan_until: string | null
+  /** пробный Pro Plus на 7 дней при регистрации (0016); админ выдал тариф — false */
+  plan_trial: boolean
   timezone: string
   starting_balance: number | null
   locale: 'ru' | 'en'
@@ -93,6 +95,7 @@ export type AdminUser = {
   last_sign_in_at: string | null
   plan: Plan
   plan_until: string | null
+  plan_trial: boolean
   effective_plan: Plan
   trades_month: number
   trades_total: number

@@ -30,6 +30,14 @@ select pg_temp.check((select timezone from profiles where id = 'bbbbbbbb-0000-00
 select pg_temp.check((select count(*) from setups where user_id = 'aaaaaaaa-0000-0000-0000-000000000001') = 6, 'созданы стартовые сетапы');
 select pg_temp.check((select count(*) from mistake_tags where user_id = 'aaaaaaaa-0000-0000-0000-000000000001') = 10, 'созданы стартовые теги ошибок');
 select pg_temp.check((select count(*) from emotions where user_id = 'aaaaaaaa-0000-0000-0000-000000000001') = 8, 'созданы стартовые эмоции');
+-- Пробный период (0016): новый пользователь — 7 дней Pro Plus
+select pg_temp.check((select plan = 'pro_plus' and plan_trial and plan_until between now() + interval '6 days 23 hours' and now() + interval '7 days 1 minute'
+  from profiles where id = 'aaaaaaaa-0000-0000-0000-000000000001'), 'новый пользователь получает пробный Pro Plus на 7 дней');
+select pg_temp.check(effective_plan('aaaaaaaa-0000-0000-0000-000000000001') = 'pro_plus', 'во время пробного периода тариф — Pro Plus');
+-- пробный период закончился → Basic, ничего чистить не нужно
+update profiles set plan_until = now() - interval '1 second';
+select pg_temp.check(effective_plan('aaaaaaaa-0000-0000-0000-000000000001') = 'free' and effective_plan('bbbbbbbb-0000-0000-0000-000000000002') = 'free', 'после 7 дней пробного — сам Basic');
+update profiles set plan = 'free', plan_until = null, plan_trial = false;
 
 -- Сделка пользователя B (от его имени)
 set role authenticated;
@@ -50,6 +58,8 @@ select pg_temp.expect_error($$update profiles set plan = 'pro'$$, 'permission de
 select pg_temp.check(true, 'A не может сам включить себе Pro');
 select pg_temp.expect_error($$update profiles set plan_until = now() + interval '1 year'$$, 'permission denied');
 select pg_temp.check(true, 'A не может продлить Pro');
+select pg_temp.expect_error($$update profiles set plan_trial = true$$, 'permission denied');
+select pg_temp.check(true, 'A не может сам включить пробный период');
 update profiles set timezone = 'Asia/Almaty', starting_balance = 1000;
 select pg_temp.check((select timezone from profiles) = 'Asia/Almaty', 'A меняет часовой пояс и депозит');
 select pg_temp.expect_error($$update profiles set timezone = 'Mars/Base'$$, 'check constraint');
@@ -113,12 +123,13 @@ select pg_temp.check(true, 'нельзя загрузить файл в папк
 delete from setups where id = (select setup_id from trades where id = 'aaaaaaaa-1111-0000-0000-000000000000');
 select pg_temp.check((select setup_id is null and user_id is not null from trades where id = 'aaaaaaaa-1111-0000-0000-000000000000'), 'удаление сетапа обнуляет ссылку, сделка остаётся');
 
--- Лимит Free: 30 в месяц (1 уже создана)
+-- Лимит Basic (Free): 50 в месяц (1 уже создана)
+select pg_temp.check((select trade_limit = 50 and plan = 'free' from get_my_usage()), 'на Basic лимит 50 сделок в месяц');
 insert into trades (exchange, symbol, side, entry_at, entry_price, size_usd)
-select 'bybit', 'SOLUSDT', 'long', now(), 150, 100 from generate_series(1, 29);
-select pg_temp.check((select trades_created from get_my_usage()) = 30, 'счётчик: 30 сделок за месяц');
+select 'bybit', 'SOLUSDT', 'long', now(), 150, 100 from generate_series(1, 49);
+select pg_temp.check((select trades_created from get_my_usage()) = 50, 'счётчик: 50 сделок за месяц');
 select pg_temp.expect_error($$insert into trades (exchange, symbol, side, entry_at, entry_price, size_usd) values ('bybit', 'SOLUSDT', 'long', now(), 150, 100)$$, 'FREE_LIMIT_REACHED');
-select pg_temp.check(true, '31-я сделка на Free отклоняется');
+select pg_temp.check(true, '51-я сделка на Basic отклоняется');
 delete from trades where symbol = 'SOLUSDT' and ctid = (select min(ctid) from trades where symbol = 'SOLUSDT');
 select pg_temp.expect_error($$insert into trades (exchange, symbol, side, entry_at, entry_price, size_usd) values ('bybit', 'SOLUSDT', 'long', now(), 150, 100)$$, 'FREE_LIMIT_REACHED');
 select pg_temp.check(true, 'удаление сделки не возвращает лимит');
@@ -132,16 +143,14 @@ reset role;
 update profiles set plan = 'pro', plan_until = now() + interval '30 days' where id = 'aaaaaaaa-0000-0000-0000-000000000001';
 set role authenticated;
 insert into trades (exchange, symbol, side, entry_at, entry_price, size_usd) values ('okx', 'SOLUSDT', 'long', now(), 150, 100);
-select pg_temp.check((select trade_limit = 50 and plan = 'pro' from get_my_usage()), 'на Pro лимит 50 сделок в месяц');
+select pg_temp.check((select trade_limit is null and plan = 'pro' from get_my_usage()), 'на Pro сделки без лимита (51-я прошла)');
 update profiles set palette = 'cyan_wine';
 select pg_temp.check((select palette from profiles) = 'cyan_wine', 'на Pro палитру выбрать можно');
 select pg_temp.expect_error($$update profiles set palette = 'rainbow'$$, 'check constraint');
 select pg_temp.check(true, 'неизвестная палитра отклоняется и на Pro');
 insert into trades (exchange, symbol, side, entry_at, entry_price, size_usd)
 select 'okx', 'SOLUSDT', 'long', now(), 150, 100 from generate_series(1, 19);
-select pg_temp.check((select trades_created from get_my_usage()) = 50, 'на Pro счётчик дошёл до 50');
-select pg_temp.expect_error($$insert into trades (exchange, symbol, side, entry_at, entry_price, size_usd) values ('okx', 'SOLUSDT', 'long', now(), 150, 100)$$, 'FREE_LIMIT_REACHED');
-select pg_temp.check(true, '51-я сделка на Pro отклоняется');
+select pg_temp.check((select trades_created from get_my_usage()) = 70, 'на Pro счётчик идёт дальше 50');
 
 -- Pro Plus — без лимита
 reset role;
@@ -238,19 +247,28 @@ reset role;
 delete from auth.mfa_factors;
 set request.jwt.claims = '';
 
--- Несколько скриншотов на сделку (0003)
+-- Несколько скриншотов на сделку (0003); лимит по тарифу (0016): Basic — 2, Pro — 10
 set role authenticated;
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
 insert into trade_screenshots (trade_id, path) values
   ('bbbbbbbb-1111-0000-0000-000000000000', 'bbbbbbbb-0000-0000-0000-000000000002/bbbbbbbb-1111-0000-0000-000000000000/1.webp'),
   ('bbbbbbbb-1111-0000-0000-000000000000', 'bbbbbbbb-0000-0000-0000-000000000002/bbbbbbbb-1111-0000-0000-000000000000/2.webp');
 select pg_temp.check((select count(*) from trade_screenshots) = 2, 'B прикрепляет несколько скриншотов к своей сделке');
+select pg_temp.expect_error($$insert into trade_screenshots (trade_id, path) values ('bbbbbbbb-1111-0000-0000-000000000000', 'bbbbbbbb-0000-0000-0000-000000000002/bbbbbbbb-1111-0000-0000-000000000000/3.webp')$$, 'SCREENSHOT_LIMIT_REACHED');
+select pg_temp.check(true, 'на Basic третий скриншот к сделке не прикрепить');
+reset role;
+update profiles set plan = 'pro', plan_until = null where id = 'bbbbbbbb-0000-0000-0000-000000000002';
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
 select pg_temp.expect_error($$insert into trade_screenshots (trade_id, path) values ('bbbbbbbb-1111-0000-0000-000000000000', 'aaaaaaaa-0000-0000-0000-000000000001/x.webp')$$, 'trade_screenshots_path_owner');
 select pg_temp.check(true, 'путь скриншота должен быть в своей папке');
 insert into trade_screenshots (trade_id, path)
 select 'bbbbbbbb-1111-0000-0000-000000000000', 'bbbbbbbb-0000-0000-0000-000000000002/bbbbbbbb-1111-0000-0000-000000000000/n' || g || '.webp' from generate_series(3, 10) g;
 select pg_temp.expect_error($$insert into trade_screenshots (trade_id, path) values ('bbbbbbbb-1111-0000-0000-000000000000', 'bbbbbbbb-0000-0000-0000-000000000002/bbbbbbbb-1111-0000-0000-000000000000/11.webp')$$, 'SCREENSHOT_LIMIT_REACHED');
-select pg_temp.check(true, 'не больше 10 скриншотов на сделку');
+select pg_temp.check(true, 'на Pro не больше 10 скриншотов на сделку');
+reset role;
+update profiles set plan = 'free', plan_until = null where id = 'bbbbbbbb-0000-0000-0000-000000000002';
+set role authenticated;
 set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
 select pg_temp.check((select count(*) from trade_screenshots) = 0, 'A не видит скриншоты B');
 select pg_temp.expect_error($$insert into trade_screenshots (trade_id, path) values ('bbbbbbbb-1111-0000-0000-000000000000', 'aaaaaaaa-0000-0000-0000-000000000001/y.webp')$$, 'foreign key|row-level security');
@@ -362,7 +380,7 @@ select pg_temp.check(true, 'админ добавляет сделки свер�
 insert into setups (name) select 'Сетап ' || g from generate_series(1, 100) g;
 select pg_temp.check((select count(*) from setups) > 100, 'у админа нет потолка на число сетапов');
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
-select pg_temp.check((select plan = 'free' and trade_limit = 30 from get_my_usage()), 'у обычного пользователя лимит Free остаётся');
+select pg_temp.check((select plan = 'free' and trade_limit = 50 from get_my_usage()), 'у обычного пользователя лимит Basic остаётся');
 reset role;
 
 -- Админ с включённой 2FA — только после ввода кода (aal2)
@@ -445,11 +463,11 @@ reset role;
 update profiles set plan = 'pro', plan_until = null where id = 'bbbbbbbb-0000-0000-0000-000000000002';
 set role authenticated;
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
-select pg_temp.expect_error($$select add_exchange_connection('hyperliquid', '0x2222222222222222222222222222222222222222')$$, 'PLAN_REQUIRED');
-select pg_temp.check(true, 'Pro: биржи (ключи API, кошельки DEX) — только на Pro Plus');
-select pg_temp.expect_error($$select add_exchange_connection('bybit', 'KEYB1234567', 'SecretSecret1')$$, 'PLAN_REQUIRED');
-select pg_temp.check(true, 'Pro: ключ Bybit — только на Pro Plus');
-select pg_temp.check(add_exchange_connection('polymarket', '0x2222222222222222222222222222222222222222') is not null, 'Pro: Polymarket доступен');
+select pg_temp.expect_error($$select add_exchange_connection('polymarket', '0x2222222222222222222222222222222222222222')$$, 'PLAN_REQUIRED');
+select pg_temp.check(true, 'Pro: Polymarket — только на Pro Plus');
+select pg_temp.check(add_exchange_connection('hyperliquid', '0x2222222222222222222222222222222222222222') is not null, 'Pro: кошелёк Hyperliquid подключается');
+select pg_temp.expect_error($$select add_exchange_connection('bybit', 'KEYB1234567', 'SecretSecret1')$$, 'CONNECTION_LIMIT_REACHED');
+select pg_temp.check(true, 'Pro: второе подключение — сверх лимита (1)');
 reset role;
 update exchange_connections set last_sync_at = now() - interval '10 minutes' where label in ('свежий', 'Основной');
 update exchange_connections set last_error = 'KEY_INVALID | 10003' where label = 'сломан';
@@ -498,7 +516,8 @@ select pg_temp.expect_error($$select add_exchange_connection('hyperliquid', '0x1
 select pg_temp.check(true, 'аноним не может добавить подключение');
 reset role;
 
--- Polymarket: рынок «предсказания» (0010–0011)
+-- Polymarket: рынок «предсказания» (0010–0011); Polymarket — на Pro Plus (0016)
+update profiles set plan = 'pro_plus', plan_until = null where id = 'bbbbbbbb-0000-0000-0000-000000000002';
 set role authenticated;
 set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
 select pg_temp.check(add_exchange_connection('polymarket', '0x5555555555555555555555555555555555555555') is not null, 'подключение Polymarket по адресу кошелька');
@@ -513,14 +532,76 @@ select pg_temp.expect_error($$insert into trades (exchange, market_type, symbol,
 select pg_temp.check(true, 'слишком длинное название рынка отклоняется');
 reset role;
 
+-- Тарифы 0016: подключения Pro Plus (до 5, и Polymarket), понижение тарифа, admin_list_users видит пробный период
+insert into auth.users (id, email) values ('cccccccc-0000-0000-0000-000000000003', 'c@test');
+set role authenticated;
+set request.jwt.claim.sub = 'cccccccc-0000-0000-0000-000000000003';
+select pg_temp.check((select plan = 'pro_plus' and trade_limit is null from get_my_usage()), 'C на пробном Pro Plus');
+select pg_temp.check(add_exchange_connection('polymarket', '0xc000000000000000000000000000000000000001') is not null, 'Pro Plus: Polymarket подключается');
+select add_exchange_connection('hyperliquid', '0xc000000000000000000000000000000000000002');
+select add_exchange_connection('hyperliquid', '0xc000000000000000000000000000000000000003');
+select add_exchange_connection('polymarket', '0xc000000000000000000000000000000000000004');
+select pg_temp.check(add_exchange_connection('bybit', 'KEYC1234567', 'SecretSecretC') is not null, 'Pro Plus: пятое подключение (в любом сочетании) проходит');
+select pg_temp.expect_error($$select add_exchange_connection('hyperliquid', '0xc000000000000000000000000000000000000005')$$, 'CONNECTION_LIMIT_REACHED');
+select pg_temp.check(true, 'Pro Plus: шестое подключение — сверх лимита (5)');
+select pg_temp.check((select bool_and(connection_active(id)) from exchange_connections), 'на Pro Plus работают все 5 подключений');
+reset role;
+-- разные даты подключения: так порядок «кто первый» однозначен
+update exchange_connections ec set created_at = now() - (x.n || ' minutes')::interval
+  from (select id, 10 - row_number() over (order by api_key) as n from exchange_connections where user_id = 'cccccccc-0000-0000-0000-000000000003') x
+ where ec.id = x.id;
+update profiles set plan = 'pro', plan_until = null, plan_trial = false where id = 'cccccccc-0000-0000-0000-000000000003';
+set role authenticated;
+set request.jwt.claim.sub = 'cccccccc-0000-0000-0000-000000000003';
+select pg_temp.check((select count(*) from exchange_connections) = 5, 'при переходе на Pro подключения не удаляются');
+select pg_temp.check((select count(*) filter (where connection_active(id)) from exchange_connections) = 1
+  and (select connection_active(id) from exchange_connections where api_key = '0xc000000000000000000000000000000000000002'), 'на Pro работает одно — первое разрешённое (кошелёк, не Polymarket)');
+select pg_temp.check(not (select bool_or(connection_active(id)) from exchange_connections where exchange = 'polymarket'), 'Polymarket на Pro — на паузе');
+select pg_temp.expect_error($$select add_exchange_connection('hyperliquid', '0xc000000000000000000000000000000000000006')$$, 'CONNECTION_LIMIT_REACHED');
+select pg_temp.check(true, 'на Pro с уже лишними подключениями новое не добавить');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
+select pg_temp.check(not coalesce((select connection_active(id) from exchange_connections where user_id = 'cccccccc-0000-0000-0000-000000000003' limit 1), false)
+  and connection_active((select id from exchange_connections where user_id is not null limit 1)) is not null, 'про чужое подключение connection_active не отвечает «да»');
+reset role;
+select id as c_conn from exchange_connections where user_id = 'cccccccc-0000-0000-0000-000000000003' and exchange = 'polymarket' limit 1 \gset
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
+select pg_temp.check(not connection_active(:'c_conn'), 'B не узнаёт статус подключения C');
+reset role;
+set role anon;
+select pg_temp.expect_error($$select connection_active('00000000-0000-0000-0000-000000000000')$$, 'permission denied');
+select pg_temp.check(true, 'аноним не вызывает connection_active');
+reset role;
+update exchange_connections set last_sync_at = null where user_id = 'cccccccc-0000-0000-0000-000000000003';
+update profiles set plan = 'pro_plus', plan_until = null where id = 'cccccccc-0000-0000-0000-000000000003';
+delete from net.calls;
+select dispatch_sync();
+select pg_temp.check((select count(*) from net.calls where body ->> 'connectionId' in (select id::text from exchange_connections where user_id = 'cccccccc-0000-0000-0000-000000000003')) = 5, 'рассылка на сервере: все 5 подключений Pro Plus');
+update profiles set plan = 'pro' where id = 'cccccccc-0000-0000-0000-000000000003';
+delete from net.calls;
+update exchange_connections set last_sync_at = null where user_id = 'cccccccc-0000-0000-0000-000000000003';
+select dispatch_sync();
+select pg_temp.check((select count(*) from net.calls where body ->> 'connectionId' in (select id::text from exchange_connections where user_id = 'cccccccc-0000-0000-0000-000000000003')) = 0, 'на Pro синхронизации на сервере нет');
+-- Админка видит пробный период; выдача тарифа его снимает
+insert into auth.users (id, email) values ('dddddddd-0000-0000-0000-000000000004', 'd@test');
+set role authenticated;
+set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
+set request.jwt.claims = '{"aal":"aal2"}';
+select pg_temp.check((select plan_trial and plan = 'pro_plus' from admin_list_users() where email = 'd@test'), 'админ видит, что у D пробный период');
+select admin_set_plan('dddddddd-0000-0000-0000-000000000004', 'pro', now() + interval '1 year');
+select pg_temp.check((select not plan_trial and plan = 'pro' and plan_until > now() + interval '364 days' from admin_list_users() where email = 'd@test'), 'выдача тарифа на год снимает «пробный»');
+reset request.jwt.claims;
+reset role;
+
 -- Удаление аккаунта чистит всё
 set role authenticated;
 set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
 select add_exchange_connection('bybit', 'KEY87654321', 'AnotherSecret9');
 reset role;
-select pg_temp.check((select count(*) from vault.secrets where description like 'CryptoJournal: ключ API%') = 1, 'перед удалением аккаунта в Vault есть секрет A');
+select secret_id as a_secret from exchange_connections where user_id = 'aaaaaaaa-0000-0000-0000-000000000001' and exchange = 'bybit' \gset
+select pg_temp.check((select count(*) from vault.secrets where id = :'a_secret') = 1, 'перед удалением аккаунта в Vault есть секрет A');
 delete from auth.users where id = 'aaaaaaaa-0000-0000-0000-000000000001';
-select pg_temp.check((select count(*) from vault.secrets where description like 'CryptoJournal: ключ API%') = 0, 'удаление аккаунта удаляет и секреты API из Vault');
+select pg_temp.check((select count(*) from vault.secrets where id = :'a_secret') = 0, 'удаление аккаунта удаляет и секреты API из Vault');
 select pg_temp.check((select count(*) from trades where user_id = 'aaaaaaaa-0000-0000-0000-000000000001') = 0
   and (select count(*) from profiles where id = 'aaaaaaaa-0000-0000-0000-000000000001') = 0, 'удаление аккаунта удаляет его данные');
 
