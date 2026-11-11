@@ -1,9 +1,8 @@
 import { NavLink, Outlet } from 'react-router'
 import { useAuth } from '@/features/auth/AuthProvider'
-import { fmt, plural, useT } from '@/i18n'
-import { planTerm } from '@/lib/plans'
-import { formatDateShort } from '@/lib/format'
+import { fmt, useT } from '@/i18n'
 import { Logo, LogoMark } from '@/components/Logo'
+import { PlanMenu } from '@/features/plans/PlanMenu'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { LangSwitch } from '@/components/LangSwitch'
 import { useIsAdmin } from '@/features/admin/api'
@@ -53,18 +52,24 @@ export function AppLayout() {
   return (
     <div className="min-h-dvh pb-20 md:pb-0 md:pl-[72px] lg:pl-[232px]">
       {/*
-        Левая панель (компьютер). Широкий экран (lg): логотип, пункты с подписями, внизу — тариф и профиль.
+        Левая панель (компьютер). Широкий экран (lg): логотип с тарифом, пункты с подписями, внизу — лимит (Basic), язык, тема и профиль.
         Планшет (md): только иконки, подпись — при наведении.
       */}
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-[72px] flex-col border-r border-border bg-surface py-3 md:flex lg:w-[232px] lg:px-3">
-        <NavLink to="/dashboard" viewTransition aria-label={t.app.name} className="mb-4 flex items-center justify-center rounded-xl p-1.5 lg:justify-start lg:px-2">
-          <span className="lg:hidden">
-            <LogoMark className="size-8" />
-          </span>
-          <span className="hidden lg:inline">
-            <Logo />
-          </span>
-        </NavLink>
+        {/* логотип; на широком экране под ним — тариф (пилюля открывает окошко с выбором тарифа) */}
+        <div className="mb-4 flex flex-col items-center lg:items-start">
+          <NavLink to="/dashboard" viewTransition aria-label={t.app.name} className="flex items-center rounded-xl p-1.5 lg:px-2">
+            <span className="lg:hidden">
+              <LogoMark className="size-8" />
+            </span>
+            <span className="hidden lg:inline">
+              <Logo />
+            </span>
+          </NavLink>
+          <div className="mt-1.5 hidden pl-2 lg:block">
+            <PlanMenu />
+          </div>
+        </div>
         <nav className="flex flex-col items-center gap-1 lg:items-stretch">
           {items.map((item) => (
             <NavLink
@@ -96,9 +101,9 @@ export function AppLayout() {
             </NavLink>
           ))}
         </nav>
-        {/* низ панели на широком экране: тариф с лимитом, язык и тема, профиль */}
+        {/* низ панели на широком экране: лимит сделок (только Basic), язык и тема, профиль; тариф — у логотипа */}
         <div className="mt-auto hidden flex-col gap-3 lg:flex">
-          <PlanCard />
+          <UsageLine />
           <div className="flex items-center justify-between gap-2">
             <LangSwitch />
             <ThemeToggle />
@@ -129,7 +134,7 @@ export function AppLayout() {
               <Icon d="M12 5v14M5 12h14" />
             </NavLink>
             <span className="hidden md:contents">
-              <PlanBadge />
+              <PlanMenu align="right" />
             </span>
             <LangSwitch />
             {/* на узком телефоне тема — в «Настройки → Оформление» (в шапке не хватает места) */}
@@ -173,52 +178,19 @@ export function AppLayout() {
   )
 }
 
-/** Карточка тарифа внизу левой панели: название, сколько сделок за месяц из лимита, ссылка на тарифы */
-function PlanCard() {
+/** Лимит сделок внизу левой панели — только на Basic: «Сделок в этом месяце: 43 из 50» и тонкая полоска (у 90 % — красная) */
+function UsageLine() {
   const t = useT()
   const { data: usage } = useUsage()
-  const { data: profile } = useProfile()
-  if (!usage) return null
-  const term = planTerm(profile, usage.plan)
+  if (!usage?.trade_limit) return null
   const limit = usage.trade_limit
-  const share = limit ? Math.min(1, usage.trades_created / limit) : 0
+  const share = Math.min(1, usage.trades_created / limit)
   return (
-    <NavLink to="/plans" className="block rounded-lg border border-border bg-bg/40 p-3 transition-colors hover:border-muted/50">
-      <div className="flex items-center justify-between gap-2 text-xs">
-        <span className="font-semibold text-text">{t.plans.names[usage.plan]}</span>
-        <span className="text-primary">{t.plans.title}</span>
+    <NavLink to="/plans" viewTransition className="block rounded-lg px-1 py-1 transition-colors hover:bg-surface-2/60">
+      <div className="num text-xs text-muted">{fmt(t.settings.usageFree, { used: usage.trades_created, limit })}</div>
+      <div className="mt-1.5 h-0.5 overflow-hidden rounded-full bg-surface-2">
+        <i className={`block h-full rounded-full ${share >= 0.9 ? 'bg-loss' : 'bg-primary'}`} style={{ width: `${share * 100}%` }} />
       </div>
-      {term && (
-        <div data-plan-term className="mt-1.5 text-xs text-text">
-          {term.kind === 'trial'
-            ? fmt(t.plans.term.trial, { days: plural(term.daysLeft, t.plans.daysN) })
-            : fmt(t.plans.term.until, { plan: t.plans.names[term.plan], date: formatDateShort(term.until) })}
-        </div>
-      )}
-      <div className="mt-2 text-xs text-muted">
-        {limit ? fmt(t.settings.usageFree, { used: usage.trades_created, limit }) : fmt(t.settings.usagePro, { used: usage.trades_created })}
-      </div>
-      {limit && (
-        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-surface-2">
-          <i className={`block h-full rounded-full ${share >= 0.9 ? 'bg-loss' : 'bg-primary'}`} style={{ width: `${share * 100}%` }} />
-        </div>
-      )}
-    </NavLink>
-  )
-}
-
-/** Тариф в шапке — ссылка на страницу тарифов */
-function PlanBadge() {
-  const t = useT()
-  const { data: usage } = useUsage()
-  if (!usage) return null
-  const paid = usage.plan !== 'free'
-  return (
-    <NavLink
-      to="/plans"
-      className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${paid ? 'bg-primary/15 text-primary hover:bg-primary/25' : 'bg-surface-2 text-muted hover:text-text'}`}
-    >
-      {t.plans.names[usage.plan]}
     </NavLink>
   )
 }

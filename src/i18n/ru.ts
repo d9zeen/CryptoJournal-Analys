@@ -346,6 +346,14 @@ export const ru = {
       early: 'Новые функции первыми',
     },
     compare: 'Сравнить тарифы',
+    /** окошко тарифа у логотипа (PlanMenu) */
+    picker: {
+      label: 'Тариф',
+      choose: 'выбрать',
+      summaryFree: '{trades} сделок в месяц · {shots} скриншота на сделку',
+      summaryPro: 'Без лимита · {conn} подключение · {shots} скриншотов',
+      summaryProPlus: 'Без лимита · до {conn} подключений · сервер каждые 3 часа',
+    },
     best: 'Всё автоматически',
     month: '/ мес',
     tradesLine: '{n} сделок в месяц',

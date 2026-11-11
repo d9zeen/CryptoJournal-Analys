@@ -343,6 +343,14 @@ export const en: Dict = {
       early: 'New features first',
     },
     compare: 'Compare plans',
+    /** plan popover next to the logo (PlanMenu) */
+    picker: {
+      label: 'Plan',
+      choose: 'choose',
+      summaryFree: '{trades} trades a month · {shots} screenshots per trade',
+      summaryPro: 'Unlimited · {conn} connection · {shots} screenshots',
+      summaryProPlus: 'Unlimited · up to {conn} connections · server sync every 3 hours',
+    },
     best: 'Fully automatic',
     month: '/ mo',
     tradesLine: '{n} trades per month',
