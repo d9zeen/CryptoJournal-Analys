@@ -65,6 +65,14 @@
   --sheen-end: 60%;
   --sheen-blend: normal;
 
+  /* Свечи на первом экране главной (HeroCandles): вариант A, выбор владельца 11.11.2026 —
+   * растущие фиолетовые (цвет кнопок), падающие приглушённо-серые; не зависят от палитры прибыли / убытка */
+  --hero-up: #8d78ff;
+  --hero-down: #5a5d66;
+  --hero-up-a: 0.6;
+  --hero-down-a: 0.75;
+  --hero-wick-a: 0.55;
+
 
   /* Анимации (образец — docs/animations-showcase.html). Только transform и opacity (+ stroke-dashoffset в SVG) */
   --ease-snap: cubic-bezier(0.2, 0.7, 0.2, 1);
@@ -188,6 +196,13 @@
   --sheen-r: 340px;
   --color-sheen: color-mix(in srgb, white 75%, transparent);
   --sheen-end: 65%;
+
+  /* Свечи первого экрана (вариант A): фиолетовые растущие, тёплые серые падающие — плотнее, чем в тёмной */
+  --hero-up: var(--color-primary);
+  --hero-down: #a39a8a;
+  --hero-up-a: 0.7;
+  --hero-down-a: 0.6;
+  --hero-wick-a: 0.6;
   /* блик лежит поверх текста: «мягкий свет» осветляет фон, а тёмный текст под ним остаётся читаемым */
   --sheen-blend: soft-light;
 }
