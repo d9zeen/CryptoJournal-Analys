@@ -2,7 +2,8 @@
  * Тарифы на главной — три карточки рядом (на телефоне друг под другом), над ними переключатель «Месяц / Год».
  * Pro Plus (главный) выделен рамкой и плашкой «Всё автоматически». Страница /plans показывает таблицу (PlansTable).
  */
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
+import { useSpotlight, useTilt } from '@/lib/motion'
 import { fmt, plural, useT } from '@/i18n'
 import { MAIN_PLAN, PLANS, type Billing, type PlanInfo } from '@/lib/plans'
 import { BillingToggle } from '@/features/plans/BillingToggle'
@@ -29,12 +30,14 @@ export function PlanCards({ action }: { action: (plan: PlanInfo) => ReactNode })
   const t = useT()
   const p = t.plans
   const [billing, setBilling] = useState<Billing>('month')
+  const spotRef = useRef<HTMLDivElement>(null)
+  useSpotlight(spotRef)
   return (
     <div className="flex flex-col gap-6">
       <div className="self-start">
         <BillingToggle value={billing} onChange={setBilling} />
       </div>
-      <div className="grid gap-4 md:grid-cols-3 md:items-stretch">
+      <div ref={spotRef} className="grid gap-4 md:grid-cols-3 md:items-stretch">
         {PLANS.map((plan, i) => {
           const best = plan.id === MAIN_PLAN
           const items: [string, boolean][] = [
@@ -49,11 +52,7 @@ export function PlanCards({ action }: { action: (plan: PlanInfo) => ReactNode })
           ]
           return (
             <Reveal key={plan.id} delay={i * 110} className="flex">
-              <div
-                className={`relative flex w-full flex-col rounded-2xl border bg-surface p-6 sm:p-7 ${
-                  best ? 'border-primary/70 ring-1 ring-primary/30' : 'card-lift border-border'
-                }`}
-              >
+              <TiltCard best={best}>
                 {best && <span className="absolute -top-3 left-6 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-on-primary">{p.best}</span>}
                 <h3 className="text-lg font-bold">{p.names[plan.id]}</h3>
                 <div className="mt-4 min-h-14">
@@ -68,12 +67,31 @@ export function PlanCards({ action }: { action: (plan: PlanInfo) => ReactNode })
                   ))}
                 </ul>
                 <div className="mt-7">{action(plan)}</div>
-              </div>
+              </TiltCard>
             </Reveal>
           )
         })}
       </div>
       <p className="text-sm text-muted">{p.founder}</p>
+    </div>
+  )
+}
+
+/**
+ * Карточка тарифа: наклон к курсору (№2) и подсветка под курсором (№3) — только мышь.
+ * Рамка — обёртка .spot-frame (padding 1px), у главного тарифа она фиолетовая (--spot-rest).
+ */
+function TiltCard({ best, children }: { best: boolean; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useTilt(ref)
+  return (
+    <div
+      ref={ref}
+      data-spot
+      className={`spot-frame tilt relative flex w-full rounded-2xl ${best ? '[--spot-rest:color-mix(in_srgb,var(--color-primary)_70%,transparent)] ring-1 ring-primary/30' : ''}`}
+    >
+      <div className="spot-card relative flex w-full flex-col rounded-[calc(1rem-1px)] bg-surface p-6 sm:p-7">{children}</div>
+      <span aria-hidden className="tilt-sheen" />
     </div>
   )
 }

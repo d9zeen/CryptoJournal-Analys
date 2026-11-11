@@ -46,7 +46,16 @@ export function PeriodFilter({ preset, custom, onPreset, onCustom }: Props) {
           title={customLabel}
           className={item(preset === 'custom' || open)}
         >
-          <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <svg
+            viewBox="0 0 24 24"
+            className="size-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.8}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
             <path d="M7 3v3m10-3v3M4 9h16M5 5h14a1 1 0 011 1v13a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1z" />
           </svg>
           {/* на телефоне — только иконка календаря, иначе «Свой диапазон» не помещается в 390 px */}

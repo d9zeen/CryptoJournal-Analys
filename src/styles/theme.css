@@ -66,6 +66,8 @@
   --animate-rows-open: rows-open 0.45s var(--ease-snap) both;
   --animate-roll-in: roll-in 0.45s var(--ease-snap) both;
   --animate-roll-out: roll-out 0.45s var(--ease-snap) both;
+  /* кривая рисуется слева направо: прямоугольник clipPath растёт по ширине (transform: scaleX) */
+  --animate-reveal-x: reveal-x 1.2s var(--ease-snap) both;
   /* заход на главную: слова заголовка проявляются по очереди из лёгкой размытости, шапка опускается */
   --animate-word: word 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-drop: drop 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -130,6 +132,10 @@
     to { grid-template-rows: 1fr; }
   }
   /* число прокручивается: старое уходит вверх, новое приходит снизу */
+  @keyframes reveal-x {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+  }
   @keyframes roll-in {
     from { opacity: 0; transform: translateY(100%); }
     to { opacity: 1; transform: none; }
@@ -320,7 +326,7 @@
   --x: -400px;
   --y: -400px;
   padding: 1px;
-  background: var(--color-border);
+  background: var(--spot-rest, var(--color-border));
 }
 .spot-card {
   position: relative;
@@ -328,7 +334,7 @@
 }
 @media (hover: hover) and (pointer: fine) {
   .spot-frame {
-    background: radial-gradient(180px circle at var(--x) var(--y), var(--color-primary), var(--color-border) 70%);
+    background: radial-gradient(180px circle at var(--x) var(--y), var(--color-primary), var(--spot-rest, var(--color-border)) 70%);
   }
   .spot-card::before {
     content: '';
@@ -360,6 +366,23 @@
 }
 .tilt[data-active] .tilt-sheen {
   opacity: 1;
+}
+
+/* Кривая рисуется (№9): <rect class="reveal-x"> внутри clipPath; точка в конце «щёлкает», подпись проявляется */
+.reveal-x {
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: var(--animate-reveal-x);
+}
+.pop-in {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: var(--animate-pop);
+  animation-delay: 1.1s;
+}
+.fade-in-late {
+  animation: var(--animate-fade-in);
+  animation-delay: 1.2s;
 }
 
 /* Галочка рисуется линией: stroke-dasharray / --len задаёт длину, .drawn — нарисована */
