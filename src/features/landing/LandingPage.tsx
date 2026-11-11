@@ -18,11 +18,16 @@ import { demoAccount } from './demo'
 
 const EquityChart = lazy(() => import('@/features/dashboard/charts').then((m) => ({ default: m.EquityChart })))
 
-/** Как подключается каждая биржа (названия бирж — не перевод, поэтому прямо здесь) */
-const WAYS = [
-  { key: 'api', names: ['Bybit'] },
-  { key: 'wallet', names: ['Hyperliquid', 'Polymarket'] },
-  { key: 'file', names: ['Bybit', 'Binance', 'OKX', 'BingX', 'Bitget', 'MEXC'] },
+/** Биржи в строке «Работает с»: значок-монограмма в цветах биржи (цвета — theme.css, .ex-badge) и название (не перевод) */
+const EXCHANGES = [
+  { id: 'bybit', mark: 'BY', name: 'Bybit' },
+  { id: 'binance', mark: 'BN', name: 'Binance' },
+  { id: 'okx', mark: 'OK', name: 'OKX' },
+  { id: 'bingx', mark: 'BX', name: 'BingX' },
+  { id: 'bitget', mark: 'BG', name: 'Bitget' },
+  { id: 'mexc', mark: 'MX', name: 'MEXC' },
+  { id: 'hyperliquid', mark: 'HL', name: 'Hyperliquid' },
+  { id: 'polymarket', mark: 'PM', name: 'Polymarket' },
 ] as const
 
 const btn = 'inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors'
@@ -140,31 +145,21 @@ export function LandingPage() {
           </Reveal>
         </section>
 
-        {/* биржи: отдельная плашка — как подключается каждая */}
-        <section className={`${wrap} pb-6`} aria-labelledby="exchanges-title">
-          <Reveal className="rounded-xl border border-border bg-surface p-5 sm:p-8">
-            <h2 id="exchanges-title" className="text-2xl font-bold tracking-tight sm:text-3xl">
-              {l.exchanges.title}
-            </h2>
-            <p className="mt-2 text-text/90">{l.exchanges.hint}</p>
-            <div className="mt-6 grid gap-4 md:grid-cols-3">
-              {WAYS.map((w, i) => (
-                <Reveal key={w.key} delay={120 + i * 90} className="flex flex-col rounded-lg border border-border bg-bg/60 p-4 sm:p-5">
-                  <h3 className="font-semibold">{l.exchanges.ways[w.key].title}</h3>
-                  <ul className="mt-3 flex flex-wrap gap-1.5">
-                    {w.names.map((n) => (
-                      <li key={n} className="rounded-md bg-primary/12 px-2 py-1 text-sm font-semibold text-primary">
-                        {n}
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="mt-3 text-sm leading-relaxed text-text/75">
-                    <Rich text={l.exchanges.ways[w.key].text} />
-                  </p>
-                </Reveal>
+        {/* биржи: тонкая строка со значками (как «Auto-syncs with»), без отдельной плашки */}
+        <section className="border-y border-border" aria-label={l.exchanges.title}>
+          <Reveal className={`${wrap} flex flex-wrap items-center justify-center gap-x-7 gap-y-3 py-6`}>
+            <span className="text-xs font-semibold tracking-[0.12em] text-muted uppercase">{l.exchanges.title}</span>
+            <ul className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
+              {EXCHANGES.map((x) => (
+                <li key={x.id} className="flex items-center gap-2 text-sm font-medium">
+                  <span aria-hidden data-ex={x.id} className="ex-badge">
+                    {x.mark}
+                  </span>
+                  {x.name}
+                </li>
               ))}
-            </div>
-            <p className="mt-4 text-sm text-text/90">{l.exchanges.soon}</p>
+            </ul>
+            <span className="text-sm text-muted">{l.exchanges.more}</span>
           </Reveal>
         </section>
 
