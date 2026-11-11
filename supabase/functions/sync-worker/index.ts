@@ -45,6 +45,9 @@ Deno.serve(async (req) => {
   // 2. Только Pro Plus (dispatch_sync уже отбирает Pro Plus — проверяем ещё раз: тариф мог закончиться)
   const { data: plan } = await admin.rpc('effective_plan', { uid: userId })
   if (plan !== 'pro_plus') return json({ skipped: 'NOT_PRO_PLUS' })
+  // подключение в пределах тарифа (до 5; лишние — на паузе), как в базе (connection_active, 0016)
+  const { data: active } = await admin.rpc('connection_active', { p_id: conn.id })
+  if (active !== true) return json({ skipped: 'OVER_PLAN' })
 
   // 3. Bybit: подпись запросов ключом пользователя (только адреса для чтения)
   let secret: string | null = null
