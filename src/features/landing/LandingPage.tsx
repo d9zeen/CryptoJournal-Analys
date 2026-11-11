@@ -14,7 +14,9 @@ import { Reveal } from './Reveal'
 import { Rich } from './Rich'
 import { PlanCards } from './PlanCards'
 import { HeroCandles } from './HeroCandles'
-import { demoAccount } from './demo'
+import { DEMO_FEATURED, demoAccount } from './demo'
+import { profitCalendar, compactPnl } from '@/lib/calc/calendar'
+import type { ClosedTrade } from '@/lib/calc/stats'
 
 const EquityChart = lazy(() => import('@/features/dashboard/charts').then((m) => ({ default: m.EquityChart })))
 
@@ -160,6 +162,7 @@ export function LandingPage() {
               ))}
             </ul>
             <span className="text-sm text-muted">{l.exchanges.more}</span>
+            <p className="w-full text-center text-xs text-muted">{t.exchange.soon}</p>
           </Reveal>
         </section>
 
@@ -176,7 +179,7 @@ export function LandingPage() {
               <LeaksVisual />
             </Feature>
             <Feature title={l.features.calendar.title} text={l.features.calendar.text}>
-              <CalendarVisual />
+              <CalendarVisual trades={demo.trades} mark={`demo-${DEMO_FEATURED.index}`} />
             </Feature>
           </div>
         </section>
@@ -336,41 +339,32 @@ function LeaksVisual() {
   )
 }
 
-/** «+248 $» / «−61 $» — целые доллары, чтобы влезало в клетку календаря */
-const wholeUsd = (n: number) => `${n > 0 ? '+' : '−'}${Math.round(Math.abs(n))} $`
 
-function CalendarVisual() {
+function CalendarVisual({ trades, mark }: { trades: ClosedTrade[]; mark?: string }) {
   const t = useT()
-  // выдуманный месяц: 1-е число — среда; [число, PnL, сделок]; дни без сделок — 0
-  const pnl: Record<number, [number, number]> = {
-    1: [248.4, 3], 2: [-61.2, 1], 3: [119.75, 2], 6: [312.1, 4], 7: [-88.5, 2], 8: [54.3, 1], 9: [-140.2, 3],
-    10: [205.6, 2], 13: [-35.9, 1], 14: [176.4, 3], 15: [92.2, 2], 16: [410.7, 5], 17: [-72.6, 2], 20: [138.9, 2],
-    21: [64.1, 1], 22: [-118.3, 2], 23: [227.5, 3], 24: [41.8, 1], 27: [-54.4, 1], 28: [189.3, 2],
-  }
-  const lead = [29, 30] // хвост прошлого месяца (Пн, Вт)
-  const cells: ({ day: number; out: true } | { day: number; out?: false })[] = [
-    ...lead.map((day) => ({ day, out: true as const })),
-    ...Array.from({ length: 30 }, (_, i) => ({ day: i + 1 })),
-    ...[1, 2, 3].map((day) => ({ day, out: true as const })),
-  ]
+  // месяц той сделки, что в «пути одной сделки» (или последней), — дни из того же демо-счёта, что и дашборд выше
+  const at = new Date((trades.find((x) => x.id === mark) ?? trades[trades.length - 1])?.exit_at ?? Date.now())
+  const cal = profitCalendar(trades, at.getUTCFullYear(), at.getUTCMonth(), 'UTC')
+  const markDate = trades.find((x) => x.id === mark)?.exit_at?.slice(0, 10)
   return (
     <div className="rounded-xl border border-border bg-surface p-3 sm:p-4">
-      <div className="mb-2 grid grid-cols-7 gap-1 text-center text-[11px] text-muted sm:gap-1.5">
+      <div className="mb-2 grid grid-cols-7 gap-1 text-center text-xs text-muted sm:gap-1.5">
         {t.period.weekdaysShort.map((w) => (
           <span key={w}>{w}</span>
         ))}
       </div>
       <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
-        {cells.map((c, i) => {
-          const d = c.out ? undefined : pnl[c.day]
-          const tone = !d ? (c.out ? 'cal-hatch border-transparent' : 'border-border bg-surface-2/50') : d[0] > 0 ? 'border-up/45 bg-up/18' : 'border-down/45 bg-down/18'
+        {cal.weeks.flatMap((w) => w.days).map((d) => {
+          const has = d.inMonth && d.count > 0
+          const tone = !d.inMonth ? 'cal-hatch border-transparent' : !has ? 'border-border bg-surface-2/50' : d.pnl > 0 ? 'border-up/45 bg-up/18' : 'border-down/45 bg-down/18'
+          const ring = d.date === markDate ? 'ring-2 ring-primary' : ''
           return (
-            <div key={i} className={`relative flex min-h-12 flex-col items-center justify-center rounded-md border px-0.5 pt-3 pb-1 sm:min-h-16 ${tone}`}>
-              <span className={`absolute top-0.5 right-1 text-[9px] sm:text-[10px] ${c.out ? 'text-muted/60' : 'text-muted'}`}>{c.day}</span>
-              {d && (
+            <div key={d.date} className={`relative flex min-h-12 flex-col items-center justify-center rounded-md border px-0.5 pt-3 pb-1 sm:min-h-16 ${tone} ${ring}`}>
+              <span className={`absolute top-0.5 right-1 text-xs ${d.inMonth ? 'text-muted' : 'text-muted/60'}`}>{d.day}</span>
+              {has && (
                 <>
-                  <span className={`num text-[10px] leading-tight font-semibold sm:text-xs ${d[0] > 0 ? 'text-up' : 'text-down'}`}>{wholeUsd(d[0])}</span>
-                  <span className="hidden text-[10px] text-muted sm:block">{plural(d[1], t.dashboard.calendar.tradesN)}</span>
+                  <span className={`num text-xs leading-tight font-semibold ${d.pnl > 0 ? 'text-up' : 'text-down'}`}>{compactPnl(d.pnl)}</span>
+                  <span className="hidden text-xs text-muted sm:block">{plural(d.count, t.dashboard.calendar.tradesN)}</span>
                 </>
               )}
             </div>

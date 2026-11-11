@@ -245,18 +245,36 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
             {/* «По неделям» и «По дням недели» делят остаток высоты — панель доходит до низа календаря */}
             <section className="flex flex-col rounded-lg border border-border bg-surface p-4 xl:flex-1">
               <h2 className="text-xs text-muted">{c.byWeekday}</h2>
-              <div className="mt-3 grid h-24 grid-cols-7 items-end gap-1.5 xl:mt-auto xl:h-40">
-                {sum.weekdays.map((w, i) => (
-                  <div key={i} className="flex h-full flex-col items-center justify-end gap-1" title={w.count ? `${t.period.weekdaysShort[i]}: ${formatPnl(w.pnl)}` : undefined}>
-                    <div className="flex w-full flex-1 items-end">
-                      <i
-                        className={`block w-full rounded-sm ${w.pnl >= 0 ? 'bg-up' : 'bg-down'}`}
-                        style={{ height: w.count ? `${Math.max(6, (Math.abs(w.pnl) / wdMax) * 100)}%` : 2 }}
-                      />
+              {/* линия нуля посередине: прибыль вверх, убыток вниз, сумма над / под столбиком; дни без сделок — «—» */}
+              <div className="relative mt-3 grid h-44 grid-cols-7 gap-1.5 xl:mt-auto xl:h-52">
+                <i aria-hidden className="pointer-events-none absolute inset-x-0 top-[calc(50%-0.625rem)] border-t border-border" />
+                {sum.weekdays.map((w, i) => {
+                  const h = w.count ? `${Math.max(4, (Math.abs(w.pnl) / wdMax) * 70)}%` : 0
+                  const up = w.pnl >= 0
+                  const label = <span className={`num text-xs leading-none font-semibold ${up ? 'text-text' : 'text-down'}`}>{compactPnl(w.pnl)}</span>
+                  return (
+                    <div key={i} className="flex h-full min-w-0 flex-col items-center" title={w.count ? `${t.period.weekdaysShort[i]}: ${formatPnl(w.pnl)}` : undefined}>
+                      <div className="flex w-full flex-1 flex-col items-center justify-end gap-1">
+                        {w.count > 0 && up && (
+                          <>
+                            {label}
+                            <i className="block w-full rounded-t-sm bg-up" style={{ height: h }} />
+                          </>
+                        )}
+                      </div>
+                      <div className="flex w-full flex-1 flex-col items-center justify-start gap-1">
+                        {w.count > 0 && !up && (
+                          <>
+                            <i className="block w-full rounded-b-sm bg-down" style={{ height: h }} />
+                            {label}
+                          </>
+                        )}
+                        {w.count === 0 && <span className="-mt-2.5 text-xs text-muted">—</span>}
+                      </div>
+                      <span className="mt-1 text-xs text-muted">{t.period.weekdaysShort[i]}</span>
                     </div>
-                    <span className="text-[10px] text-muted">{t.period.weekdaysShort[i]}</span>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </section>
           </>

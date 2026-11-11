@@ -201,12 +201,17 @@ export function KpiRow({ summary: s, score, startingBalance, equity = [] }: { su
   )
 }
 
-/** «Таблетки» с количеством под шкалой (в прибыль / в убыток) */
+/** «Таблетки» с количеством под шкалой: «61 W», «29 L» (в прибыль / в убыток) */
 export function Counts({ a, b }: { a: number; b: number }) {
+  const f = useT().dashboard.kpi.form
   return (
     <div className="num flex gap-1.5 text-xs font-semibold">
-      <span className={`rounded-md px-1.5 py-0.5 ${TONE.aPill}`}>{a}</span>
-      <span className={`rounded-md px-1.5 py-0.5 ${TONE.bPill}`}>{b}</span>
+      <span className={`rounded-md px-1.5 py-0.5 ${TONE.aPill}`}>
+        {a} {f.winLetter}
+      </span>
+      <span className={`rounded-md px-1.5 py-0.5 ${TONE.bPill}`}>
+        {b} {f.lossLetter}
+      </span>
     </div>
   )
 }

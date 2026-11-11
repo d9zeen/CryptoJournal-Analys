@@ -68,11 +68,19 @@ export function calendarSpan(year: number, month: number): { first: string; last
   return { first: ymd(dates[0]), last: ymd(dates[dates.length - 1]) }
 }
 
-/** +1.2k / −350 — для узких клеток на телефоне */
+/**
+ * Коротко для узких клеток на телефоне, по-русски: до 1000 — целое («+92», «−95»),
+ * от 1000 — «+1,7к», от миллиона — «+1,2м»; минус — типографский «−».
+ */
 export function compactPnl(n: number): string {
   const a = Math.abs(n)
-  const s = a >= 1_000_000 ? `${(a / 1_000_000).toFixed(1)}M` : a >= 1000 ? `${(a / 1000).toFixed(1)}k` : a >= 100 ? a.toFixed(0) : a.toFixed(1)
-  return `${n > 0 ? '+' : n < 0 ? '−' : ''}${s.replace(/\.0(?=[kM]?$)/, '')}`
+  const sign = n > 0 ? '+' : n < 0 ? '−' : ''
+  const short = (v: number, unit: string) => `${String(Math.round(v * 10) / 10).replace('.', ',')}${unit}`
+  let s: string
+  if (Math.round(a) < 1000) s = String(Math.round(a))
+  else if (Math.round(a / 100) / 10 < 1000) s = short(a / 1000, 'к')
+  else s = short(a / 1_000_000, 'м')
+  return s === '0' ? '0' : sign + s
 }
 
 export type MonthSummary = {

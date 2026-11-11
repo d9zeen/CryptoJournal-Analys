@@ -22,6 +22,7 @@ import { formatDateTime, formatDay, formatDayShort, formatNumber, formatPnl, for
 import { useMediaQuery } from '@/lib/useMediaQuery'
 import { formatUnit, inUnit, shortDate, withTime, type EquityUnit, type TimedPoint } from './equityTime'
 import type { BarUnit, DayPnl, EquityPoint } from '@/lib/calc/stats'
+import { niceAxis } from '@/lib/calc/axis'
 import { prefersReducedMotion } from '@/lib/motion'
 
 const C = {
@@ -74,7 +75,9 @@ export function EquityChart({ points, unit, balance, height = HEIGHT + 40 }: { p
   }, [points, unit, balance])
   const last = data[data.length - 1]
   const id = useId().replace(/:/g, '')
-  const yTick = (v: number) => (unit === 'usd' ? formatUsdShort(v) : `${formatNumber(v, 0)} %`)
+  const axis = useMemo(() => niceAxis(data.map((d) => d.v)), [data])
+  const pctDigits = axis.ticks.some((v) => !Number.isInteger(v)) ? 1 : 0
+  const yTick = (v: number) => (unit === 'usd' ? formatUsdShort(v) : `${formatNumber(v, pctDigits)} %`)
   return (
     <div>
       <ResponsiveContainer width="100%" height={height}>
@@ -87,7 +90,7 @@ export function EquityChart({ points, unit, balance, height = HEIGHT + 40 }: { p
           </defs>
           <CartesianGrid stroke={C.grid} vertical={false} />
           <XAxis dataKey="i" type="number" domain={['dataMin', 'dataMax']} {...axisProps} tickFormatter={(i: number) => (data[i] ? shortDate(data[i].t) : '')} minTickGap={40} />
-          <YAxis {...axisProps} width={60} tickFormatter={yTick} />
+          <YAxis {...axisProps} width={60} tickFormatter={yTick} domain={[axis.lo, axis.hi]} ticks={axis.ticks} allowDataOverflow />
           <ReferenceLine y={0} stroke={C.muted} strokeOpacity={0.45} strokeDasharray="4 4" />
           <Tooltip
             cursor={{ stroke: C.muted, strokeOpacity: 0.4 }}
