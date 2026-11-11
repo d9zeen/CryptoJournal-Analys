@@ -14,7 +14,7 @@ import { Reveal } from './Reveal'
 import { SideBadge } from '@/components/SideBadge'
 import { PlanCards } from './PlanCards'
 import { HeroCandles } from './HeroCandles'
-import { DEMO_FEATURED, demoAccount } from './demo'
+import { DEMO_FEATURED, demoAccount, demoMistakeRows } from './demo'
 import { profitCalendar, compactPnl } from '@/lib/calc/calendar'
 import type { ClosedTrade } from '@/lib/calc/stats'
 
@@ -176,10 +176,10 @@ export function LandingPage() {
               <TradeVisual />
             </PathStep>
             <PathStep n={2} text={l.path.analysis.text}>
-              <AnalysisVisual />
+              <AnalysisVisual trades={demo.trades} featuredId={demo.featuredId} />
             </PathStep>
             <PathStep n={3} text={l.path.calendar.text}>
-              <CalendarVisual trades={demo.trades} mark={`demo-${DEMO_FEATURED.index}`} />
+              <CalendarVisual trades={demo.trades} mark={demo.featuredId} />
             </PathStep>
           </ol>
         </section>
@@ -273,7 +273,7 @@ function TradeVisual() {
       </div>
       <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 border-t border-border pt-3 text-sm">
         <dt className="text-muted">{p.mistake}</dt>
-        <dd>{p.mistakeValue}</dd>
+        <dd>{t.landing.path.analysis.rows[DEMO_FEATURED.mistake]}</dd>
         <dt className="text-muted">{p.emotion}</dt>
         <dd>{p.emotionValue}</dd>
       </dl>
@@ -281,14 +281,22 @@ function TradeVisual() {
   )
 }
 
-function AnalysisVisual() {
+/** Месяц сделки из «пути» (UTC) — его же показывают «Разбор» и календарь */
+function featuredMonth(trades: ClosedTrade[], id: string): Date {
+  return new Date((trades.find((x) => x.id === id) ?? trades[trades.length - 1])?.exit_at ?? Date.now())
+}
+
+function AnalysisVisual({ trades, featuredId }: { trades: ClosedTrade[]; featuredId: string }) {
   const t = useT()
   const f = t.landing.path.analysis
-  const rows: [string, number, number, boolean][] = [
-    [f.rows.a, 12, -214.4, false],
-    [f.rows.b, 9, -906.8, true],
-    [f.rows.c, 5, -188.1, false],
-  ]
+  // считается из тех же демо-сделок, что и календарь рядом: сумма «Вход без стопа» включает сделку из карточки
+  const at = featuredMonth(trades, featuredId)
+  const rows: [string, number, number, boolean][] = demoMistakeRows(trades, at.getUTCFullYear(), at.getUTCMonth()).map((r) => [
+    f.rows[r.key],
+    r.count,
+    r.pnl,
+    r.key === DEMO_FEATURED.mistake,
+  ])
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-surface">
       <table className="w-full text-sm">
@@ -313,10 +321,10 @@ function AnalysisVisual() {
   )
 }
 
-function CalendarVisual({ trades, mark }: { trades: ClosedTrade[]; mark?: string }) {
+function CalendarVisual({ trades, mark }: { trades: ClosedTrade[]; mark: string }) {
   const t = useT()
-  // месяц той сделки, что в «пути одной сделки» (или последней), — дни из того же демо-счёта, что и дашборд выше
-  const at = new Date((trades.find((x) => x.id === mark) ?? trades[trades.length - 1])?.exit_at ?? Date.now())
+  // месяц той сделки, что в «пути одной сделки», — дни из того же демо-счёта, что и дашборд выше
+  const at = featuredMonth(trades, mark)
   const cal = profitCalendar(trades, at.getUTCFullYear(), at.getUTCMonth(), 'UTC')
   const markDate = trades.find((x) => x.id === mark)?.exit_at?.slice(0, 10)
   return (
