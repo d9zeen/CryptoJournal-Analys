@@ -1,5 +1,7 @@
 /**
- * Палитра прибыли / убытка — компактная полоска в «Настройки → Оформление» (ревью 11.11.2026; раньше была под календарём).
+ * Палитра прибыли / убытка — компактная полоска в двух местах: под календарём прибыли (под «Итогом месяца») и в «Настройки → Оформление».
+ * Один компонент; inline — подпись и ссылка на тарифы в одну строку с плашками (под календарём), иначе подпись над ссылкой (настройки).
+ * Выбор сразу перекрашивает страницу (applyPalette) и сохраняется в профиль.
  * На палитру — плашка W / L в её цветах (без подписей — выбор владельца; название только во всплывающей подсказке). Три палитры — всем; остальные на Basic под замком (ссылка на тарифы).
  */
 import { useState } from 'react'
@@ -9,7 +11,7 @@ import { useProfile, useUpdateProfile, useUsage } from '@/features/settings/api'
 import { applyPalette, canUsePalette, isPalette, PALETTES, type Palette } from '@/lib/palette'
 import { dbErrorMessage } from '@/lib/errors'
 
-export function PaletteStrip() {
+export function PaletteStrip({ inline = false }: { inline?: boolean }) {
   const t = useT()
   const a = t.settings.appearance
   const { data: profile } = useProfile()
@@ -35,7 +37,7 @@ export function PaletteStrip() {
   if (!usage) return null
   return (
     <div data-shot="palette" className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
-      <div className="flex flex-col gap-1">
+      <div className={`flex gap-1 ${inline ? 'flex-wrap items-baseline gap-x-3' : 'flex-col'}`}>
         <span className="text-muted">{a.palette}</span>
         {anyLocked && (
           <Link to="/plans" className="flex items-center gap-1 font-semibold text-primary hover:underline">

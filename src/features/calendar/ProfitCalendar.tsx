@@ -15,6 +15,7 @@ import { parseYmd, ymd } from '@/lib/period'
 import { useMediaQuery } from '@/lib/useMediaQuery'
 import { AnimatedNumber } from '@/components/AnimatedNumber'
 import { CalendarSkeleton } from '@/components/Skeleton'
+import { PaletteStrip } from '@/features/palette/PaletteStrip'
 
 const monthTitle = new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' })
 /** «Ноябрь 2026» — без «г.» и без CSS capitalize (он делал «2026 Г.») */
@@ -91,6 +92,10 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
             <Week key={week.days[0].date} days={week.days} total={week.total} row={row} />
           ))}
           <MonthTotal />
+        </div>
+        {/* цвета плюса и минуса — прямо под календарём (и в «Настройки → Оформление»): выбор сразу перекрашивает клетки */}
+        <div className="mt-3">
+          <PaletteStrip inline />
         </div>
       </section>
 
