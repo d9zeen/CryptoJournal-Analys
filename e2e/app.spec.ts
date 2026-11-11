@@ -566,7 +566,8 @@ test('тарифы на главной: вперёд выходит карточ
   await expect(card('free').getByRole('link')).toHaveClass(/bg-primary/)
   await page.mouse.move(2, 2)
   await expect(card('pro_plus')).toHaveAttribute('data-pos', 'active')
-  // цена прокручивается при переключении на год: Pro Plus $15 → $12 в месяц
-  await page.getByRole('radio', { name: /Год/ }).click()
+  // тумблер «Оплата за год», как в образце: Pro Plus $15 → $12 в месяц, под ценой — сумма за год
+  await page.getByRole('switch', { name: /Оплата за год/ }).click()
   await expect(card('pro_plus')).toContainText('$12')
+  await expect(card('pro_plus')).toContainText('$144')
 })

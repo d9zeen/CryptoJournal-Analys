@@ -323,6 +323,18 @@ export const en: Dict = {
     yes: 'yes',
     no: 'no',
     billing: { label: 'Billing', month: 'Monthly', year: 'Yearly', discount: '−{n}%' },
+    cards: {
+      annual: 'Annual billing',
+      save: '(Save {n}%)',
+      billedMonthly: 'billed monthly',
+      billedYearly: 'billed annually · ${price}',
+      forever: 'free forever',
+      desc: {
+        free: 'Try the journal: exchange files and manual trades.',
+        pro: 'For traders on one exchange.',
+        pro_plus: 'Fully automatic: several exchanges, wallets and Polymarket.',
+      },
+    },
     perYear: '${price} per year',
     perYearHint: 'billed yearly',
     features: {

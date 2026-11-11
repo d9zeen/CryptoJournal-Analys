@@ -416,18 +416,12 @@
 }
 
 /*
- * Тарифы на главной (образец — Prism UI «Pricing» с 21st.dev, переделан: вперёд выходит карточка под мышкой).
- * PlanCards ставит каждой карточке data-pos: active — под мышкой (или Pro Plus, пока мышки нет), before / after — слева / справа от неё.
- * Активная поднимается на 20px; остальные — 94 %, сдвинуты к ней на 24px и развёрнуты к ней в 3D (как раскрытая книга).
- * Только компьютер с мышью и от 768px (три карточки в ряд); на телефоне карточки просто друг под другом.
+ * Тарифы на главной — как Prism UI «Pricing» (21st.dev), но «главная» карточка — та, что под мышкой (без мышки — Pro Plus).
+ * PlanCards ставит data-pos: active — поднята на 20px; before / after — слева / справа от неё: 94 % и придвинуты к ней на 30px.
+ * Карточки плоские (без 3D), как в образце. Только компьютер с мышью и от 768px; на телефоне — друг под другом.
  */
-.plan-stage {
-  perspective: 1200px;
-}
 .plan-card {
-  transition:
-    transform 0.6s var(--ease-spring),
-    opacity 0.3s;
+  transition: transform 0.6s var(--ease-spring);
 }
 @media (min-width: 768px) and (hover: hover) and (pointer: fine) {
   .plan-card[data-pos='active'] {
@@ -435,12 +429,10 @@
     z-index: 10;
   }
   .plan-card[data-pos='before'] {
-    transform: translateX(24px) translateZ(-40px) rotateY(8deg) scale(0.94);
-    transform-origin: right center;
+    transform: translateX(30px) scale(0.94);
   }
   .plan-card[data-pos='after'] {
-    transform: translateX(-24px) translateZ(-40px) rotateY(-8deg) scale(0.94);
-    transform-origin: left center;
+    transform: translateX(-30px) scale(0.94);
   }
 }
 
