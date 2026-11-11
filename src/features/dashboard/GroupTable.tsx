@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
+import { RollNumber } from '@/components/RollNumber'
 import { fmt, useT } from '@/i18n'
 import { Card } from '@/components/ui/Card'
 import { formatPercent, formatPnl, formatR, pnlClass } from '@/lib/format'
@@ -14,10 +15,14 @@ type Props = {
   mode?: 'default' | 'mistakes'
   empty?: string
   limit?: number
+  /** номер в лесенке появления (№7) */
+  i?: number
+  /** сменился (период) — суммы прокручиваются (№13) */
+  rollKey?: unknown
 }
 
 /** Таблица статистики по группам (сетапы, эмоции, ошибки, пары…) */
-export function GroupTable({ title, hint, rows, mode = 'default', empty, limit = 5 }: Props) {
+export function GroupTable({ title, hint, rows, mode = 'default', empty, limit = 5, i = 0, rollKey }: Props) {
   const t = useT()
   const [expanded, setExpanded] = useState(false)
   const visible = expanded ? rows : rows.slice(0, limit)
@@ -28,7 +33,7 @@ export function GroupTable({ title, hint, rows, mode = 'default', empty, limit =
   const maxAbs = Math.max(1e-9, ...rows.map((r) => Math.abs(val(r.group))))
 
   return (
-    <Card className="rise !p-4 [--i:10]">
+    <Card className="rise !p-4" style={{ '--i': i } as CSSProperties}>
       <h2 className="font-semibold">{title}</h2>
       {hint && <p className="mt-0.5 text-xs text-muted">{hint}</p>}
       {rows.length === 0 ? (
@@ -56,21 +61,28 @@ export function GroupTable({ title, hint, rows, mode = 'default', empty, limit =
                 <td className="max-w-0 py-2.5 pr-3" title={label}>
                   <div className="truncate">{label}</div>
                   <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-surface-2" aria-hidden>
-                    <i className={`block h-full rounded-full ${val(g) >= 0 ? 'bg-profit' : 'bg-loss'}`} style={{ width: `${(Math.abs(val(g)) / maxAbs) * 100}%` }} />
+                    <i
+                      className={`block h-full rounded-full ${val(g) >= 0 ? 'bg-profit' : 'bg-loss'}`}
+                      style={{ width: `${(Math.abs(val(g)) / maxAbs) * 100}%` }}
+                    />
                   </div>
                   {/* на телефоне число сделок — под названием, чтобы названию хватило места */}
                   <div className="text-xs text-muted sm:hidden">{fmt(t.dashboard.tooltipTrades, { n: g.count })}</div>
                 </td>
                 <td className={`num ${num} hidden text-muted sm:table-cell`}>{g.count}</td>
                 {mode === 'mistakes' ? (
-                  <td className={`num ${num} font-medium ${pnlClass(g.lossSum)}`}>{formatPnl(g.lossSum)}</td>
+                  <td className={`num ${num} font-medium ${pnlClass(g.lossSum)}`}>
+                    <RollNumber text={formatPnl(g.lossSum)} token={rollKey} />
+                  </td>
                 ) : (
                   <>
                     <td className={num}>{formatPercent(g.winrate, 0)}</td>
                     <td className={`num ${num} hidden sm:table-cell ${pnlClass(g.avgR)}`}>{formatR(g.avgR)}</td>
                   </>
                 )}
-                <td className={`num ${num} pr-0 font-medium ${pnlClass(g.pnl)} ${mode === 'mistakes' ? 'hidden sm:table-cell' : ''}`}>{formatPnl(g.pnl)}</td>
+                <td className={`num ${num} pr-0 font-medium ${pnlClass(g.pnl)} ${mode === 'mistakes' ? 'hidden sm:table-cell' : ''}`}>
+                  <RollNumber text={formatPnl(g.pnl)} token={rollKey} />
+                </td>
               </tr>
             ))}
           </tbody>

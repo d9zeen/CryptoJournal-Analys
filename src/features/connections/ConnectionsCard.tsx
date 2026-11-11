@@ -18,6 +18,9 @@ import { useIsAdmin } from '@/features/admin/api'
 import { UpgradeLine } from '@/components/UpgradeLine'
 import type { Plan } from '@/types/db'
 import { PolymarketDemoDialog } from './PolymarketDemoDialog'
+import { PasswordInput } from '@/components/PasswordInput'
+import { SaveButton, type SaveState } from '@/components/SaveButton'
+import { pause } from '@/lib/motion'
 import {
   CONNECTABLE,
   SyncError,
@@ -37,7 +40,16 @@ export function connectionError(e: unknown, t: Dict): string {
   const c = t.connections.errors as Record<string, string>
   if (e instanceof SyncError) return c[e.code] ?? c.UNKNOWN
   const msg = e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : ''
-  for (const code of ['BAD_WALLET', 'BAD_API_KEY', 'CONNECTION_LIMIT_REACHED', 'TOO_MANY_CONNECTIONS', 'CONNECTION_EXISTS', 'EXCHANGE_NOT_SUPPORTED', 'PLAN_REQUIRED']) if (msg.includes(code)) return c[code]
+  for (const code of [
+    'BAD_WALLET',
+    'BAD_API_KEY',
+    'CONNECTION_LIMIT_REACHED',
+    'TOO_MANY_CONNECTIONS',
+    'CONNECTION_EXISTS',
+    'EXCHANGE_NOT_SUPPORTED',
+    'PLAN_REQUIRED',
+  ])
+    if (msg.includes(code)) return c[code]
   return dbErrorMessage(e, t)
 }
 
@@ -58,7 +70,9 @@ export function ConnectionsCard() {
   const onSynced = (r: SyncResult) =>
     setNotice({
       tone: 'success',
-      text: [r.inserted ? fmt(c.syncedNew, { n: r.inserted }) : c.syncedNothing, r.overLimit ? fmt(c.syncedOverLimit, { n: r.overLimit }) : ''].filter(Boolean).join(' '),
+      text: [r.inserted ? fmt(c.syncedNew, { n: r.inserted }) : c.syncedNothing, r.overLimit ? fmt(c.syncedOverLimit, { n: r.overLimit }) : '']
+        .filter(Boolean)
+        .join(' '),
     })
 
   return (
@@ -101,7 +115,15 @@ export function ConnectionsCard() {
       ) : (
         <ul className="flex flex-col">
           {conns.map((conn) => (
-            <ConnectionRow key={conn.id} conn={conn} pro={pro} paused={!active.has(conn.id)} plan={plan} onSynced={onSynced} onError={(text) => setNotice({ tone: 'error', text })} />
+            <ConnectionRow
+              key={conn.id}
+              conn={conn}
+              pro={pro}
+              paused={!active.has(conn.id)}
+              plan={plan}
+              onSynced={onSynced}
+              onError={(text) => setNotice({ tone: 'error', text })}
+            />
           ))}
         </ul>
       )}
@@ -165,7 +187,10 @@ function ConnectionRow({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-sm font-medium">
-            <span className={`size-2 shrink-0 rounded-full ${paused ? 'bg-muted' : errText ? 'bg-loss' : conn.last_sync_at ? 'bg-profit' : 'bg-muted'}`} aria-hidden />
+            <span
+              className={`size-2 shrink-0 rounded-full ${paused ? 'bg-muted' : errText ? 'bg-loss' : conn.last_sync_at ? 'bg-profit' : 'bg-muted'}`}
+              aria-hidden
+            />
             {exchangeName(conn.exchange, t.exchange.other)}
             <span className="num truncate text-xs font-normal text-muted">{conn.label ?? shortKey(conn.api_key)}</span>
           </div>
@@ -219,18 +244,34 @@ function AddForm({ count, admin, onDone, onCancel }: { count: number; admin: boo
   const [label, setLabel] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [demo, setDemo] = useState(false)
+  // №15: «Подключить» — крутилка в круге (идёт проверка ключа), галочка цветом прибыли
+  const [saveState, setSaveState] = useState<SaveState>('idle')
   const kind = CONNECTABLE.find((x) => x.id === exchange)!.kind
 
   async function submit(e: FormEvent) {
     e.preventDefault()
     setError(null)
+    setSaveState('busy')
     try {
       const id = await add.mutateAsync({ exchange, apiKey, secret: kind === 'cex' ? secret : undefined, label })
       setSecret('')
+      // сразу первая синхронизация (ошибку покажет строка подключения) — до паузы на галочку, чтобы автосинхронизация не начала её второй раз
+      sync.mutate({
+        id,
+        exchange,
+        label: label.trim() || null,
+        api_key: kind === 'wallet' ? apiKey.trim().toLowerCase() : apiKey.trim(),
+        last_sync_at: null,
+        cursor_at: null,
+        last_error: null,
+        key_expires_at: null,
+        created_at: '',
+      })
+      setSaveState('done')
+      await pause(600)
       onDone(exchangeName(exchange, ''))
-      // сразу первая синхронизация (ошибку покажет строка подключения)
-      sync.mutate({ id, exchange, label: label.trim() || null, api_key: kind === 'wallet' ? apiKey.trim().toLowerCase() : apiKey.trim(), last_sync_at: null, cursor_at: null, last_error: null, key_expires_at: null, created_at: '' })
     } catch (err) {
+      setSaveState('idle')
       setError(connectionError(err, t))
     }
   }
@@ -271,10 +312,26 @@ function AddForm({ count, admin, onDone, onCancel }: { count: number; admin: boo
           {kind === 'cex' ? (
             <>
               <TextField label={c.apiKey} value={apiKey} onChange={(e) => setApiKey(e.target.value)} autoComplete="off" spellCheck={false} required />
-              <TextField label={c.secret} value={secret} onChange={(e) => setSecret(e.target.value)} type="password" autoComplete="new-password" required hint={c.secretHint} />
+              <PasswordInput
+                label={c.secret}
+                value={secret}
+                onChange={(e) => setSecret(e.target.value)}
+                autoComplete="new-password"
+                required
+                hint={c.secretHint}
+              />
             </>
           ) : (
-            <TextField label={c.wallet} value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="0x…" autoComplete="off" spellCheck={false} required hint={exchange === 'polymarket' ? c.walletHintPolymarket : c.walletHint} />
+            <TextField
+              label={c.wallet}
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="0x…"
+              autoComplete="off"
+              spellCheck={false}
+              required
+              hint={exchange === 'polymarket' ? c.walletHintPolymarket : c.walletHint}
+            />
           )}
           <TextField label={c.label} value={label} onChange={(e) => setLabel(e.target.value)} maxLength={60} placeholder={c.labelPlaceholder} />
         </>
@@ -285,9 +342,9 @@ function AddForm({ count, admin, onDone, onCancel }: { count: number; admin: boo
         <Button type="button" variant="ghost" onClick={onCancel}>
           {t.common.cancel}
         </Button>
-        <Button type="submit" loading={add.isPending} disabled={!allowed}>
-          {add.isPending ? c.checking : c.connect}
-        </Button>
+        <SaveButton state={saveState} disabled={!allowed}>
+          {c.connect}
+        </SaveButton>
       </div>
     </form>
   )

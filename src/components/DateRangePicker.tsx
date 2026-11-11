@@ -211,7 +211,12 @@ export function DateRangePicker({ value, onApply, onClose, anchor }: Props) {
 
 function NavBtn({ dir, label, onClick }: { dir: 1 | -1; label: string; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} aria-label={label} className="flex size-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-text">
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className="flex size-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-text"
+    >
       <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <path d={dir < 0 ? 'M15 18l-6-6 6-6' : 'M9 18l6-6-6-6'} />
       </svg>

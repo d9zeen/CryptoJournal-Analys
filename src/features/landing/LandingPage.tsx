@@ -2,7 +2,8 @@
  * Главная для тех, кто ещё не вошёл: что это, живой дашборд демо-счёта, возможности, шаги, тарифы, вопросы.
  * Превью — настоящие виджеты дашборда на выдуманных сделках (demo.ts), а не картинка.
  */
-import { Fragment, lazy, Suspense, useMemo } from 'react'
+import { Fragment, lazy, Suspense, useMemo, useRef } from 'react'
+import { useSpotlight, useTilt } from '@/lib/motion'
 import { Link } from 'react-router'
 import { plural, useT } from '@/i18n'
 import { Logo } from '@/components/Logo'
@@ -42,6 +43,10 @@ export function LandingPage() {
   const l = t.landing
   const accentWords = l.titleAccent.split(' ').length
   const demo = useMemo(() => demoAccount(), [])
+  const previewRef = useRef<HTMLDivElement>(null)
+  useTilt(previewRef, 4)
+  const pathRef = useRef<HTMLOListElement>(null)
+  useSpotlight(pathRef)
   const { user } = useAuth()
 
   return (
@@ -90,58 +95,60 @@ export function LandingPage() {
         {/* первый экран */}
         <section className={`${wrap} pt-12 pb-10 sm:pt-20`}>
           <div className="relative">
-          {/* живой свечной график справа от заголовка, на фоне */}
-          <HeroCandles
-            className="hero-fade animate-word pointer-events-none absolute -top-10 -bottom-8 right-0 hidden w-[60%] md:block"
-            style={{ animationDelay: '500ms' }}
-          />
-          <div className="relative max-w-3xl">
-            {/* заход на сайт: слова заголовка по очереди, затем подзаголовок, кнопки и превью */}
-            <h1 className="text-4xl leading-[1.08] font-bold tracking-tight text-balance sm:text-5xl lg:text-6xl" aria-label={l.title}>
-              {l.title.split(' ').map((w, i, all) => (
-                <Fragment key={i}>
-                  {i > 0 && ' '}
-                  {/* конец заголовка (фьючерсы, спот, Polymarket) — цветом кнопок */}
-                  <span
-                    aria-hidden
-                    className={`animate-word inline-block ${i >= all.length - accentWords ? 'text-primary' : ''}`}
-                    style={{ animationDelay: `${150 + i * 70}ms` }}
-                  >
-                    {w}
-                  </span>
-                </Fragment>
-              ))}
-            </h1>
-            <Reveal delay={550}>
-              <p className="mt-4 max-w-xl text-lg leading-snug text-balance text-text/75 sm:text-xl">
-                {l.subtitle}
-              </p>
-            </Reveal>
-            <Reveal delay={680} className="mt-8 flex flex-wrap items-center gap-3">
-              <Link to="/register" className={`${btnPrimary} !px-5 !py-3`}>
-                {l.start}
-              </Link>
-              <Link to="/login" className={`${btnSecondary} !px-5 !py-3`}>
-                {l.login}
-              </Link>
-            </Reveal>
-          </div>
+            {/* живой свечной график справа от заголовка, на фоне */}
+            <HeroCandles
+              className="hero-fade animate-word pointer-events-none absolute -top-10 -bottom-8 right-0 hidden w-[60%] md:block"
+              style={{ animationDelay: '500ms' }}
+            />
+            <div className="relative max-w-3xl">
+              {/* заход на сайт: слова заголовка по очереди, затем подзаголовок, кнопки и превью */}
+              <h1 className="text-4xl leading-[1.08] font-bold tracking-tight text-balance sm:text-5xl lg:text-6xl" aria-label={l.title}>
+                {l.title.split(' ').map((w, i, all) => (
+                  <Fragment key={i}>
+                    {i > 0 && ' '}
+                    {/* конец заголовка (фьючерсы, спот, Polymarket) — цветом кнопок */}
+                    <span
+                      aria-hidden
+                      className={`animate-word inline-block ${i >= all.length - accentWords ? 'text-primary' : ''}`}
+                      style={{ animationDelay: `${150 + i * 70}ms` }}
+                    >
+                      {w}
+                    </span>
+                  </Fragment>
+                ))}
+              </h1>
+              <Reveal delay={550}>
+                <p className="mt-4 max-w-xl text-lg leading-snug text-balance text-text/75 sm:text-xl">{l.subtitle}</p>
+              </Reveal>
+              <Reveal delay={680} className="mt-8 flex flex-wrap items-center gap-3">
+                <Link to="/register" className={`${btnPrimary} !px-5 !py-3`}>
+                  {l.start}
+                </Link>
+                <Link to="/login" className={`${btnSecondary} !px-5 !py-3`}>
+                  {l.login}
+                </Link>
+              </Reveal>
+            </div>
           </div>
 
           {/* живое превью дашборда */}
-          <Reveal delay={820} zoom className="mt-12 rounded-xl border border-border bg-surface/40 p-2 sm:p-3">
-            <div className="flex items-center gap-1.5 px-2 pt-1 pb-2.5">
-              <i className="size-2.5 rounded-full bg-border" />
-              <i className="size-2.5 rounded-full bg-border" />
-              <i className="size-2.5 rounded-full bg-border" />
-              <span className="ml-2 truncate text-xs text-muted">{l.previewLabel}</span>
-            </div>
-            <div className="flex flex-col gap-3 rounded-lg bg-bg p-3 sm:p-4">
-              <KpiRow summary={demo.summary} score={demo.score} startingBalance={demo.balance} equity={demo.equity} />
-              <div className="rounded-lg border border-border bg-surface p-4">
-                <Suspense fallback={<div className="h-[300px]" />}>
-                  <EquityChart points={demo.equity} unit="usd" balance={demo.balance} height={380} />
-                </Suspense>
+          <Reveal delay={820} zoom className="mt-12">
+            {/* №2: превью чуть наклоняется к курсору (только мышь; большой блок — наклон меньше, ±4°) */}
+            <div ref={previewRef} className="tilt relative rounded-xl border border-border bg-surface/40 p-2 sm:p-3">
+              <span aria-hidden className="tilt-sheen" />
+              <div className="flex items-center gap-1.5 px-2 pt-1 pb-2.5">
+                <i className="size-2.5 rounded-full bg-border" />
+                <i className="size-2.5 rounded-full bg-border" />
+                <i className="size-2.5 rounded-full bg-border" />
+                <span className="ml-2 truncate text-xs text-muted">{l.previewLabel}</span>
+              </div>
+              <div className="flex flex-col gap-3 rounded-lg bg-bg p-3 sm:p-4">
+                <KpiRow summary={demo.summary} score={demo.score} startingBalance={demo.balance} equity={demo.equity} />
+                <div className="rounded-lg border border-border bg-surface p-4">
+                  <Suspense fallback={<div className="h-[300px]" />}>
+                    <EquityChart points={demo.equity} unit="usd" balance={demo.balance} height={380} />
+                  </Suspense>
+                </div>
               </div>
             </div>
           </Reveal>
@@ -171,7 +178,7 @@ export function LandingPage() {
           <Reveal as="h2" className="text-3xl font-bold tracking-tight sm:text-4xl">
             {l.path.title}
           </Reveal>
-          <ol className="mt-10 grid gap-x-6 gap-y-10 rounded-xl border border-border bg-surface/40 p-4 sm:p-6 lg:grid-cols-3">
+          <ol ref={pathRef} className="mt-10 grid gap-x-6 gap-y-10 rounded-xl border border-border bg-surface/40 p-4 sm:p-6 lg:grid-cols-3">
             <PathStep n={1} text={l.path.trade.text}>
               <TradeVisual />
             </PathStep>
@@ -252,7 +259,10 @@ function PathStep({ n, text, children }: { n: number; text: string; children: Re
         <span className="num mr-2 text-muted">{n}.</span>
         {text}
       </p>
-      {children}
+      {/* №3: рамка и пятно подсветки под курсором (обёртка .spot-frame = рамка 1px) */}
+      <div data-spot className="spot-frame rounded-xl">
+        {children}
+      </div>
     </Reveal>
   )
 }
@@ -263,7 +273,7 @@ function TradeVisual() {
   const t = useT()
   const p = t.landing.path.trade
   return (
-    <div className="rounded-xl border border-border bg-surface p-4">
+    <div className="spot-card rounded-[calc(0.75rem-1px)] bg-surface p-4">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="font-semibold">{DEMO_FEATURED.symbol}</span>
@@ -298,7 +308,7 @@ function AnalysisVisual({ trades, featuredId }: { trades: ClosedTrade[]; feature
     r.key === DEMO_FEATURED.mistake,
   ])
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-surface">
+    <div className="spot-card overflow-hidden rounded-[calc(0.75rem-1px)] bg-surface">
       <table className="w-full text-sm">
         <thead className="text-xs text-muted">
           <tr>
@@ -328,28 +338,42 @@ function CalendarVisual({ trades, mark }: { trades: ClosedTrade[]; mark: string 
   const cal = profitCalendar(trades, at.getUTCFullYear(), at.getUTCMonth(), 'UTC')
   const markDate = trades.find((x) => x.id === mark)?.exit_at?.slice(0, 10)
   return (
-    <div className="rounded-xl border border-border bg-surface p-3 sm:p-4">
+    <div className="spot-card rounded-[calc(0.75rem-1px)] bg-surface p-3 sm:p-4">
       <div className="mb-2 grid grid-cols-7 gap-1 text-center text-xs text-muted sm:gap-1.5">
         {t.period.weekdaysShort.map((w) => (
           <span key={w}>{w}</span>
         ))}
       </div>
       <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
-        {cal.weeks.flatMap((w) => w.days).map((d) => {
-          const has = d.inMonth && d.count > 0
-          const tone = !d.inMonth ? 'cal-hatch border-transparent' : !has ? 'border-border bg-surface-2/50' : d.pnl > 0 ? 'border-up/45 bg-up/18' : 'border-down/45 bg-down/18'
-          const ring = d.date === markDate ? 'ring-2 ring-primary' : ''
-          return (
-            <div key={d.date} className={`relative flex min-h-12 flex-col items-center justify-center rounded-md border px-0.5 pt-3 pb-1 sm:min-h-14 ${tone} ${ring}`}>
-              <span className={`absolute top-0.5 right-1 text-xs ${d.inMonth ? 'text-muted' : 'text-muted/60'}`}>{d.day}</span>
-              {has && (
-                <span className={`num text-xs leading-tight font-semibold ${d.pnl > 0 ? 'text-up' : 'text-down'}`} title={plural(d.count, t.dashboard.calendar.tradesN)}>
-                  {compactPnl(d.pnl)}
-                </span>
-              )}
-            </div>
-          )
-        })}
+        {cal.weeks
+          .flatMap((w) => w.days)
+          .map((d) => {
+            const has = d.inMonth && d.count > 0
+            const tone = !d.inMonth
+              ? 'cal-hatch border-transparent'
+              : !has
+                ? 'border-border bg-surface-2/50'
+                : d.pnl > 0
+                  ? 'border-up/45 bg-up/18'
+                  : 'border-down/45 bg-down/18'
+            const ring = d.date === markDate ? 'ring-2 ring-primary' : ''
+            return (
+              <div
+                key={d.date}
+                className={`relative flex min-h-12 flex-col items-center justify-center rounded-md border px-0.5 pt-3 pb-1 sm:min-h-14 ${tone} ${ring}`}
+              >
+                <span className={`absolute top-0.5 right-1 text-xs ${d.inMonth ? 'text-muted' : 'text-muted/60'}`}>{d.day}</span>
+                {has && (
+                  <span
+                    className={`num text-xs leading-tight font-semibold ${d.pnl > 0 ? 'text-up' : 'text-down'}`}
+                    title={plural(d.count, t.dashboard.calendar.tradesN)}
+                  >
+                    {compactPnl(d.pnl)}
+                  </span>
+                )}
+              </div>
+            )
+          })}
       </div>
     </div>
   )

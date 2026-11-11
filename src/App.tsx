@@ -13,27 +13,23 @@ import { isSupabaseConfigured } from '@/lib/supabase'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from '@/lib/queryClient'
 import { BASENAME } from '@/lib/url'
-import { FullPageSpinner, PageSpinner } from '@/components/ui/Spinner'
+import { FullPageSpinner } from '@/components/ui/Spinner'
+import { PageSkeleton } from '@/components/Skeleton'
 import { useT } from '@/i18n'
 
 /**
  * Страницы приложения грузятся отдельными файлами, когда на них заходят:
- * первый экран (вход) открывается быстрее, особенно на медленном интернете.
+ * первый экран (вход) открывается быстрее, особенно на медленном интернете. Пока грузится — заготовка страницы (№14).
  */
 function lazyPage<K extends string>(load: () => Promise<Record<K, ComponentType>>, name: K) {
   const Page = lazy<ComponentType>(() => load().then((m) => ({ default: m[name] })))
   return function LazyPage() {
     return (
-      <Suspense fallback={<PageLoading />}>
+      <Suspense fallback={<PageSkeleton />}>
         <Page />
       </Suspense>
     )
   }
-}
-
-function PageLoading() {
-  const t = useT()
-  return <PageSpinner label={t.common.loading} />
 }
 
 const DashboardPage = lazyPage(() => import('@/features/dashboard/DashboardPage'), 'DashboardPage')
@@ -57,46 +53,49 @@ function Home() {
   return <LandingPage />
 }
 
-const router = createBrowserRouter([
-  { path: '/', element: <Home /> },
-  // главная «как её видит гость» — открывается всегда, даже если уже вошёл (посмотреть / показать другим)
-  { path: '/welcome', element: <LandingPage /> },
-  // «Данные и безопасность» — без входа
-  { path: '/privacy', element: <PrivacyPage /> },
-  // Только для незалогиненных
-  {
-    element: <GuestOnly />,
-    children: [
-      { path: '/login', element: <LoginPage /> },
-      { path: '/register', element: <RegisterPage /> },
-      { path: '/reset-password', element: <ResetPasswordPage /> },
-    ],
-  },
-  // Ссылка из письма «сменить пароль» — доступна всегда
-  { path: '/update-password', element: <UpdatePasswordPage /> },
-  // Приложение — только для залогиненных
-  {
-    element: <RequireAuth />,
-    children: [
-      {
-        element: <AppLayout />,
-        children: [
-          { path: '/dashboard', element: <DashboardPage /> },
-          { path: '/trades', element: <TradesPage /> },
-          { path: '/trades/new', element: <TradeFormPage /> },
-          { path: '/trades/:id', element: <TradeFormPage /> },
-          { path: '/calendar', element: <CalendarPage /> },
-          { path: '/analysis', element: <AnalysisPage /> },
-          { path: '/import', element: <ImportPage /> },
-          { path: '/settings', element: <SettingsPage /> },
-          { path: '/admin', element: <AdminPage /> },
-          { path: '/plans', element: <PlansPage /> },
-        ],
-      },
-    ],
-  },
-  { path: '*', element: <NotFoundPage /> },
-], { basename: BASENAME })
+const router = createBrowserRouter(
+  [
+    { path: '/', element: <Home /> },
+    // главная «как её видит гость» — открывается всегда, даже если уже вошёл (посмотреть / показать другим)
+    { path: '/welcome', element: <LandingPage /> },
+    // «Данные и безопасность» — без входа
+    { path: '/privacy', element: <PrivacyPage /> },
+    // Только для незалогиненных
+    {
+      element: <GuestOnly />,
+      children: [
+        { path: '/login', element: <LoginPage /> },
+        { path: '/register', element: <RegisterPage /> },
+        { path: '/reset-password', element: <ResetPasswordPage /> },
+      ],
+    },
+    // Ссылка из письма «сменить пароль» — доступна всегда
+    { path: '/update-password', element: <UpdatePasswordPage /> },
+    // Приложение — только для залогиненных
+    {
+      element: <RequireAuth />,
+      children: [
+        {
+          element: <AppLayout />,
+          children: [
+            { path: '/dashboard', element: <DashboardPage /> },
+            { path: '/trades', element: <TradesPage /> },
+            { path: '/trades/new', element: <TradeFormPage /> },
+            { path: '/trades/:id', element: <TradeFormPage /> },
+            { path: '/calendar', element: <CalendarPage /> },
+            { path: '/analysis', element: <AnalysisPage /> },
+            { path: '/import', element: <ImportPage /> },
+            { path: '/settings', element: <SettingsPage /> },
+            { path: '/admin', element: <AdminPage /> },
+            { path: '/plans', element: <PlansPage /> },
+          ],
+        },
+      ],
+    },
+    { path: '*', element: <NotFoundPage /> },
+  ],
+  { basename: BASENAME },
+)
 
 export function App() {
   if (!isSupabaseConfigured) return <SetupNeeded />

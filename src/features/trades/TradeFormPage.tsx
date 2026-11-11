@@ -1,4 +1,7 @@
 import { UpgradeLine } from '@/components/UpgradeLine'
+import { SaveButton, type SaveState } from '@/components/SaveButton'
+import { FormError } from '@/components/FormError'
+import { pause, useShake } from '@/lib/motion'
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { fmt, useT } from '@/i18n'
@@ -73,6 +76,9 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
   )
   const savedShots = allSaved.filter((s) => !removeShots.some((r) => r.id === s.id))
   const [submitError, setSubmitError] = useState<string | null>(null)
+  // №15: кнопка «Сохранить» — круг с крутилкой → галочка цветом прибыли → назад; ошибка — обратно и форма «мотает головой»
+  const [saveState, setSaveState] = useState<SaveState>('idle')
+  const [formRef, shake] = useShake<HTMLFormElement>()
 
   const save = useSaveTrade()
   const del = useDeleteTrade()
@@ -104,6 +110,7 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
     setErrors(errors)
     if (!trade) {
       setSubmitError(t.tradeForm.errors.form)
+      shake()
       return
     }
     // поле времени точно до минуты: если время не трогали — сохраняем исходное (с секундами)
@@ -111,13 +118,18 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
       if (form.entryAt === isoToLocalInput(existing.entry_at)) trade.entry_at = existing.entry_at
       if (existing.exit_at && trade.exit_at && form.exitAt === isoToLocalInput(existing.exit_at)) trade.exit_at = existing.exit_at
     }
+    setSaveState('busy')
     try {
       const nextOrder = allSaved.reduce((m, s) => Math.max(m, s.sort_order + 1), 0)
       await save.mutateAsync({ trade, tagIds: form.tagIds, isNew, screenshots: { add: addShots, remove: removeShots, nextOrder } })
       if (isNew) saveDefaults(form)
+      setSaveState('done')
+      await pause(600)
       navigate('/trades')
     } catch (error) {
+      setSaveState('idle')
       setSubmitError(dbErrorMessage(error, t))
+      shake()
     }
   }
 
@@ -132,7 +144,7 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+    <form ref={formRef} onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Link to="/trades" className="text-muted hover:text-text" aria-label={t.common.back}>
@@ -210,7 +222,13 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
                     : undefined
                 }
               />
-              <NumberField label={t.tradeForm.leverage} value={form.leverage} disabled={form.marketType === 'spot'} onChange={(e) => set('leverage', e.target.value)} error={err('leverage')} />
+              <NumberField
+                label={t.tradeForm.leverage}
+                value={form.leverage}
+                disabled={form.marketType === 'spot'}
+                onChange={(e) => set('leverage', e.target.value)}
+                error={err('leverage')}
+              />
               <NumberField
                 label={t.tradeForm.stopLoss}
                 value={form.stopLoss}
@@ -224,9 +242,21 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
                   ) : undefined
                 }
               />
-              <NumberField label={t.tradeForm.takeProfit} value={form.takeProfit} onChange={(e) => set('takeProfit', e.target.value)} error={err('takeProfit')} />
+              <NumberField
+                label={t.tradeForm.takeProfit}
+                value={form.takeProfit}
+                onChange={(e) => set('takeProfit', e.target.value)}
+                error={err('takeProfit')}
+              />
               <NumberField label={t.tradeForm.fee} placeholder="0" value={form.fee} onChange={(e) => set('fee', e.target.value)} error={err('fee')} />
-              <NumberField label={t.tradeForm.funding} placeholder="0" hint={t.tradeForm.fundingHint} value={form.funding} onChange={(e) => set('funding', e.target.value)} error={err('funding')} />
+              <NumberField
+                label={t.tradeForm.funding}
+                placeholder="0"
+                hint={t.tradeForm.fundingHint}
+                value={form.funding}
+                onChange={(e) => set('funding', e.target.value)}
+                error={err('funding')}
+              />
             </div>
           </Section>
         </div>
@@ -234,12 +264,34 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
           <Section title={t.tradeForm.sections.entryExit}>
             <Checkbox label={t.tradeForm.isClosed} checked={form.isClosed} onChange={(e) => set('isClosed', e.target.checked)} />
             <div className="grid gap-4 sm:grid-cols-2">
-              <TextField type="datetime-local" label={t.tradeForm.entryAt} value={form.entryAt} onChange={(e) => set('entryAt', e.target.value)} error={err('entryAt')} />
-              <NumberField label={t.tradeForm.entryPrice} value={form.entryPrice} onChange={(e) => set('entryPrice', e.target.value)} error={err('entryPrice')} />
+              <TextField
+                type="datetime-local"
+                label={t.tradeForm.entryAt}
+                value={form.entryAt}
+                onChange={(e) => set('entryAt', e.target.value)}
+                error={err('entryAt')}
+              />
+              <NumberField
+                label={t.tradeForm.entryPrice}
+                value={form.entryPrice}
+                onChange={(e) => set('entryPrice', e.target.value)}
+                error={err('entryPrice')}
+              />
               {form.isClosed && (
                 <>
-                  <TextField type="datetime-local" label={t.tradeForm.exitAt} value={form.exitAt} onChange={(e) => set('exitAt', e.target.value)} error={err('exitAt')} />
-                  <NumberField label={t.tradeForm.exitPrice} value={form.exitPrice} onChange={(e) => set('exitPrice', e.target.value)} error={err('exitPrice')} />
+                  <TextField
+                    type="datetime-local"
+                    label={t.tradeForm.exitAt}
+                    value={form.exitAt}
+                    onChange={(e) => set('exitAt', e.target.value)}
+                    error={err('exitAt')}
+                  />
+                  <NumberField
+                    label={t.tradeForm.exitPrice}
+                    value={form.exitPrice}
+                    onChange={(e) => set('exitPrice', e.target.value)}
+                    error={err('exitPrice')}
+                  />
                 </>
               )}
             </div>
@@ -251,11 +303,24 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-4">
-                  <Stat label={t.tradeForm.pnl} value={formatPnl(d.pnl)} className={pnlClass(d.pnl)} hint={!form.pnlManual ? (d.pnlAuto === null ? t.tradeForm.pnlNeedData : t.tradeForm.pnlAuto) : undefined} />
+                  <Stat
+                    label={t.tradeForm.pnl}
+                    value={formatPnl(d.pnl)}
+                    className={pnlClass(d.pnl)}
+                    hint={!form.pnlManual ? (d.pnlAuto === null ? t.tradeForm.pnlNeedData : t.tradeForm.pnlAuto) : undefined}
+                  />
                   <Stat label={t.tradeForm.r} value={formatR(d.r)} className={pnlClass(d.r)} hint={d.risk === null ? t.tradeForm.rNoStop : undefined} />
                 </div>
                 <Checkbox label={t.tradeForm.pnlManual} checked={form.pnlManual} onChange={(e) => set('pnlManual', e.target.checked)} />
-                {form.pnlManual && <NumberField label={t.tradeForm.pnlManualLabel} value={form.pnl} onChange={(e) => set('pnl', e.target.value)} error={err('pnl')} wrapClassName="sm:max-w-xs" />}
+                {form.pnlManual && (
+                  <NumberField
+                    label={t.tradeForm.pnlManualLabel}
+                    value={form.pnl}
+                    onChange={(e) => set('pnl', e.target.value)}
+                    error={err('pnl')}
+                    wrapClassName="sm:max-w-xs"
+                  />
+                )}
               </>
             )}
           </Section>
@@ -270,7 +335,13 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
               <ListSelect kind="emotions" label={t.tradeForm.emotion} value={form.emotionId} onChange={(v) => set('emotionId', v)} />
             </div>
             <MistakePicker value={form.tagIds} onChange={(v) => set('tagIds', v)} />
-            <TextArea label={t.tradeForm.note} placeholder={t.tradeForm.notePlaceholder} maxLength={5000} value={form.note} onChange={(e) => set('note', e.target.value)} />
+            <TextArea
+              label={t.tradeForm.note}
+              placeholder={t.tradeForm.notePlaceholder}
+              maxLength={5000}
+              value={form.note}
+              onChange={(e) => set('note', e.target.value)}
+            />
           </div>
           <div className="min-w-0">
             <ScreenshotsField
@@ -284,16 +355,16 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
         </div>
       </Section>
 
-      {submitError && <Alert tone="error">{submitError}</Alert>}
+      <FormError message={submitError} />
 
       {/* панель действий прилипает к низу экрана, пока форма длиннее экрана */}
       <div className="sticky bottom-20 z-10 flex items-center justify-end gap-3 rounded-lg border border-border bg-surface/95 px-3 py-3 backdrop-blur md:bottom-4 md:px-4">
         <Button type="button" variant="secondary" onClick={() => navigate('/trades')}>
           {t.common.cancel}
         </Button>
-        <Button type="submit" loading={save.isPending} disabled={limitReached} className="flex-1 sm:flex-none sm:px-6">
+        <SaveButton state={saveState} disabled={limitReached} className="sm:px-6">
           {t.tradeForm.save}
-        </Button>
+        </SaveButton>
       </div>
     </form>
   )

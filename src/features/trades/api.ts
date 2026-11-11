@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/features/auth/AuthProvider'
 import type { TradeInput, TradeScreenshot, TradeWithTags } from '@/types/db'
@@ -44,6 +44,9 @@ export function useTrades(range: DateRange) {
     queryKey: ['trades', user?.id, range.from, range.to],
     enabled: Boolean(user),
     queryFn: () => fetchTradesPaged(range),
+    // при смене периода показываем прежние сделки, пока грузятся новые: страница не мигает заготовками,
+    // а числа прокручиваются к новым значениям (№13)
+    placeholderData: keepPreviousData,
   })
 }
 

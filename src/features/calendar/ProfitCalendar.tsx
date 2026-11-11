@@ -4,7 +4,8 @@
  * Справа (на телефоне — ниже) — итоги месяца: результат, торговые дни, лучший и худший день, недели, дни недели.
  * Свой месяц (стрелки), не зависит от фильтра периода. Дни соседних месяцев — заштрихованы.
  */
-import { useMemo, useState, type CSSProperties } from 'react'
+import { useMemo, useRef, useState, type CSSProperties } from 'react'
+import { Link } from 'react-router'
 import { fmt, plural, useT } from '@/i18n'
 import { useTrades } from '@/features/trades/api'
 import { closedTrades } from '@/lib/calc/stats'
@@ -12,6 +13,8 @@ import { calendarSpan, compactPnl, monthSummary, monthWeeks, profitCalendar, typ
 import { formatDay, formatPercent, formatPnl } from '@/lib/format'
 import { parseYmd, ymd } from '@/lib/period'
 import { useMediaQuery } from '@/lib/useMediaQuery'
+import { AnimatedNumber } from '@/components/AnimatedNumber'
+import { CalendarSkeleton } from '@/components/Skeleton'
 
 const monthTitle = new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' })
 /** «Ноябрь 2026» — без «г.» и без CSS capitalize (он делал «2026 Г.») */
@@ -44,19 +47,25 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
     to.setDate(to.getDate() + 2)
     return { from: from.toISOString(), to: to.toISOString() }
   }, [span.first, span.last])
-  const { data: trades = [], isLoading } = useTrades(range)
+  const { data: trades = [], isLoading, isPlaceholderData } = useTrades(range)
+  // месяц, чьи сделки уже на экране: волна клеток (№11) и прокрутка итога — когда пришли данные нового месяца
+  const monthKey = `${view.y}-${view.m}`
+  const shownMonth = useRef(monthKey)
+  if (!isLoading && !isPlaceholderData) shownMonth.current = monthKey
 
   const cal = useMemo(() => profitCalendar(closedTrades(trades.map((tr) => ({ ...tr, tagIds: [] }))), view.y, view.m, timeZone), [trades, view, timeZone])
   const sum = useMemo(() => monthSummary(cal), [cal])
   const shift = (n: number) => setView((v) => ({ y: new Date(v.y, v.m + n, 1).getFullYear(), m: new Date(v.y, v.m + n, 1).getMonth() }))
   const today = ymd(now)
   const m = cal.month
+  // №14: первая загрузка — заготовка сетки вместо пустоты
+  if (isLoading) return <CalendarSkeleton />
 
   return (
     // широкий экран (выбор владельца — вариант 2): высота ~86 % экрана, по краям небольшие поля (до 2000 px по центру);
     // панель итогов справа той же высоты, что и календарь
-    <div className="rise mx-auto grid w-full max-w-[2000px] gap-4 xl:min-h-[max(680px,86dvh)] xl:grid-cols-[minmax(0,1fr)_360px]">
-      <section className="flex flex-col rounded-lg border border-border bg-surface p-4 sm:p-5 xl:h-full">
+    <div data-shot="calendar" className="mx-auto grid w-full max-w-[2000px] gap-4 xl:min-h-[max(680px,86dvh)] xl:grid-cols-[minmax(0,1fr)_360px]">
+      <section className="rise flex flex-col rounded-lg border border-border bg-surface p-4 sm:p-5 xl:h-full">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-lg font-semibold">{c.title}</h1>
           <div className="flex items-center gap-1 rounded-lg border border-border bg-surface-2/60 p-1">
@@ -68,7 +77,8 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
 
         {/* рядов столько, сколько недель у месяца (4–6), под ними — итог месяца */}
         <div
-          className={`mt-4 grid flex-1 gap-1.5 ${wide ? 'grid-cols-[repeat(7,minmax(0,1fr))_minmax(0,1fr)]' : 'grid-cols-7'} ${isLoading ? 'opacity-60' : ''}`}
+          key={shownMonth.current}
+          className={`mt-4 grid flex-1 gap-1.5 ${wide ? 'grid-cols-[repeat(7,minmax(0,1fr))_minmax(0,1fr)]' : 'grid-cols-7'} ${isLoading || isPlaceholderData ? 'opacity-60' : ''}`}
           style={wide ? { gridTemplateRows: `auto repeat(${cal.weeks.length}, minmax(0, 1fr)) auto` } : undefined}
         >
           {t.period.weekdaysShort.map((w) => (
@@ -77,8 +87,8 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
             </div>
           ))}
           {wide && <div className="pb-1 text-center text-xs text-muted">{c.week}</div>}
-          {cal.weeks.map((week) => (
-            <Week key={week.days[0].date} days={week.days} total={week.total} />
+          {cal.weeks.map((week, row) => (
+            <Week key={week.days[0].date} days={week.days} total={week.total} row={row} />
           ))}
           <MonthTotal />
         </div>
@@ -88,14 +98,17 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
     </div>
   )
 
-  function Week({ days, total }: { days: CalDay[]; total: CalCell }) {
+  function Week({ days, total, row }: { days: CalDay[]; total: CalCell; row: number }) {
     return (
       <>
-        {days.map((d) => (
-          <Day key={d.date} d={d} />
+        {days.map((d, col) => (
+          <Day key={d.date} d={d} k={row + col} />
         ))}
         {wide && (
-          <div className="flex min-h-24 flex-col items-center justify-center rounded-md border border-border bg-bg/40 px-1 py-2 text-center xl:min-h-28">
+          <div
+            style={{ '--k': row + 7 } as CSSProperties}
+            className="cell-in flex min-h-24 flex-col items-center justify-center rounded-md border border-border bg-bg/40 px-1 py-2 text-center xl:min-h-28"
+          >
             {total.count > 0 ? (
               <>
                 <span className={`num truncate text-sm font-semibold ${total.pnl >= 0 ? 'text-text' : 'text-down'}`}>{formatPnl(total.pnl)}</span>
@@ -125,7 +138,10 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
       >
         <div className="flex items-baseline gap-3">
           <span className="text-sm font-semibold">{c.monthTotal}</span>
-          <span className={`num text-lg font-semibold ${m.count === 0 ? 'text-muted' : m.pnl >= 0 ? 'text-up' : 'text-down'}`}>{m.count ? formatPnl(m.pnl) : '—'}</span>
+          <span className={`num text-lg font-semibold ${m.count === 0 ? 'text-muted' : m.pnl >= 0 ? 'text-up' : 'text-down'}`}>
+            {/* №8: итог набегает при первом показе, при смене месяца прокручивается */}
+            {m.count ? <AnimatedNumber value={m.pnl} format={formatPnl} rollKey={shownMonth.current} /> : '—'}
+          </span>
         </div>
         <dl className="flex flex-wrap items-baseline gap-x-6 gap-y-1 text-sm sm:ml-auto">
           {items.map((it) => (
@@ -139,18 +155,19 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
     )
   }
 
-  function Day({ d }: { d: CalDay }) {
+  /**
+   * День. №11: клетки появляются волной по диагонали (--k = столбец + строка), при смене месяца — заново (key сетки).
+   * День со сделками — кнопка: клик открывает «Сделки» с фильтром на этот день; при наведении клетка приподнимается.
+   */
+  function Day({ d, k }: { d: CalDay; k: number }) {
     // дни соседних месяцев — пустое место: ряд просто заканчивается на последнем дне месяца
     if (!d.inMonth) return <div aria-hidden className={wide ? 'min-h-24 xl:min-h-28' : 'min-h-14'} />
-    const title = d.count ? `${d.date}: ${formatPnl(d.pnl)} · ${plural(d.count, c.tradesN)}` : d.date
-    const style = d.inMonth ? heat(d.pnl) : undefined
-    const base = !d.inMonth ? 'cal-hatch border-transparent' : style ? '' : 'border-border bg-surface-2/40'
-    return (
-      <div
-        title={title}
-        style={style}
-        className={`relative flex flex-col rounded-md border text-center transition-colors ${wide ? 'min-h-24 justify-center px-1 py-2 xl:min-h-28' : 'min-h-14 justify-start px-0.5 pt-1 pb-1.5'} ${base}`}
-      >
+    const title = d.count ? `${formatDay(d.date)}: ${formatPnl(d.pnl)} · ${plural(d.count, c.tradesN)}` : formatDay(d.date)
+    const style = { ...heat(d.pnl), '--k': k } as CSSProperties
+    const base = d.count ? '' : 'border-border bg-surface-2/40'
+    const cls = `cell-in relative flex flex-col rounded-md border text-center ${wide ? 'min-h-24 justify-center px-1 py-2 xl:min-h-28' : 'min-h-14 justify-start px-0.5 pt-1 pb-1.5'} ${base}`
+    const inner = (
+      <>
         <span
           className={`flex items-center justify-center rounded-full ${wide ? 'absolute top-1.5 right-1.5 size-5 text-xs' : 'mx-auto size-5 text-xs'} ${
             d.date === today ? 'bg-primary font-semibold text-on-primary' : d.inMonth ? 'text-muted' : 'text-muted/50'
@@ -160,13 +177,26 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
         </span>
         {d.count > 0 && (
           <>
-            <span className={`num font-semibold ${wide ? 'mt-2 truncate text-[15px]' : 'mt-1 text-xs leading-tight tracking-tighter'} ${d.inMonth ? 'text-text' : 'text-muted/70'}`}>
+            <span
+              className={`num font-semibold ${wide ? 'mt-2 truncate text-[15px]' : 'mt-1 text-xs leading-tight tracking-tighter'} ${d.inMonth ? 'text-text' : 'text-muted/70'}`}
+            >
               {wide ? formatPnl(d.pnl) : compactPnl(d.pnl)}
             </span>
             {wide && <span className={`mt-0.5 truncate text-xs ${d.inMonth ? 'text-text/70' : 'text-muted/60'}`}>{plural(d.count, c.tradesN)}</span>}
           </>
         )}
-      </div>
+      </>
+    )
+    if (!d.count)
+      return (
+        <div title={title} style={style} className={cls}>
+          {inner}
+        </div>
+      )
+    return (
+      <Link to={`/trades?day=${d.date}`} title={title} aria-label={fmt(c.openDay, { day: title })} style={style} className={`${cls} cal-day-link`}>
+        {inner}
+      </Link>
     )
   }
 
@@ -182,14 +212,14 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
     return (
       <aside className="flex flex-col gap-3 xl:h-full">
         {m.count === 0 && (
-          <section className="rounded-lg border border-border bg-surface p-4">
+          <section style={{ '--i': 1 } as CSSProperties} className="rise rounded-lg border border-border bg-surface p-4">
             <p className="text-sm text-muted">{c.empty}</p>
           </section>
         )}
 
         {m.count > 0 && (
           <>
-            <section className="rounded-lg border border-border bg-surface p-4">
+            <section style={{ '--i': 2 } as CSSProperties} className="rise rounded-lg border border-border bg-surface p-4">
               <div className="flex items-baseline justify-between gap-3 text-sm">
                 <span className="text-muted">{c.days}</span>
                 <span className="num font-semibold">{sum.tradedDays}</span>
@@ -206,21 +236,23 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
               </dl>
             </section>
 
-            <section className="flex flex-col rounded-lg border border-border bg-surface p-4 xl:flex-1">
+            <section style={{ '--i': 3 } as CSSProperties} className="rise flex flex-col rounded-lg border border-border bg-surface p-4 xl:flex-1">
               <h2 className="text-xs text-muted">{c.byWeek}</h2>
               <div className="mt-2 grid gap-1.5 xl:flex-1 xl:content-evenly">
                 {weeks.map((w) => (
                   <div key={w.from} className="grid grid-cols-[72px_minmax(0,1fr)_auto] items-center gap-2 text-xs">
                     <span className="num text-muted">{weekLabel(w.from, w.to)}</span>
                     <Bar value={w.cell.pnl} max={weekMax} />
-                    <span className={`num w-20 text-right font-semibold ${w.cell.pnl < 0 ? 'text-down' : ''}`}>{w.cell.count ? formatPnl(w.cell.pnl) : '—'}</span>
+                    <span className={`num w-20 text-right font-semibold ${w.cell.pnl < 0 ? 'text-down' : ''}`}>
+                      {w.cell.count ? formatPnl(w.cell.pnl) : '—'}
+                    </span>
                   </div>
                 ))}
               </div>
             </section>
 
             {/* «По неделям» и «По дням недели» делят остаток высоты — панель доходит до низа календаря */}
-            <section className="flex flex-col rounded-lg border border-border bg-surface p-4 xl:flex-1">
+            <section style={{ '--i': 4 } as CSSProperties} className="rise flex flex-col rounded-lg border border-border bg-surface p-4 xl:flex-1">
               <h2 className="text-xs text-muted">{c.byWeekday}</h2>
               {/* линия нуля посередине: прибыль вверх, убыток вниз, сумма над / под столбиком; дни без сделок — «—» */}
               <div className="relative mt-3 grid h-44 grid-cols-7 gap-1.5 xl:mt-auto xl:h-52">
@@ -230,7 +262,11 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
                   const up = w.pnl >= 0
                   const label = <span className={`num text-xs leading-none font-semibold ${up ? 'text-text' : 'text-down'}`}>{compactPnl(w.pnl)}</span>
                   return (
-                    <div key={i} className="flex h-full min-w-0 flex-col items-center" title={w.count ? `${t.period.weekdaysShort[i]}: ${formatPnl(w.pnl)}` : undefined}>
+                    <div
+                      key={i}
+                      className="flex h-full min-w-0 flex-col items-center"
+                      title={w.count ? `${t.period.weekdaysShort[i]}: ${formatPnl(w.pnl)}` : undefined}
+                    >
                       <div className="flex w-full flex-1 flex-col items-center justify-end gap-1">
                         {w.count > 0 && up && (
                           <>
@@ -286,7 +322,12 @@ function Bar({ value, max }: { value: number; max: number }) {
 
 function NavBtn({ dir, label, onClick }: { dir: 1 | -1; label: string; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} aria-label={label} className="flex size-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-2 hover:text-text">
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className="flex size-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-2 hover:text-text"
+    >
       <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <path d={dir < 0 ? 'M15 18l-6-6 6-6' : 'M9 18l6-6-6-6'} />
       </svg>

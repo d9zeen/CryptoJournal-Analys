@@ -101,7 +101,11 @@ function StartSteps() {
             <div className="min-w-0 pt-0.5">
               <p className={`font-semibold ${done[i] ? 'text-muted line-through decoration-1' : ''}`}>{s.title}</p>
               {!done[i] && <p className="mt-0.5 text-sm text-text/80">{s.text}</p>}
-              {i === 0 && done[0] && <p className="mt-0.5 text-sm text-text/80">{fmt(w.connected, { list: [...new Set(conns!.map((c) => exchangeName(c.exchange, t.exchange.other)))].join(', ') })}</p>}
+              {i === 0 && done[0] && (
+                <p className="mt-0.5 text-sm text-text/80">
+                  {fmt(w.connected, { list: [...new Set(conns!.map((c) => exchangeName(c.exchange, t.exchange.other)))].join(', ') })}
+                </p>
+              )}
               {i === current && s.actions}
             </div>
           </li>
