@@ -330,11 +330,14 @@ test.describe('админка', () => {
 test('страница тарифов: Basic, Pro, Pro Plus; месяц / год; текущий тариф', async ({ page, db }) => {
   db.usage = { plan: 'pro', trades_created: 3, trade_limit: null }
   await fakeSupabase(page, db)
-  // телефон: ссылка из настроек (тарифа в шапке нет); компьютер: карточка тарифа в левой панели
+  // телефон: ссылка из настроек (тарифа в шапке нет); компьютер: пилюля тарифа у логотипа → окошко → «Сравнить тарифы»
   const phone = (page.viewportSize()?.width ?? 0) < 768
   await page.goto(phone ? 'settings' : 'dashboard')
   if (phone) await page.getByRole('link', { name: 'Сравнить тарифы' }).click()
-  else await page.getByRole('link', { name: /^Pro(\s|$)/ }).filter({ visible: true }).first().click()
+  else {
+    await page.getByRole('button', { name: 'Тариф: Pro' }).click()
+    await page.getByRole('dialog', { name: 'Тариф' }).getByRole('link', { name: 'Сравнить тарифы' }).click()
+  }
   await expect(page.getByRole('heading', { name: 'Тарифы' })).toBeVisible()
   for (const name of ['Basic', 'Pro', 'Pro Plus']) await expect(page.getByRole('heading', { name, exact: true })).toBeVisible()
   const head = page.locator('thead')
@@ -465,7 +468,7 @@ test('«Данные и безопасность»: открывается бе�
   await expect(page).toHaveURL(/\/privacy$/)
 })
 
-test('пробный Pro Plus: в карточке тарифа — сколько дней осталось, за 2 дня — плашка на дашборде', async ({ page, db }) => {
+test('пробный Pro Plus: в окошке тарифа у логотипа — сколько дней осталось, за 2 дня — плашка на дашборде', async ({ page, db }) => {
   db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
   db.planTrial = true
   db.planUntil = new Date(Date.now() + 1.5 * 86_400_000).toISOString()
@@ -475,7 +478,16 @@ test('пробный Pro Plus: в карточке тарифа — скольк
   const banner = page.locator('[data-plan-ending]')
   await expect(banner).toContainText('Пробный Pro Plus закончится через 2 дня.')
   await expect(banner.getByRole('link', { name: 'Тарифы' })).toBeVisible()
-  if ((page.viewportSize()?.width ?? 0) >= 1024) await expect(page.locator('[data-plan-term]')).toContainText('Pro Plus — пробный, осталось 2 дня')
+  if ((page.viewportSize()?.width ?? 0) >= 1024) {
+    // тариф — пилюля у логотипа; окошко показывает срок и три тарифа на выбор
+    await page.getByRole('button', { name: 'Тариф: Pro Plus' }).click()
+    const menu = page.getByRole('dialog', { name: 'Тариф' })
+    await expect(menu.locator('[data-plan-term]')).toContainText('Pro Plus — пробный, осталось 2 дня')
+    await expect(menu.getByText('Твой тариф')).toBeVisible()
+    await expect(menu.getByRole('link', { name: /^Pro \$10/ })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(menu).toBeHidden()
+  }
 })
 
 test('Pro со сроком: «Pro до …», за 3 дня — плашка «Продлить»; раньше плашки нет', async ({ page, db }) => {

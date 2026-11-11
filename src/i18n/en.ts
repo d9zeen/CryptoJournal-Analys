@@ -351,6 +351,14 @@ export const en: Dict = {
       early: 'New features first',
     },
     compare: 'Compare plans',
+    /** plan popover next to the logo (PlanMenu) */
+    picker: {
+      label: 'Plan',
+      choose: 'choose',
+      summaryFree: '{trades} trades a month · {shots} screenshots per trade',
+      summaryPro: 'Unlimited · {conn} connection · {shots} screenshots',
+      summaryProPlus: 'Unlimited · up to {conn} connections · server sync every 3 hours',
+    },
     best: 'Fully automatic',
     month: '/ mo',
     tradesLine: '{n} trades per month',
@@ -467,6 +475,8 @@ export const en: Dict = {
     startingBalanceHint: 'Used to show drawdown in percent. Optional.',
     plan: 'Plan',
     plansLink: 'Compare plans',
+    /** placeholder in the plan card until payments exist */
+    payment: { title: 'Payment', soon: 'Plan payment will appear here. For now the owner activates plans.' },
     usageFree: 'Trades this month: {used} of {limit}',
     usagePro: 'Trades this month: {used} · unlimited',
     lists: {
