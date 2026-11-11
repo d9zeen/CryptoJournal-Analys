@@ -324,10 +324,6 @@ export const en: Dict = {
     no: 'no',
     billing: { label: 'Billing', month: 'Monthly', year: 'Yearly', discount: '−{n}%' },
     cards: {
-      annual: 'Annual billing',
-      save: '(Save {n}%)',
-      billedMonthly: 'billed monthly',
-      billedYearly: 'billed annually · ${price}',
       forever: 'free forever',
       desc: {
         free: 'Try the journal: exchange files and manual trades.',
@@ -879,7 +875,7 @@ export const en: Dict = {
       },
     },
     pricingTitle: 'Pricing',
-    pricingHint: 'New users get Pro Plus free for 7 days. Yearly billing is 20% cheaper.',
+    pricingHint: 'New users get Pro Plus free for 7 days.',
     faq: {
       title: 'FAQ',
       items: {

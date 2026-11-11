@@ -566,8 +566,7 @@ test('тарифы на главной: вперёд выходит карточ
   await expect(card('free').getByRole('link')).toHaveClass(/bg-primary/)
   await page.mouse.move(2, 2)
   await expect(card('pro_plus')).toHaveAttribute('data-pos', 'active')
-  // тумблер «Оплата за год», как в образце: Pro Plus $15 → $12 в месяц, под ценой — сумма за год
-  await page.getByRole('switch', { name: /Оплата за год/ }).click()
-  await expect(card('pro_plus')).toContainText('$12')
-  await expect(card('pro_plus')).toContainText('$144')
+  // оплаты за год пока нет: тумблера нет, цены — в месяц
+  await expect(page.getByRole('switch')).toHaveCount(0)
+  await expect(card('pro_plus')).toContainText('$15')
 })

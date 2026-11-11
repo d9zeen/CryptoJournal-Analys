@@ -1,6 +1,6 @@
 /**
- * Тарифы на главной — как Prism UI «Pricing» (21st.dev): по центру тумблер «Оплата за год (−20 %)», под ним три карточки.
- * Карточка: название, крупная цена, «оплата помесячно / за год», только то, что входит (галочки), черта, кнопка, описание.
+ * Тарифы на главной — как Prism UI «Pricing» (21st.dev): три карточки. Тумблера «за год» нет: оплаты за год пока нет (решение владельца 11.11.2026).
+ * Карточка: название, крупная цена в месяц, только то, что входит (галочки), черта, кнопка, описание.
  * Правка владельца: «главная» карточка — та, что под мышкой (или в фокусе с клавиатуры), без мышки — Pro Plus.
  * Главная поднята на 20px, рамка 2px цвета кнопок, кнопка залита; остальные 94 % и придвинуты к ней (.plan-card[data-pos] в theme.css).
  * Значок «★ Всё автоматически» — всегда у Pro Plus, как «Popular» в образце. Страница /plans — таблица (PlansTable).
@@ -9,8 +9,7 @@ import { useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { useSpotlight } from '@/lib/motion'
 import { fmt, plural, useT } from '@/i18n'
-import { MAIN_PLAN, PLANS, monthlyPrice, yearDiscount, type Billing, type PlanInfo } from '@/lib/plans'
-import { RollNumber } from '@/components/RollNumber'
+import { MAIN_PLAN, PLANS, type PlanInfo } from '@/lib/plans'
 import { Reveal } from './Reveal'
 
 const CHECK = 'M4 10.5l3.5 3.5L16 5.5'
@@ -32,28 +31,7 @@ function useFeatures(plan: PlanInfo): string[] {
   ].filter((x): x is string => x !== null)
 }
 
-/** Тумблер «Оплата за год (экономия 20 %)» — как Switch в образце */
-function AnnualSwitch({ billing, onChange }: { billing: Billing; onChange: (b: Billing) => void }) {
-  const c = useT().plans.cards
-  const on = billing === 'year'
-  const discount = Math.max(...PLANS.map(yearDiscount))
-  return (
-    <button type="button" role="switch" aria-checked={on} onClick={() => onChange(on ? 'month' : 'year')} className="group inline-flex items-center gap-3">
-      <span
-        aria-hidden
-        className={`relative h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors group-focus-visible:outline-2 group-focus-visible:outline-offset-2 group-focus-visible:outline-primary ${on ? 'bg-primary' : 'bg-border'}`}
-      >
-        <span className={`absolute top-0 left-0 size-5 rounded-full bg-surface transition-transform duration-200 ${on ? 'translate-x-5' : ''}`} />
-      </span>
-      <span className="font-semibold">
-        {c.annual} {discount > 0 && <span className="text-primary">{fmt(c.save, { n: discount })}</span>}
-      </span>
-    </button>
-  )
-}
-
 export function PlanCards({ to, label }: { to: string; label: string }) {
-  const [billing, setBilling] = useState<Billing>('month')
   const [hover, setHover] = useState<number | null>(null)
   const spotRef = useRef<HTMLDivElement>(null)
   useSpotlight(spotRef)
@@ -61,9 +39,6 @@ export function PlanCards({ to, label }: { to: string; label: string }) {
   const front = hover ?? MAIN_INDEX
   return (
     <div className="flex flex-col items-center">
-      <div className="mb-10">
-        <AnnualSwitch billing={billing} onChange={setBilling} />
-      </div>
       <div
         ref={spotRef}
         className="grid w-full max-w-[1180px] grid-cols-1 gap-4 md:grid-cols-3 md:items-stretch md:pt-5"
@@ -77,7 +52,6 @@ export function PlanCards({ to, label }: { to: string; label: string }) {
           <Reveal key={plan.id} delay={i * 110} className="flex">
             <Card
               plan={plan}
-              billing={billing}
               pos={i === front ? 'active' : i < front ? 'before' : 'after'}
               onEnter={() => setHover(i)}
               to={to}
@@ -93,14 +67,12 @@ export function PlanCards({ to, label }: { to: string; label: string }) {
 
 function Card({
   plan,
-  billing,
   pos,
   onEnter,
   to,
   label,
 }: {
   plan: PlanInfo
-  billing: Billing
   pos: 'active' | 'before' | 'after'
   onEnter: () => void
   to: string
@@ -113,7 +85,6 @@ function Card({
   const main = plan.id === MAIN_PLAN
   const active = pos === 'active'
   const paid = plan.price > 0
-  const year = billing === 'year' && plan.priceYear !== null
   return (
     <div
       data-pos={pos}
@@ -142,16 +113,14 @@ function Card({
           <div className="mt-6 flex items-center justify-center gap-x-2">
             {paid ? (
               <>
-                <RollNumber text={`$${monthlyPrice(plan, billing)}`} token={billing} className="num text-5xl font-bold tracking-tight" />
+                <span className="num text-5xl font-bold tracking-tight">${plan.price}</span>
                 <span className="text-sm leading-6 font-semibold tracking-wide text-muted">{p.month}</span>
               </>
             ) : (
               <span className="text-5xl font-bold tracking-tight">{p.free}</span>
             )}
           </div>
-          <p className="num mt-1 text-xs leading-5 text-muted">
-            {!paid ? c.forever : year ? fmt(c.billedYearly, { price: plan.priceYear! }) : c.billedMonthly}
-          </p>
+          {!paid && <p className="mt-1 text-xs leading-5 text-muted">{c.forever}</p>}
           {/* как в образце: кнопка сразу под списком, свободное место — внизу карточки */}
           <ul className="mt-5 flex flex-col gap-2">
             {features.map((f) => (
