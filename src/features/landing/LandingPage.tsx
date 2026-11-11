@@ -228,7 +228,10 @@ export function LandingPage() {
         <div className={`${wrap} flex flex-wrap items-center justify-between gap-4 text-sm text-muted`}>
           <Logo />
           <span>{l.footer}</span>
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-4">
+            <Link to="/privacy" className="hover:text-text">
+              {t.privacy.link}
+            </Link>
             <Link to="/login" className="hover:text-text">
               {l.login}
             </Link>

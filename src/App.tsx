@@ -46,6 +46,7 @@ const SettingsPage = lazyPage(() => import('@/features/settings/SettingsPage'), 
 const PlansPage = lazyPage(() => import('@/features/plans/PlansPage'), 'PlansPage')
 const CalendarPage = lazyPage(() => import('@/features/calendar/CalendarPage'), 'CalendarPage')
 const LandingPage = lazyPage(() => import('@/features/landing/LandingPage'), 'LandingPage')
+const PrivacyPage = lazyPage(() => import('@/features/privacy/PrivacyPage'), 'PrivacyPage')
 
 /** Главная: вошедшего — сразу в дашборд, остальным — страница о сервисе */
 function Home() {
@@ -60,6 +61,8 @@ const router = createBrowserRouter([
   { path: '/', element: <Home /> },
   // главная «как её видит гость» — открывается всегда, даже если уже вошёл (посмотреть / показать другим)
   { path: '/welcome', element: <LandingPage /> },
+  // «Данные и безопасность» — без входа
+  { path: '/privacy', element: <PrivacyPage /> },
   // Только для незалогиненных
   {
     element: <GuestOnly />,

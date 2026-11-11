@@ -352,3 +352,15 @@ test('тема: старый сохранённый выбор «тёмная» 
   await page.goto('')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
 })
+
+test('«Данные и безопасность»: открывается без входа, ссылки с главной и из регистрации', async ({ page, db }) => {
+  await fakeSupabase(page, db, { signedIn: false })
+  await page.goto('')
+  await expect(page.locator('meta[property="og:image"]')).toHaveAttribute('content', 'https://d9zeen.github.io/CryptoJournal-Analys/og.png')
+  await page.getByRole('contentinfo').getByRole('link', { name: 'Данные и безопасность' }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'Данные и безопасность' })).toBeVisible()
+  await expect(page.getByText(/Supabase Vault/)).toBeVisible()
+  await page.goto('register')
+  await page.getByRole('link', { name: 'Данные и безопасность' }).click()
+  await expect(page).toHaveURL(/\/privacy$/)
+})
