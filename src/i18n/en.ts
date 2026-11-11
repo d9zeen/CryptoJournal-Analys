@@ -467,6 +467,8 @@ export const en: Dict = {
     startingBalanceHint: 'Used to show drawdown in percent. Optional.',
     plan: 'Plan',
     plansLink: 'Compare plans',
+    /** placeholder in the plan card until payments exist */
+    payment: { title: 'Payment', soon: 'Plan payment will appear here. For now the owner activates plans.' },
     usageFree: 'Trades this month: {used} of {limit}',
     usagePro: 'Trades this month: {used} · unlimited',
     lists: {

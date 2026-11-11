@@ -202,6 +202,11 @@ function PlanCard() {
           <div className={`h-full ${pct >= 100 ? 'bg-loss' : 'bg-primary'}`} style={{ width: `${pct}%` }} />
         </div>
       )}
+      {/* заглушка: оплата на сайте появится здесь (отдельный PR); пока тариф подключает владелец */}
+      <div data-payment-placeholder className="rounded-lg border border-dashed border-border px-3 py-2.5 text-sm">
+        <div className="font-medium">{t.settings.payment.title}</div>
+        <p className="mt-0.5 text-muted">{t.settings.payment.soon}</p>
+      </div>
     </Card>
   )
 }
