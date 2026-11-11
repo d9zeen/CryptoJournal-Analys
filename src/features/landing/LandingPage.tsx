@@ -198,19 +198,12 @@ export function LandingPage() {
 
         {/* тарифы */}
         <section id="pricing" className={`${wrap} scroll-mt-20 py-16 sm:py-24`}>
-          <Reveal>
-            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">{l.pricingTitle}</h2>
-            <p className="mt-3 text-text/90">{l.pricingHint}</p>
+          {/* как в образце (Prism UI «Pricing»): заголовок и описание по центру */}
+          <Reveal className="mb-12 text-center">
+            <h2 className="text-4xl font-bold tracking-tight sm:text-5xl">{l.pricingTitle}</h2>
+            <p className="mt-4 text-lg text-muted">{l.pricingHint}</p>
           </Reveal>
-          <div className="mt-10">
-            <PlanCards
-              action={(plan) => (
-                <Link to="/register" className={`${plan.id === 'pro_plus' ? btnPrimary : btnSecondary} w-full !py-3`}>
-                  {l.pick}
-                </Link>
-              )}
-            />
-          </div>
+          <PlanCards to="/register" label={l.pick} />
         </section>
 
         {/* вопросы */}

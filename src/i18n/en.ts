@@ -323,6 +323,14 @@ export const en: Dict = {
     yes: 'yes',
     no: 'no',
     billing: { label: 'Billing', month: 'Monthly', year: 'Yearly', discount: '−{n}%' },
+    cards: {
+      forever: 'free forever',
+      desc: {
+        free: 'Try the journal: exchange files and manual trades.',
+        pro: 'For traders on one exchange.',
+        pro_plus: 'Fully automatic: several exchanges, wallets and Polymarket.',
+      },
+    },
     perYear: '${price} per year',
     perYearHint: 'billed yearly',
     features: {
@@ -867,7 +875,7 @@ export const en: Dict = {
       },
     },
     pricingTitle: 'Pricing',
-    pricingHint: 'New users get Pro Plus free for 7 days. Yearly billing is 20% cheaper.',
+    pricingHint: 'New users get Pro Plus free for 7 days.',
     faq: {
       title: 'FAQ',
       items: {

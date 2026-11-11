@@ -549,3 +549,24 @@ test('кнопка «Сохранить сделку»: ошибка — кно�
   await expect(page.locator('button[data-state]')).toHaveAttribute('data-state', 'idle')
   await expect(page).toHaveURL(/\/trades\/new$/)
 })
+
+test('тарифы на главной: вперёд выходит карточка под мышкой, без мышки — Pro Plus', async ({ page, db, isMobile }) => {
+  test.skip(isMobile, 'на телефоне карточки друг под другом, без наведения')
+  await fakeSupabase(page, db, { signedIn: false })
+  await page.goto('')
+  const card = (id: string) => page.locator(`[data-plan="${id}"]`)
+  await card('pro_plus').scrollIntoViewIfNeeded()
+  await expect(card('pro_plus')).toHaveAttribute('data-pos', 'active')
+  await expect(card('free')).toHaveAttribute('data-pos', 'before')
+  await card('free').hover()
+  await expect(card('free')).toHaveAttribute('data-pos', 'active')
+  await expect(card('pro')).toHaveAttribute('data-pos', 'after')
+  await expect(card('pro_plus')).toHaveAttribute('data-pos', 'after')
+  // у карточки впереди — главная кнопка
+  await expect(card('free').getByRole('link')).toHaveClass(/bg-primary/)
+  await page.mouse.move(2, 2)
+  await expect(card('pro_plus')).toHaveAttribute('data-pos', 'active')
+  // оплаты за год пока нет: тумблера нет, цены — в месяц
+  await expect(page.getByRole('switch')).toHaveCount(0)
+  await expect(card('pro_plus')).toContainText('$15')
+})
