@@ -181,8 +181,8 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
                   disabled={form.marketType === 'spot'}
                   onChange={(v) => set('side', v)}
                   options={[
-                    { value: 'long', label: t.side.long, tone: 'profit' },
-                    { value: 'short', label: t.side.short, tone: 'loss' },
+                    { value: 'long', label: t.side.long },
+                    { value: 'short', label: t.side.short },
                   ]}
                 />
                 {form.marketType === 'spot' && <p className="text-xs text-muted">{t.tradeForm.spotLongOnly}</p>}

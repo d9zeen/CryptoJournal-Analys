@@ -69,8 +69,8 @@ export function PaletteStrip() {
                 </svg>
               )}
               <span className={`flex gap-1 ${locked ? 'opacity-45' : ''}`}>
-                <span className="num flex size-6 items-center justify-center rounded bg-profit/15 text-[11px] font-bold text-profit">W</span>
-                <span className="num flex size-6 items-center justify-center rounded bg-loss/15 text-[11px] font-bold text-loss">L</span>
+                <span className="num flex size-6 items-center justify-center rounded bg-profit/15 text-xs font-bold text-profit">W</span>
+                <span className="num flex size-6 items-center justify-center rounded bg-loss/15 text-xs font-bold text-loss">L</span>
               </span>
             </button>
           )

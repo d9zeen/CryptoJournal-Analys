@@ -11,7 +11,7 @@ import { useAuth } from '@/features/auth/AuthProvider'
 import { KpiRow } from '@/features/dashboard/Widgets'
 import { formatPnl, pnlClass } from '@/lib/format'
 import { Reveal } from './Reveal'
-import { Rich } from './Rich'
+import { SideBadge } from '@/components/SideBadge'
 import { PlanCards } from './PlanCards'
 import { HeroCandles } from './HeroCandles'
 import { DEMO_FEATURED, demoAccount } from './demo'
@@ -114,7 +114,7 @@ export function LandingPage() {
             </h1>
             <Reveal delay={550}>
               <p className="mt-4 max-w-xl text-lg leading-snug text-balance text-text/75 sm:text-xl">
-                <Rich text={l.subtitle} />
+                {l.subtitle}
               </p>
             </Reveal>
             <Reveal delay={680} className="mt-8 flex flex-wrap items-center gap-3">
@@ -166,42 +166,22 @@ export function LandingPage() {
           </Reveal>
         </section>
 
-        {/* возможности: строки «текст — картинка», через одну меняются местами */}
+        {/* возможности: путь одной сделки — сделка → «Разбор» → календарь (на широком экране в один ряд) */}
         <section id="features" className={`${wrap} scroll-mt-20 py-16 sm:py-24`}>
           <Reveal as="h2" className="text-3xl font-bold tracking-tight sm:text-4xl">
-            {l.features.title}
+            {l.path.title}
           </Reveal>
-          <div className="mt-12 grid gap-16 sm:gap-24">
-            <Feature title={l.features.sync.title} text={l.features.sync.text}>
-              <SyncVisual />
-            </Feature>
-            <Feature title={l.features.leaks.title} text={l.features.leaks.text} flip>
-              <LeaksVisual />
-            </Feature>
-            <Feature title={l.features.calendar.title} text={l.features.calendar.text}>
+          <ol className="mt-10 grid gap-x-6 gap-y-10 rounded-xl border border-border bg-surface/40 p-4 sm:p-6 lg:grid-cols-3">
+            <PathStep n={1} text={l.path.trade.text}>
+              <TradeVisual />
+            </PathStep>
+            <PathStep n={2} text={l.path.analysis.text}>
+              <AnalysisVisual />
+            </PathStep>
+            <PathStep n={3} text={l.path.calendar.text}>
               <CalendarVisual trades={demo.trades} mark={`demo-${DEMO_FEATURED.index}`} />
-            </Feature>
-          </div>
-        </section>
-
-        {/* шаги */}
-        <section className="border-t border-border bg-surface/40 py-16 sm:py-20">
-          <div className={wrap}>
-            <Reveal as="h2" className="text-3xl font-bold tracking-tight sm:text-4xl">
-              {l.steps.title}
-            </Reveal>
-            <ol className="mt-10 grid gap-8 md:grid-cols-3">
-              {(['a', 'b', 'c'] as const).map((k, i) => (
-                <Reveal as="li" key={k} delay={i * 90} className="border-t-2 border-primary pt-5">
-                  <div className="num text-sm font-semibold text-primary">0{i + 1}</div>
-                  <h3 className="mt-2 text-lg font-semibold">{l.steps[k].title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-text/75">
-                    <Rich text={l.steps[k].text} />
-                  </p>
-                </Reveal>
-              ))}
-            </ol>
-          </div>
+            </PathStep>
+          </ol>
         </section>
 
         {/* тарифы */}
@@ -262,75 +242,66 @@ export function LandingPage() {
   )
 }
 
-function Feature({ title, text, flip = false, children }: { title: string; text: string; flip?: boolean; children: React.ReactNode }) {
+function PathStep({ n, text, children }: { n: number; text: string; children: React.ReactNode }) {
   return (
-    <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-16">
-      <Reveal className={flip ? 'lg:order-2' : ''}>
-        <h3 className="text-2xl font-bold tracking-tight">{title}</h3>
-        <p className="mt-3 max-w-lg leading-relaxed text-text/75">
-          <Rich text={text} />
-        </p>
-      </Reveal>
-      <Reveal delay={90}>{children}</Reveal>
-    </div>
+    <Reveal as="li" delay={(n - 1) * 90} className="flex min-w-0 flex-col gap-3">
+      <p className="text-sm leading-snug">
+        <span className="num mr-2 text-muted">{n}.</span>
+        {text}
+      </p>
+      {children}
+    </Reveal>
   )
 }
 
 /* ---------- маленькие «скриншоты» из интерфейса ---------- */
 
-function SyncVisual() {
+function TradeVisual() {
   const t = useT()
-  const f = t.landing.features.sync
-  const rows: [string, number][] = [
-    [f.rows.a, 248.4],
-    [f.rows.b, -61.2],
-    [f.rows.c, 119.75],
-  ]
+  const p = t.landing.path.trade
   return (
     <div className="rounded-xl border border-border bg-surface p-4">
-      <div className="flex items-center justify-between gap-3 text-xs text-muted">
-        <span className="font-semibold text-text">Bybit</span>
-        <span className="flex items-center gap-1.5">
-          <i className="size-1.5 rounded-full bg-profit" />
-          {f.synced}
-        </span>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="font-semibold">{DEMO_FEATURED.symbol}</span>
+          <SideBadge side={DEMO_FEATURED.side} />
+        </div>
+        <span className={`num font-semibold ${pnlClass(DEMO_FEATURED.pnl)}`}>{formatPnl(DEMO_FEATURED.pnl)}</span>
       </div>
-      <ul className="mt-3 divide-y divide-border">
-        {rows.map(([name, pnl]) => (
-          <li key={name} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-            <span>{name}</span>
-            <span className={`num font-semibold ${pnlClass(pnl)}`}>{formatPnl(pnl)}</span>
-          </li>
-        ))}
-      </ul>
+      <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 border-t border-border pt-3 text-sm">
+        <dt className="text-muted">{p.mistake}</dt>
+        <dd>{p.mistakeValue}</dd>
+        <dt className="text-muted">{p.emotion}</dt>
+        <dd>{p.emotionValue}</dd>
+      </dl>
     </div>
   )
 }
 
-function LeaksVisual() {
+function AnalysisVisual() {
   const t = useT()
-  const f = t.landing.features.leaks
-  const rows: [string, number, number][] = [
-    [f.rows.a, 34, 1840.5],
-    [f.rows.b, 21, 412.3],
-    [f.rows.c, 9, -906.8],
+  const f = t.landing.path.analysis
+  const rows: [string, number, number, boolean][] = [
+    [f.rows.a, 12, -214.4, false],
+    [f.rows.b, 9, -906.8, true],
+    [f.rows.c, 5, -188.1, false],
   ]
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-surface">
       <table className="w-full text-sm">
         <thead className="text-xs text-muted">
           <tr>
-            <th className="px-4 py-3 text-left font-normal">{f.cols.name}</th>
-            <th className="px-4 py-3 text-right font-normal">{f.cols.trades}</th>
-            <th className="px-4 py-3 text-right font-normal">{f.cols.pnl}</th>
+            <th className="px-3 py-2.5 text-left font-normal">{f.cols.name}</th>
+            <th className="px-3 py-2.5 text-right font-normal">{f.cols.trades}</th>
+            <th className="px-3 py-2.5 text-right font-normal">{f.cols.pnl}</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map(([name, n, pnl]) => (
-            <tr key={name} className={`border-t border-border ${pnl < 0 ? 'bg-loss/8' : ''}`}>
-              <td className="px-4 py-3">{name}</td>
-              <td className="num px-4 py-3 text-right text-muted">{n}</td>
-              <td className={`num px-4 py-3 text-right font-semibold ${pnlClass(pnl)}`}>{formatPnl(pnl)}</td>
+          {rows.map(([name, n, pnl, hit]) => (
+            <tr key={name} className={`border-t border-border ${hit ? 'bg-surface-2 font-semibold' : ''}`}>
+              <td className="px-3 py-2.5">{name}</td>
+              <td className="num px-3 py-2.5 text-right text-muted">{n}</td>
+              <td className={`num px-3 py-2.5 text-right ${pnlClass(pnl)}`}>{formatPnl(pnl)}</td>
             </tr>
           ))}
         </tbody>
@@ -338,7 +309,6 @@ function LeaksVisual() {
     </div>
   )
 }
-
 
 function CalendarVisual({ trades, mark }: { trades: ClosedTrade[]; mark?: string }) {
   const t = useT()

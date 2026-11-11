@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { fmt, useT } from '@/i18n'
+import { SideBadge } from '@/components/SideBadge'
 import { useTrades } from './api'
 import { applyFilters, EMPTY_FILTERS, hasActiveFilters, type TradeFilters } from './filters'
 import { useList, useUsage } from '@/features/settings/api'
@@ -205,15 +206,6 @@ export function TradesPage() {
         </>
       )}
     </div>
-  )
-}
-
-function SideBadge({ side }: { side: 'long' | 'short' }) {
-  const t = useT()
-  return (
-    <span className={`rounded px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide ${side === 'long' ? 'bg-profit/15 text-profit' : 'bg-loss/15 text-loss'}`}>
-      {t.side[side]}
-    </span>
   )
 }
 

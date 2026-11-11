@@ -80,24 +80,11 @@ export function HalfGauge({ a, b, live }: { a: number; b: number; live?: boolean
   )
 }
 
-/** Кольцо: прибыль и убытки по кругу */
-export function Ring({ a, b, live }: { a: number; b: number; live?: boolean }) {
-  const shown = useShown() || !!live
-  const grow = live ? '' : growCls
-  const sum = a + b
-  const gap = a > 0 && b > 0 ? 4 : 0
-  const pa = sum > 0 ? (a / sum) * (100 - gap * 2) : 0
-  const pb = sum > 0 ? (b / sum) * (100 - gap * 2) : 0
-  const c = { cx: 26, cy: 26, r: 21, pathLength: 100, fill: 'none', strokeWidth: 7 }
-  return (
-    <svg viewBox="0 0 52 52" className="size-[44px] shrink-0 -rotate-90 sm:size-[52px]" aria-hidden>
-      <circle {...c} className="stroke-surface-2" />
-      {pa > 0 && <circle {...c} className={`${TONE.aStroke} ${grow}`} strokeLinecap="round" strokeDasharray={`${shown ? pa : 0} 100`} />}
-      {pb > 0 && (
-        <circle {...c} className={`${TONE.bStroke} ${grow}`} strokeLinecap="round" strokeDasharray={`${shown ? pb : 0} 100`} strokeDashoffset={-(pa + gap)} />
-      )}
-    </svg>
-  )
+/** Подпись под profit factor: «на 1 $ убытка — 3,10 $ прибыли» (нет убытков или прибылей — без подписи) */
+export function PfCaption({ pf }: { pf: number | null }) {
+  const k = useT().dashboard.kpi
+  if (pf === null || !Number.isFinite(pf)) return null
+  return <p className="text-xs text-muted">{fmt(k.perDollar, { v: formatNumber(pf, 2) })}</p>
 }
 
 /** Две полоски: средний выигрыш и средний проигрыш, длина — относительно большего */
@@ -171,10 +158,8 @@ export function KpiRow({ summary: s, score, startingBalance, equity = [] }: { su
       </Widget>
 
       <Widget label={k.profitFactor} hint={k.hints.profitFactor}>
-        <div className="flex items-center justify-between gap-2">
-          <div className={big}>{formatRatio(s.profitFactor)}</div>
-          <Ring a={grossWin} b={grossLoss} />
-        </div>
+        <div className={big}>{formatRatio(s.profitFactor)}</div>
+        <PfCaption pf={s.profitFactor} />
         <div className="num flex justify-between gap-2 text-xs">
           <span className={TONE.aText}>{formatUsd(grossWin)}</span>
           <span className={TONE.bText}>−{formatUsd(grossLoss)}</span>

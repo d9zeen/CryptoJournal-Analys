@@ -1,3 +1,4 @@
+import { SideBadge } from '@/components/SideBadge'
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { Link, useLocation } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
@@ -159,12 +160,14 @@ export function ImportPage() {
       {result && <ResultAlert result={result} />}
       {run.error && <Alert tone="error">{dbErrorMessage(run.error, t)}</Alert>}
 
+      {/* Сверху во всю ширину — подключённые биржи; ниже — загрузка файла и история */}
+      <div id="connections" className="scroll-mt-20">
+        <ConnectionsCard />
+      </div>
+
       <div className="grid gap-4 xl:grid-cols-[400px_minmax(0,1fr)] xl:items-start">
-        {/* Слева: подключения бирж, файл, подсказки, история */}
+        {/* Слева: файл, где его взять, история */}
         <div className="flex flex-col gap-4">
-          <div id="connections" className="scroll-mt-20">
-            <ConnectionsCard />
-          </div>
           <Card className="flex flex-col gap-4 !p-4">
             <label
               className={`flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-dashed px-4 py-10 text-center transition-colors ${dragging ? 'border-primary bg-primary/10' : 'border-border hover:border-muted'}`}
@@ -212,7 +215,7 @@ export function ImportPage() {
             )}
           </Card>
 
-          <details className="group rounded-xl border border-border bg-surface p-4">
+          <details open className="group rounded-xl border border-border bg-surface p-4">
             <summary className="cursor-pointer list-none font-medium marker:hidden">
               <span className="text-muted group-open:hidden">▸ </span>
               <span className="hidden text-muted group-open:inline">▾ </span>
@@ -237,17 +240,7 @@ export function ImportPage() {
         <div className="flex min-w-0 flex-col gap-4">
           {!file && (
             <Card className="hidden !p-6 xl:block">
-              <h2 className="font-semibold">{t.import.how.title}</h2>
-              <ol className="mt-5 grid gap-6 2xl:grid-cols-3">
-                {(['a', 'b', 'c'] as const).map((k, i) => (
-                  <li key={k} className="border-t-2 border-primary/70 pt-4">
-                    <div className="num text-sm font-semibold text-primary">0{i + 1}</div>
-                    <h3 className="mt-1.5 font-medium">{t.import.how[k].title}</h3>
-                    <p className="mt-1.5 text-sm leading-relaxed text-muted">{t.import.how[k].text}</p>
-                  </li>
-                ))}
-              </ol>
-              <p className="mt-6 text-sm text-muted">{t.import.previewEmpty}</p>
+              <p className="text-sm text-muted">{t.import.previewEmpty}</p>
             </Card>
           )}
 
@@ -324,7 +317,7 @@ export function ImportPage() {
                                 {r.trade ? (
                                   <>
                                     <span className="font-medium">{r.trade.title ?? r.trade.symbol}</span>{' '}
-                                    <span className={r.trade.side === 'long' ? 'text-profit' : 'text-loss'}>{t.side[r.trade.side]}</span>
+                                    <SideBadge side={r.trade.side} />
                                     <div className="text-xs text-muted md:hidden">{formatDateTime(r.trade.exit_at)}</div>
                                   </>
                                 ) : (

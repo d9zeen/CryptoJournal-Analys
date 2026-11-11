@@ -136,7 +136,7 @@ export function AppLayout() {
             key={item.to}
             to={item.to}
             viewTransition
-            className={({ isActive }) => `flex min-w-0 flex-col items-center gap-1 py-2 text-[10px] transition-colors ${isActive ? 'text-primary' : 'text-muted'}`}
+            className={({ isActive }) => `flex min-w-0 flex-col items-center gap-1 py-2 text-xs transition-colors ${isActive ? 'text-primary' : 'text-muted'}`}
           >
             <Icon d={item.icon} />
             <span className="max-w-full truncate px-0.5">{item.label}</span>
@@ -160,7 +160,7 @@ function PlanCard() {
         <span className="font-semibold text-text">{t.plans.names[usage.plan]}</span>
         <span className="text-primary">{t.plans.title}</span>
       </div>
-      <div className="mt-2 text-[11px] text-muted">
+      <div className="mt-2 text-xs text-muted">
         {limit ? fmt(t.settings.usageFree, { used: usage.trades_created, limit }) : fmt(t.settings.usagePro, { used: usage.trades_created })}
       </div>
       {limit && (

@@ -59,10 +59,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
     <div className="rise mx-auto grid w-full max-w-[2000px] gap-4 xl:min-h-[max(680px,86dvh)] xl:grid-cols-[minmax(0,1fr)_360px]">
       <section className="flex flex-col rounded-lg border border-border bg-surface p-4 sm:p-5 xl:h-full">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-baseline gap-3">
-            <h1 className="text-lg font-semibold">{c.title}</h1>
-            {m.count > 0 && <span className={`num text-sm font-semibold ${m.pnl < 0 ? 'text-down' : 'text-muted'}`}>{formatPnl(m.pnl)}</span>}
-          </div>
+          <h1 className="text-lg font-semibold">{c.title}</h1>
           <div className="flex items-center gap-1 rounded-lg border border-border bg-surface-2/60 p-1">
             <NavBtn dir={-1} label={c.prev} onClick={() => shift(-1)} />
             <span className="min-w-36 text-center text-sm font-semibold">{monthLabel(view.y, view.m)}</span>
@@ -104,7 +101,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
             {total.count > 0 ? (
               <>
                 <span className={`num truncate text-sm font-semibold ${total.pnl >= 0 ? 'text-text' : 'text-down'}`}>{formatPnl(total.pnl)}</span>
-                <span className="mt-0.5 truncate text-[11px] text-muted">{plural(total.count, c.tradesN)}</span>
+                <span className="mt-0.5 truncate text-xs text-muted">{plural(total.count, c.tradesN)}</span>
               </>
             ) : (
               <span className="text-xs text-muted">—</span>
@@ -147,7 +144,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
   function Day({ d }: { d: CalDay }) {
     // дни соседних месяцев — пустое место: ряд просто заканчивается на последнем дне месяца
     if (!d.inMonth) return <div aria-hidden className={wide ? 'min-h-24 xl:min-h-28' : 'min-h-14'} />
-    const title = d.count ? `${d.date}: ${formatPnl(d.pnl)} · ${plural(d.count, c.tradesN)} · ${formatPercent(d.wins / d.count, 0)}` : d.date
+    const title = d.count ? `${d.date}: ${formatPnl(d.pnl)} · ${plural(d.count, c.tradesN)}` : d.date
     const style = d.inMonth ? heat(d.pnl) : undefined
     const base = !d.inMonth ? 'cal-hatch border-transparent' : style ? '' : 'border-border bg-surface-2/40'
     return (
@@ -157,7 +154,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
         className={`relative flex flex-col rounded-md border text-center transition-colors ${wide ? 'min-h-24 justify-center px-1 py-2 xl:min-h-28' : 'min-h-14 justify-start px-0.5 pt-1 pb-1.5'} ${base}`}
       >
         <span
-          className={`flex items-center justify-center rounded-full ${wide ? 'absolute top-1.5 right-1.5 size-5 text-[11px]' : 'mx-auto size-5 text-[10px]'} ${
+          className={`flex items-center justify-center rounded-full ${wide ? 'absolute top-1.5 right-1.5 size-5 text-xs' : 'mx-auto size-5 text-xs'} ${
             d.date === today ? 'bg-primary font-semibold text-on-primary' : d.inMonth ? 'text-muted' : 'text-muted/50'
           }`}
         >
@@ -165,15 +162,10 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
         </span>
         {d.count > 0 && (
           <>
-            <span className={`num font-semibold ${wide ? 'mt-2 truncate text-[15px]' : 'mt-1 text-[10px] leading-tight tracking-tighter'} ${d.inMonth ? 'text-text' : 'text-muted/70'}`}>
+            <span className={`num font-semibold ${wide ? 'mt-2 truncate text-[15px]' : 'mt-1 text-xs leading-tight tracking-tighter'} ${d.inMonth ? 'text-text' : 'text-muted/70'}`}>
               {wide ? formatPnl(d.pnl) : compactPnl(d.pnl)}
             </span>
-            {wide && (
-              <span className={`mt-0.5 truncate text-[11px] ${d.inMonth ? 'text-text/70' : 'text-muted/60'}`}>
-                {plural(d.count, c.tradesN)}
-                <span className="hidden min-[1600px]:inline"> · {formatPercent(d.wins / d.count, 0)}</span>
-              </span>
-            )}
+            {wide && <span className={`mt-0.5 truncate text-xs ${d.inMonth ? 'text-text/70' : 'text-muted/60'}`}>{plural(d.count, c.tradesN)}</span>}
           </>
         )}
       </div>
@@ -191,24 +183,11 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
     const dayShare = sum.upDays + sum.downDays ? sum.upDays / (sum.upDays + sum.downDays) : 0
     return (
       <aside className="flex flex-col gap-3 xl:h-full">
-        <section className="rounded-lg border border-border bg-surface p-4">
-          {/* «Результат» и цифра — соседи: так их читают экранные читалки и находит тест */}
-          <div>
-            <div className="text-xs text-muted">{c.result}</div>
-            <div className="num mt-1 text-3xl font-semibold">{m.count ? formatPnl(m.pnl) : '—'}</div>
-          </div>
-          <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
-            <div className="rounded-md bg-surface-2/50 px-3 py-2">
-              <dt className="text-xs text-muted">{c.trades}</dt>
-              <dd className="num mt-0.5 font-semibold">{m.count}</dd>
-            </div>
-            <div className="rounded-md bg-surface-2/50 px-3 py-2">
-              <dt className="text-xs text-muted">{c.winrate}</dt>
-              <dd className="num mt-0.5 font-semibold">{m.count ? formatPercent(m.wins / m.count, 0) : '—'}</dd>
-            </div>
-          </dl>
-          {m.count === 0 && <p className="mt-3 text-sm text-muted">{c.empty}</p>}
-        </section>
+        {m.count === 0 && (
+          <section className="rounded-lg border border-border bg-surface p-4">
+            <p className="text-sm text-muted">{c.empty}</p>
+          </section>
+        )}
 
         {m.count > 0 && (
           <>

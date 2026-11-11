@@ -133,7 +133,7 @@ export function DateRangePicker({ value, onApply, onClose, anchor }: Props) {
                   </span>
                   {mi === months.length - 1 ? <NavBtn dir={1} label={p.nextMonth} onClick={() => shift(1)} /> : <span className="size-8" />}
                 </div>
-                <div className="grid grid-cols-7 text-center text-[11px] text-muted">
+                <div className="grid grid-cols-7 text-center text-xs text-muted">
                   {p.weekdaysShort.map((w) => (
                     <span key={w} className="py-1">
                       {w}

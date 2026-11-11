@@ -141,7 +141,7 @@ export function AdminPage() {
   const who = (u: AdminUser) => (
     <div className="min-w-0">
       <div className="truncate font-medium">{u.email ?? u.id}</div>
-      <div className="mt-0.5 flex gap-1.5 text-[11px]">
+      <div className="mt-0.5 flex gap-1.5 text-xs">
         {u.id === user?.id && <span className="text-accent">{a.you}</span>}
         {u.is_admin && <span className="text-primary">{a.adminBadge}</span>}
       </div>
