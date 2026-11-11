@@ -50,3 +50,18 @@ test('календарь: только недели месяца и строка
   await expect(total.getByText('+120,00 $')).toBeVisible()
   await expect(total.getByText('−80,00 $')).toBeVisible()
 })
+
+test('под календарём — выбор палитры: бесплатная сразу перекрашивает и сохраняется, платные на Basic под замком', async ({ page, db }) => {
+  await fakeSupabase(page, db)
+  await page.goto('calendar')
+  const strip = page.locator('[data-shot="calendar"] [data-shot="palette"]')
+  await expect(strip.getByText('Цвета плюса и минуса')).toBeVisible()
+  await expect(strip.getByRole('link', { name: 'Ещё 5 палитр — в Pro' })).toBeVisible()
+  await expect(strip.getByRole('radio', { name: 'Палитра 4' })).toBeDisabled()
+  const patch = page.waitForRequest((r) => r.url().includes('/rest/v1/profiles') && r.method() === 'PATCH')
+  await strip.getByRole('radio', { name: 'Палитра 2' }).click()
+  expect((await patch).postDataJSON()).toMatchObject({ palette: 'teal_salmon' })
+  await expect(page.locator('html')).toHaveAttribute('data-palette', 'teal_salmon')
+  await expect.poll(() => db.palette).toBe('teal_salmon')
+  await expect(strip.getByRole('radio', { name: 'Палитра 2' })).toHaveAttribute('aria-checked', 'true')
+})

@@ -41,7 +41,7 @@ src/
                        text-profit, text-loss, font-display (заголовки), num (цифры моно), rise (появление, --i), card-lift.
                        Без пульсаций и кричащих градиентов. Разрешены только: мягкая подсветка под курсором (spotlight) и отблеск заготовок при загрузке (skeleton) — сайт не должен выглядеть «сгенерированным». Светлая тема — :root[data-theme='light'] в том же файле
   lib/theme.ts         светлая (по умолчанию) / тёмная тема (localStorage; до загрузки приложения — public/theme-init.js, без вспышки), useTheme / setTheme; кнопка — components/ThemeToggle.tsx
-  lib/palette.ts       палитра прибыли / убытка (по умолчанию classic — зелёный / красный; classic, teal_salmon, sky_coral — всем, остальные 5 — Pro / Pro Plus, проверка и триггером 0015; выбор — полоска PaletteStrip в «Настройки → Оформление», features/palette):
+  lib/palette.ts       палитра прибыли / убытка (по умолчанию classic — зелёный / красный; classic, teal_salmon, sky_coral — всем, остальные 5 — Pro / Pro Plus, проверка и триггером 0015; выбор — полоска PaletteStrip под календарём и в «Настройки → Оформление», features/palette):
                        data-palette на <html>, цвета в theme.css; --color-up / --color-down = profit / loss
   lib/motion.ts        хуки анимаций (раздел «Анимации» ниже): prefersReducedMotion, useCountUp, useShown, useTilt, useSpotlight, useShake, pause
   i18n/ru.ts, en.ts    ВСЕ тексты интерфейса на двух языках (en.ts типизирован Dict из ru.ts — ключи обязаны совпадать). Новый язык = ещё один файл + LANGS в lib/locale.ts
@@ -118,6 +118,10 @@ docs/SECURITY.md       вся защита (база, сайт, сборка) + 
 - «Уменьшить движение» — общий блок в theme.css; итоговое состояние задаётся в базовых стилях, анимация только «приводит» к нему.
 - Наклон (№2, useTilt) — только главная: карточки тарифов и превью дашборда. Подсветка под курсором (№3, useSpotlight) — ряд показателей,
   тарифы, «Путь одной сделки». Оба — только мышь `(hover: hover) and (pointer: fine)`.
+- Подсветка и блик — одно правило CSS на обе темы, разница только в токенах theme.css: `--spot-ring-r`, `--spot-ring-stops` (на .spot-frame —
+  чтобы `--spot-rest` рамки Pro Plus бралась у карточки), `--spot-glow-r`, `--color-spot-glow(-mid)`, `--spot-glow-stops`,
+  `--sheen-r`, `--color-sheen`, `--sheen-end`, `--sheen-blend`. Светлая ярче тёмной (на светлом фоне иначе не видно): шире круг,
+  плотнее фиолетовый, белый блик в режиме soft-light (текст под ним остаётся читаемым). Тёмная — как в первой версии (11.11.2026).
 - Числа: AnimatedNumber — первый показ набегает, смена периода (rollKey) — прокрутка, новые сделки — плавный пересчёт.
   Ключ периода «на экране» берётся только когда пришли данные (useTrades с keepPreviousData, isPlaceholderData).
 - Новые сделки от синхронизации: `lib/arrivals.ts` (markSynced + useArrivals), не больше 10, не при импорте файла.
