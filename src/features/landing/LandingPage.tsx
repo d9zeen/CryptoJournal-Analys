@@ -71,7 +71,10 @@ export function LandingPage() {
           </nav>
           <div className="flex items-center gap-1 sm:gap-2">
             <LangSwitch />
-            <ThemeToggle />
+            {/* на самых узких телефонах (до 400px) кнопке темы не хватает места рядом с «Войти» */}
+            <span className="hidden min-[400px]:contents">
+              <ThemeToggle />
+            </span>
             {user ? (
               // уже вошёл (смотрит /welcome) — одна кнопка в дневник
               <Link to="/dashboard" className={`${btnPrimary} !px-3 !py-2`}>
@@ -79,7 +82,7 @@ export function LandingPage() {
               </Link>
             ) : (
               <>
-                <Link to="/login" className={`${btnSecondary} !px-3 !py-2`}>
+                <Link to="/login" className={`${btnSecondary} !px-3 !py-2 whitespace-nowrap`}>
                   {l.login}
                 </Link>
                 <span className="hidden sm:contents">

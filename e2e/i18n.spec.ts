@@ -17,29 +17,27 @@ test.describe('язык по умолчанию — английский', () =>
     await expect(page.getByRole('button', { name: 'Create account' })).toBeVisible()
   })
 
-  test('переключатель: русский на главной, выбор сохраняется после перезагрузки', async ({ page, db }) => {
+  test('переключатель EN | RU: русский на главной, выбор сохраняется после перезагрузки', async ({ page, db }) => {
     await fakeSupabase(page, db, { signedIn: false })
     await page.goto('')
-    await page.getByRole('button', { name: 'Language: English' }).click()
-    await page.getByRole('menuitemradio', { name: 'Русский' }).click()
+    const group = page.getByRole('radiogroup', { name: 'Language' })
+    await expect(group.getByRole('radio', { name: /^en$/i })).toHaveAttribute('aria-checked', 'true')
+    await group.getByRole('radio', { name: /^ru$/i }).click()
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Дневник сделок')
     await expect(page.locator('html')).toHaveAttribute('lang', 'ru')
     await page.reload()
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Дневник сделок')
-    await expect(page.locator('html')).toHaveAttribute('lang', 'ru')
-    // и обратно
-    await page.getByRole('button', { name: 'Язык: Русский' }).click()
-    await page.getByRole('menuitemradio', { name: 'English' }).click()
+    await expect(page.getByRole('radiogroup', { name: 'Язык' }).getByRole('radio', { name: /^ru$/i })).toHaveAttribute('aria-checked', 'true')
+    // и обратно — одним нажатием
+    await page.getByRole('radiogroup', { name: 'Язык' }).getByRole('radio', { name: /^en$/i }).click()
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Trading journal')
   })
 
-  test('меню закрывается по Esc', async ({ page, db }) => {
+  test('переключатель есть на входе', async ({ page, db }) => {
     await fakeSupabase(page, db, { signedIn: false })
     await page.goto('login')
-    await page.getByRole('button', { name: 'Language: English' }).click()
-    await expect(page.getByRole('menu')).toBeVisible()
-    await page.keyboard.press('Escape')
-    await expect(page.getByRole('menu')).toBeHidden()
+    await page.getByRole('radiogroup', { name: 'Language' }).getByRole('radio', { name: /^ru$/i }).click()
+    await expect(page.getByRole('heading', { name: 'Вход' })).toBeVisible()
   })
 })
 
@@ -58,6 +56,7 @@ test.describe('в дневнике', () => {
     await fakeSupabase(page, db)
     await page.goto('settings')
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
+    // в «Оформлении» — полные названия языков
     await page.getByRole('radio', { name: 'Русский' }).click()
     await expect(page.getByRole('heading', { name: 'Настройки' })).toBeVisible()
     await expect(page.locator('html')).toHaveAttribute('lang', 'ru')
