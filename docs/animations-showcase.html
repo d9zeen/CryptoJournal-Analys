@@ -1,0 +1,873 @@
+<!--
+  Образец анимаций для CryptoJournal (не часть сайта, в сборку не входит).
+  Открыть в браузере как файл. Номера совпадают с выбором владельца от 11.11.2026.
+  Владелец взял все, кроме №1 «3D-дашборд на главной».
+-->
+<title>Анимации CryptoJournal</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Manrope:wght@400;500;600;700&family=Unbounded:wght@500;600&display=swap">
+<style>
+/* Раскладка: витрина вариантов в две колонки (одна на телефоне); цвета и шрифты — как на сайте CryptoJournal (theme.css) */
+:root {
+  --bg: #efe9dc; --surface: #f8f4ea; --surface-2: #e6dfcf; --border: #d9d1bf;
+  --text: #1f1b14; --muted: #5a5346; --primary: #5b45e6; --on-primary: #ffffff;
+  --accent: #0b9f84; --up: #0a9b6a; --down: #dc2f4a; --warn: #b0700a;
+  --shadow: 0 10px 30px -18px rgb(31 27 20 / .35);
+  --font-sans: 'Manrope', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  --font-display: 'Unbounded', 'Manrope', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --ease: cubic-bezier(.2, .7, .2, 1);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17181b; --surface: #1f2024; --surface-2: #27292e; --border: #33353b;
+    --text: #e8e6e1; --muted: #c0bdb6; --primary: #8d78ff; --on-primary: #ffffff;
+    --accent: #4ee6c2; --up: #4dffb0; --down: #f6465d; --warn: #f4b64a;
+    --shadow: 0 10px 30px -16px rgb(0 0 0 / .7);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #17181b; --surface: #1f2024; --surface-2: #27292e; --border: #33353b;
+  --text: #e8e6e1; --muted: #c0bdb6; --primary: #8d78ff; --on-primary: #ffffff;
+  --accent: #4ee6c2; --up: #4dffb0; --down: #f6465d; --warn: #f4b64a;
+  --shadow: 0 10px 30px -16px rgb(0 0 0 / .7);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--text); font-family: var(--font-sans); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 0;
+}
+.num { font-family: var(--font-sans); font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+.wrap { max-width: 1320px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+header.top { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: flex-end; justify-content: space-between; }
+h1 { font-family: var(--font-display); font-weight: 600; font-size: clamp(22px, 3.2vw, 32px); line-height: 1.15; margin: 0; text-wrap: balance; }
+.lead { margin: 8px 0 0; color: var(--muted); max-width: 62ch; }
+.tools { display: flex; gap: 8px; flex-wrap: wrap; }
+button { font: inherit; color: inherit; cursor: pointer; }
+.btn { border: 1px solid var(--border); background: var(--surface); border-radius: 10px; padding: 8px 14px; font-weight: 600; font-size: 14px; transition: background .15s, transform .1s; }
+.btn:hover { background: var(--surface-2); }
+.btn:active { transform: scale(.97); }
+.btn.primary { background: var(--primary); color: var(--on-primary); border-color: transparent; }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.notice { border: 1px solid var(--border); background: var(--surface); border-radius: 12px; padding: 12px 14px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 14px; }
+
+.grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+@media (min-width: 980px) { .grid { grid-template-columns: 1fr 1fr; } .grid > .variant:last-child:nth-child(odd) { grid-column: 1 / -1; } }
+.variant { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.variant.picked { border-color: var(--primary); }
+.vhead { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.vnum { font-family: var(--font-mono); color: var(--primary); font-weight: 600; font-size: 14px; }
+.vhead h2 { font-size: 17px; font-weight: 700; margin: 0; }
+.tag { margin-left: auto; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
+.tag.rec { color: var(--up); background: color-mix(in srgb, var(--up) 12%, var(--surface)); }
+.tag.taste { color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, var(--surface)); }
+.tag.care { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, var(--surface)); }
+.tag.have { color: var(--muted); }
+.vdesc { margin: 0; color: var(--muted); font-size: 14px; }
+.stage { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 16px; min-height: 230px; position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: center; gap: 12px; }
+.vfoot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.vfoot .where { flex: 1 1 220px; }
+.pick { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--text); cursor: pointer; user-select: none; }
+.pick input { width: 17px; height: 17px; accent-color: var(--primary); }
+
+/* мини-карточки как на дашборде */
+.kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media (min-width: 560px) { .kpis.four { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px; min-width: 0; }
+.kpi .l { font-size: 12px; color: var(--muted); }
+.kpi .v { font-size: 20px; font-weight: 600; margin-top: 4px; white-space: nowrap; }
+.up { color: var(--up); } .down { color: var(--down); }
+
+/* 1. каскад */
+@keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.go .rise { animation: rise .55s var(--ease) both; animation-delay: calc(var(--i, 0) * 80ms); }
+
+/* 2. счёт и шкала */
+.gaugeRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.gauge path { fill: none; stroke-width: 9; stroke-linecap: round; }
+.gauge .track { stroke: var(--surface-2); }
+.gauge .fill { stroke: var(--primary); }
+.chips { display: flex; gap: 6px; margin-top: 6px; font-size: 12px; }
+.chips span { padding: 1px 7px; border-radius: 6px; background: var(--surface-2); }
+.chips .w { color: var(--primary); background: color-mix(in srgb, var(--primary) 14%, var(--surface)); }
+
+/* 3. подсветка под курсором */
+.spotGroup { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.spot { --x: -300px; --y: -300px; border-radius: 13px; padding: 1px; background: radial-gradient(180px circle at var(--x) var(--y), var(--primary), var(--border) 70%); }
+.spot .kpi { position: relative; border: 0; overflow: hidden; height: 100%; }
+.spot .kpi::before { content: ""; position: absolute; inset: 0; background: radial-gradient(220px circle at var(--x) var(--y), color-mix(in srgb, var(--primary) 13%, transparent), transparent 70%); pointer-events: none; }
+.spot .kpi > * { position: relative; }
+@media (max-width: 520px) { .spotGroup { grid-template-columns: 1fr; } }
+
+/* 4. 3D-наклон */
+.tiltWrap { perspective: 800px; display: flex; justify-content: center; }
+.tilt { width: min(340px, 100%); transform-style: preserve-3d; transition: transform .5s var(--ease), box-shadow .3s; position: relative; box-shadow: var(--shadow); }
+.tilt.active { transition: transform .08s linear; }
+.tilt .sheen { position: absolute; inset: 0; border-radius: 12px; pointer-events: none; background: radial-gradient(260px circle at var(--sx, 50%) var(--sy, 0%), color-mix(in srgb, var(--text) 8%, transparent), transparent 60%); opacity: 0; transition: opacity .3s; }
+.tilt.active .sheen { opacity: 1; }
+.tilt .inner { transform: translateZ(28px); }
+.spark { width: 100%; height: 46px; margin-top: 8px; display: block; }
+
+/* графики */
+svg text { fill: var(--muted); font-family: var(--font-sans); font-size: 10px; font-variant-numeric: tabular-nums; }
+.grid-line { stroke: var(--border); stroke-width: 1; }
+.zero { stroke: var(--muted); stroke-opacity: .5; stroke-dasharray: 4 4; }
+.eqLine { fill: none; stroke: var(--primary); stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; }
+.eqArea { fill: color-mix(in srgb, var(--primary) 16%, transparent); }
+.chart { width: 100%; height: auto; display: block; overflow: visible; }
+
+/* 5. рисование кривой */
+.go .eqArea.draw { animation: fadeIn .7s ease .9s both; }
+.go .endDot { animation: pop .4s var(--ease) 1.25s both; transform-box: fill-box; transform-origin: center; }
+.go .endLbl { animation: fadeIn .4s ease 1.35s both; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pop { from { transform: scale(0); } 70% { transform: scale(1.4); } to { transform: scale(1); } }
+.endDot { fill: var(--primary); }
+.endLbl { fill: var(--text); font-weight: 600; font-size: 11px; }
+
+/* 6. наведение на график */
+.hoverBox { position: relative; touch-action: pan-y; }
+.cross { stroke: var(--muted); stroke-opacity: .55; stroke-width: 1; }
+.tip { position: absolute; top: 0; left: 0; pointer-events: none; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px; font-size: 12px; box-shadow: var(--shadow); white-space: nowrap; transition: opacity .15s; opacity: 0; }
+.tip b { display: block; font-size: 13px; }
+.bar { transition: opacity .15s; }
+.bars.hovering .bar { opacity: .3; }
+.bars.hovering .bar.on { opacity: 1; }
+
+/* 7. календарь */
+.cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
+.cal .wd { font-size: 11px; color: var(--muted); text-align: center; }
+.cell { aspect-ratio: 1.25; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); font-size: 11px; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: transform .2s var(--ease), border-color .2s, box-shadow .2s; min-width: 0; }
+.cell .d { font-size: 10px; color: var(--muted); align-self: flex-end; margin: -2px 5px 0 0; line-height: 1; }
+.cell.pos { background: color-mix(in srgb, var(--up) 16%, var(--surface)); border-color: color-mix(in srgb, var(--up) 35%, var(--border)); }
+.cell.neg { background: color-mix(in srgb, var(--down) 14%, var(--surface)); border-color: color-mix(in srgb, var(--down) 35%, var(--border)); }
+.cell.pos b { color: var(--up); } .cell.neg b { color: var(--down); }
+.cell b { font-weight: 600; white-space: nowrap; }
+.cell:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: var(--primary); }
+@keyframes cellIn { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: none; } }
+.go .cell { animation: cellIn .4s var(--ease) both; animation-delay: calc(var(--k) * 32ms); }
+
+/* 8. новая сделка */
+.tradeHead { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; color: var(--muted); }
+.tradeHead b { font-size: 16px; color: var(--text); }
+.list { display: flex; flex-direction: column; }
+.rowWrap { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .45s var(--ease); }
+.rowWrap.enter { grid-template-rows: 0fr; }
+.rowWrap > div { overflow: hidden; }
+.trow { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-bottom: 1px solid var(--border); font-size: 14px; border-radius: 8px; }
+.trow .sym { font-weight: 600; min-width: 84px; }
+.side { font-size: 11px; padding: 1px 7px; border-radius: 6px; background: var(--surface-2); color: var(--text); }
+.trow .p { margin-left: auto; font-weight: 600; }
+@keyframes flashUp { from { background: color-mix(in srgb, var(--up) 26%, transparent); } to { background: transparent; } }
+@keyframes flashDown { from { background: color-mix(in srgb, var(--down) 22%, transparent); } to { background: transparent; } }
+.trow.fu { animation: flashUp 1.6s ease-out both; }
+.trow.fd { animation: flashDown 1.6s ease-out both; }
+.syncDot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--up); margin-right: 6px; vertical-align: middle; }
+
+/* 9. переключение периода */
+.seg { position: relative; display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 3px; align-self: flex-start; }
+.seg button { position: relative; z-index: 1; border: 0; background: none; padding: 6px 12px; font-size: 13px; color: var(--muted); border-radius: 7px; transition: color .2s; }
+.seg button[aria-pressed="true"] { color: var(--text); font-weight: 600; }
+.seg .pill { position: absolute; top: 3px; bottom: 3px; left: 0; width: 0; background: var(--surface-2); border-radius: 7px; transition: transform .35s var(--ease), width .35s var(--ease); }
+.roll { display: inline-grid; overflow: hidden; vertical-align: bottom; }
+.roll > span { grid-area: 1 / 1; transition: transform .45s var(--ease), opacity .45s; }
+.roll .out { transform: translateY(-100%); opacity: 0; }
+.roll .in { transform: translateY(100%); opacity: 0; }
+
+/* 10. 3D-дашборд при прокрутке */
+.scroller { height: 260px; overflow-y: auto; border-radius: 10px; margin: -16px; padding: 16px; scrollbar-width: thin; }
+.scroller .hint { text-align: center; font-size: 13px; color: var(--muted); padding: 6px 0 14px; }
+.persp { perspective: 1100px; }
+.mock { --p: 1; transform: rotateX(calc(var(--p) * 24deg)) scale(calc(1 - var(--p) * .1)); transform-origin: 50% 0; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px; box-shadow: var(--shadow); }
+.mock .bar3 { display: flex; gap: 5px; margin-bottom: 10px; }
+.mock .bar3 i { width: 8px; height: 8px; border-radius: 50%; background: var(--surface-2); }
+.mock .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.mock .kpi { padding: 8px; }
+.mock .kpi .v { font-size: 14px; }
+.scroller .after { height: 220px; display: flex; align-items: flex-end; justify-content: center; font-size: 13px; color: var(--muted); }
+
+/* 11. загрузка */
+.skel { border-radius: 8px; background: linear-gradient(90deg, var(--surface-2) 0%, var(--surface) 50%, var(--surface-2) 100%); background-size: 200% 100%; animation: shimmer 1.1s linear infinite; }
+@keyframes shimmer { from { background-position: 150% 0; } to { background-position: -50% 0; } }
+.loadBox { display: grid; }
+.loadBox > div { grid-area: 1 / 1; transition: opacity .35s ease; }
+.loadBox .hidden { opacity: 0; pointer-events: none; }
+.skelKpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.skelKpis .kpi { display: flex; flex-direction: column; gap: 8px; }
+
+/* 12. кнопка сохранения */
+.saveRow { display: flex; justify-content: center; align-items: center; gap: 14px; flex-wrap: wrap; }
+.save { position: relative; height: 44px; min-width: 190px; border: 0; border-radius: 11px; background: var(--primary); color: var(--on-primary); font-weight: 700; font-size: 15px; transition: min-width .35s var(--ease), background .3s, transform .1s; overflow: hidden; }
+.save:active { transform: scale(.97); }
+.save .lbl, .save .spin, .save .ok { transition: opacity .2s, transform .3s var(--ease); }
+.save .spin, .save .ok { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0; }
+.save.busy { min-width: 44px; }
+.save.busy .lbl { opacity: 0; transform: scale(.8); }
+.save.busy .spin { opacity: 1; }
+.save.done { background: var(--up); min-width: 190px; }
+.save.done .lbl { opacity: 0; }
+.save.done .ok { opacity: 1; }
+.spin i { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid color-mix(in srgb, var(--on-primary) 35%, transparent); border-top-color: var(--on-primary); animation: rot .7s linear infinite; }
+@keyframes rot { to { transform: rotate(360deg); } }
+.ok path { stroke: var(--on-primary); stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 24; stroke-dashoffset: 24; }
+.save.done .ok path { transition: stroke-dashoffset .4s ease .1s; stroke-dashoffset: 0; }
+.toast { font-size: 13px; color: var(--muted); }
+
+/* выбор */
+.bar-pick { position: sticky; bottom: 0; z-index: 5; margin-inline: calc(-1 * max(16px, env(safe-area-inset-left, 0px))); padding: 12px max(16px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(8px); border-top: 1px solid var(--border); }
+.bar-pick .in { max-width: 1320px; margin: 0 auto; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.bar-pick .txt { flex: 1 1 260px; min-width: 0; font-size: 14px; }
+.bar-pick code { font-family: var(--font-mono); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; }
+footer.note { color: var(--muted); font-size: 13px; padding-bottom: 24px; max-width: 80ch; }
+
+/* разделы */
+.group { display: flex; flex-direction: column; gap: 14px; }
+.ghead { display: flex; flex-direction: column; gap: 2px; padding-top: 8px; }
+.gtitle { font-weight: 700; font-size: 20px; margin: 0; }
+
+/* 13-15. вход и регистрация */
+.auth { width: min(340px, 100%); margin: 0 auto; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px; display: grid; gap: 10px; }
+.authView { grid-area: 1 / 1; display: flex; flex-direction: column; gap: 10px; transition: opacity .35s ease, transform .35s var(--ease); }
+.authView.hidden { opacity: 0; transform: translateY(8px); pointer-events: none; visibility: hidden; }
+.authTitle { font-weight: 700; font-size: 17px; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.field input { font: inherit; font-size: 14px; color: var(--text); width: 100%; background: var(--surface-2); border: 1px solid transparent; border-radius: 9px; padding: 9px 11px; transition: border-color .2s, box-shadow .2s, background .2s; }
+.field input:focus { outline: none; border-color: var(--primary); background: var(--surface); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 20%, transparent); }
+.field input.bad { border-color: var(--down); }
+.errWrap { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .3s var(--ease); }
+.errWrap.show { grid-template-rows: 1fr; }
+.errWrap > div { overflow: hidden; }
+.err { margin: 0; color: var(--down); font-size: 13px; }
+@keyframes shake { 0%, 100% { transform: none; } 20% { transform: translateX(-8px); } 40% { transform: translateX(7px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(3px); } }
+.auth.shake { animation: shake .42s ease; }
+.loginBtn { position: relative; height: 42px; width: 100%; border: 0; border-radius: 10px; background: var(--primary); color: var(--on-primary); font-weight: 700; transition: transform .1s, background .2s; }
+.loginBtn:active { transform: scale(.98); }
+.loginBtn .lbl, .loginBtn .spin { transition: opacity .2s; }
+.loginBtn .spin { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0; }
+.loginBtn.busy .lbl { opacity: 0; }
+.loginBtn.busy .spin { opacity: 1; }
+.okView { align-items: center; text-align: center; padding: 6px 0; }
+.okCircle circle { fill: none; stroke: var(--up); stroke-width: 3; stroke-dasharray: 151; stroke-dashoffset: 151; }
+.okCircle path { fill: none; stroke: var(--up); stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 32; stroke-dashoffset: 32; }
+.okView:not(.hidden) .okCircle circle { transition: stroke-dashoffset .55s ease .1s; stroke-dashoffset: 0; }
+.okView:not(.hidden) .okCircle path { transition: stroke-dashoffset .35s ease .55s; stroke-dashoffset: 0; }
+.pw { position: relative; display: block; }
+.pw input { padding-right: 42px; }
+.eye { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 34px; height: 34px; border: 0; background: none; border-radius: 8px; display: grid; place-items: center; color: var(--muted); }
+.eye:hover { color: var(--text); background: var(--surface); }
+.eye svg path, .eye svg circle { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.eye .slash { stroke-dasharray: 23; stroke-dashoffset: 0; transition: stroke-dashoffset .3s ease; }
+.eye[aria-pressed="true"] .slash { stroke-dashoffset: 23; }
+.meter { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.meter i { height: 5px; border-radius: 3px; background: var(--surface-2); transition: background .35s ease, transform .35s var(--ease); }
+.meterTxt { font-size: 13px; color: var(--muted); min-height: 1.5em; }
+
+@media (prefers-reduced-motion: reduce) {
+  body:not(.force-motion) *, body:not(.force-motion) *::before, body:not(.force-motion) *::after { animation-duration: .01ms !important; animation-delay: 0ms !important; transition-duration: .01ms !important; }
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Анимации для CryptoJournal</h1>
+      <p class="lead">15 вариантов на элементах твоего сайта: главная, вход и регистрация, сам дневник, в цветах сайта. Нажимай «Повторить», води мышкой, переключай тему. Что нравится — отмечай «Беру», внизу соберётся список номеров для меня.</p>
+    </div>
+    <div class="tools">
+      <button class="btn" id="themeBtn" type="button">Тёмная тема</button>
+      <button class="btn primary" id="replayAll" type="button">Повторить все</button>
+    </div>
+  </header>
+
+  <div class="legend" aria-label="Обозначения">
+    <span><span class="tag rec">рекомендую</span> подходит сайту</span>
+    <span><span class="tag taste">на вкус</span> красиво, но решать тебе</span>
+    <span><span class="tag care">осторожно</span> легко перебрать</span>
+    <span><span class="tag have">уже есть</span> похожее уже на сайте</span>
+  </div>
+
+  <div class="notice" id="rmNotice" hidden>
+    <span>У тебя в системе включено «уменьшить движение», поэтому анимации выключены (так же будет и на сайте).</span>
+    <button class="btn" id="forceMotion" type="button">Всё равно показать</button>
+  </div>
+
+    <section class="group">
+    <div class="ghead"><h2 class="gtitle">Главная — превью сайта</h2><p class="vdesc">Что видит гость до регистрации: первое впечатление и тарифы.</p></div>
+    <div class="grid">
+    <section class="variant" data-v="10">
+      <div class="vhead"><span class="vnum">01</span><h2>3D-дашборд на главной</h2><span class="tag rec">рекомендую для главной</span></div>
+      <p class="vdesc">Прокрути внутри рамки: превью дашборда лежит наклонённым в 3D и выпрямляется, пока прокручиваешь. Главная сразу выглядит дороже.</p>
+      <div class="stage" id="s10">
+        <div class="scroller" id="scroll10" tabindex="0" aria-label="Прокрути, чтобы выпрямить превью">
+          <div class="hint">↓ прокрути здесь</div>
+          <div class="persp">
+            <div class="mock" id="mock10">
+              <div class="bar3"><i></i><i></i><i></i></div>
+              <div class="kpis">
+                <div class="kpi"><div class="l">PnL</div><div class="v num up">+3 135 $</div></div>
+                <div class="kpi"><div class="l">Винрейт</div><div class="v num">60 %</div></div>
+                <div class="kpi"><div class="l">PF</div><div class="v num">2,22</div></div>
+              </div>
+              <svg class="chart" id="eq10" viewBox="0 0 560 150" aria-hidden="true" style="margin-top:8px"></svg>
+            </div>
+          </div>
+          <div class="after">конец превью</div>
+        </div>
+      </div>
+      <div class="vfoot"><span class="where">Где: первый экран главной, под заголовком. На сайте — от прокрутки всей страницы.</span><button class="btn" type="button" data-replay="10">Показать</button><label class="pick"><input type="checkbox" data-pick="10">Беру</label></div>
+    </section>
+
+
+    <section class="variant" data-v="4">
+      <div class="vhead"><span class="vnum">02</span><h2>3D-наклон карточки</h2><span class="tag care">осторожно</span></div>
+      <p class="vdesc">Карточка поворачивается к курсору, как физическая, с лёгким бликом. Эффектно, но на рабочем дашборде утомляет: лучше только на главной или на тарифах.</p>
+      <div class="stage" id="s4">
+        <div class="tiltWrap">
+          <div class="kpi tilt" id="tilt">
+            <div class="sheen"></div>
+            <div class="inner">
+              <div class="l">Pro Plus · сделки сами каждые 3 часа</div>
+              <div class="v num up">+4 504,63 $</div>
+              <svg class="spark" viewBox="0 0 300 46" preserveAspectRatio="none" aria-hidden="true"><path class="eqArea" id="sparkA"/><path class="eqLine" id="sparkL"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="vfoot"><span class="where">Где: главная (превью дашборда), карточки тарифов.</span><label class="pick"><input type="checkbox" data-pick="4">Беру</label></div>
+    </section>
+
+
+    <section class="variant" data-v="3">
+      <div class="vhead"><span class="vnum">03</span><h2>Подсветка под курсором</h2><span class="tag taste">на вкус</span></div>
+      <p class="vdesc">Води мышкой по карточкам: за курсором идёт мягкое пятно света, рамка подсвечивается там, где ближе мышь. Это и есть «подсветочка». Сейчас в правилах сайта стоит «без свечений» — если берём, правило меняем.</p>
+      <div class="stage" id="s3">
+        <div class="spotGroup" id="spotGroup">
+          <div class="spot"><div class="kpi"><div class="l">Profit factor</div><div class="v num">3,10</div><div class="l">на 1 $ убытка — 3,10 $ прибыли</div></div></div>
+          <div class="spot"><div class="kpi"><div class="l">Винрейт дней</div><div class="v num">71,9 %</div><div class="l">41 W · 16 L</div></div></div>
+          <div class="spot"><div class="kpi"><div class="l">Ср. выигрыш / проигрыш</div><div class="v num">1,47</div><div class="l">+108,99 $ / −73,93 $</div></div></div>
+        </div>
+      </div>
+      <div class="vfoot"><span class="where">Где: карточки дашборда, тарифы, главная. На телефоне срабатывает от касания.</span><label class="pick"><input type="checkbox" data-pick="3">Беру</label></div>
+    </section>
+
+    </div>
+  </section>
+
+  <section class="group">
+    <div class="ghead"><h2 class="gtitle">Вход и регистрация</h2><p class="vdesc">Первые секунды после «Начать бесплатно»: формы должны отзываться на каждое действие.</p></div>
+    <div class="grid">
+
+
+    <section class="variant" data-v="13">
+      <div class="vhead"><span class="vnum">04</span><h2>Форма входа живая</h2><span class="tag rec">рекомендую</span></div>
+      <p class="vdesc">Поле в фокусе мягко обводится цветом кнопок. Неверный пароль — форма коротко «мотает головой» и выезжает сообщение. Верный — кнопка крутится и показывает успех. Нажимай «Повторить»: ошибка и успех по очереди.</p>
+      <div class="stage" id="s13">
+        <div class="auth" id="auth13">
+          <div class="authView" id="form13">
+            <div class="authTitle">Вход</div>
+            <label class="field" for="em13"><span>Email</span><input id="em13" type="email" autocomplete="off" placeholder="you@mail.com"></label>
+            <label class="field" for="pw13"><span>Пароль</span><input id="pw13" type="password" autocomplete="off"></label>
+            <div class="errWrap" id="err13"><div><p class="err">Неверный email или пароль</p></div></div>
+            <button class="loginBtn" id="btn13" type="button"><span class="lbl">Войти</span><span class="spin" aria-hidden="true"><i></i></span></button>
+          </div>
+          <div class="authView okView hidden" id="ok13">
+            <svg class="okCircle" width="54" height="54" viewBox="0 0 54 54" aria-hidden="true"><circle cx="27" cy="27" r="24"/><path d="M17 28l7 7 13-15"/></svg>
+            <div class="authTitle">Привет, трейдер</div>
+            <div class="vdesc">Открываю дневник…</div>
+          </div>
+        </div>
+      </div>
+      <div class="vfoot"><span class="where">Где: вход, регистрация, сброс пароля, 2FA.</span><button class="btn" type="button" data-replay="13">Повторить</button><label class="pick"><input type="checkbox" data-pick="13">Беру</label></div>
+    </section>
+
+    <section class="variant" data-v="14">
+      <div class="vhead"><span class="vnum">05</span><h2>Пароль: глазик и надёжность</h2><span class="tag rec">рекомендую</span></div>
+      <p class="vdesc">Печатай в поле: полоска надёжности заполняется и меняет цвет, подпись подсказывает, чего не хватает. Глазик показывает пароль — перечёркивание рисуется линией.</p>
+      <div class="stage" id="s14">
+        <div class="auth">
+          <label class="field" for="pw14"><span>Придумай пароль</span>
+            <span class="pw"><input id="pw14" type="password" autocomplete="new-password" value="Btc2026">
+              <button class="eye" id="eye14" type="button" aria-label="Показать пароль" aria-pressed="false"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path class="slash" d="M4 4l16 16"/></svg></button>
+            </span>
+          </label>
+          <div class="meter" id="meter14" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+          <div class="meterTxt" id="mtxt14" aria-live="polite"></div>
+        </div>
+      </div>
+      <div class="vfoot"><span class="where">Где: регистрация, смена пароля в настройках.</span><label class="pick"><input type="checkbox" data-pick="14">Беру</label></div>
+    </section>
+
+    <section class="variant" data-v="15">
+      <div class="vhead"><span class="vnum">06</span><h2>Регистрация: «проверь почту»</h2><span class="tag rec">рекомендую</span></div>
+      <p class="vdesc">После «Создать аккаунт» форма сворачивается, рисуется галочка и появляется понятный следующий шаг с таймером повторной отправки письма. Человек не теряется после регистрации.</p>
+      <div class="stage" id="s15">
+        <div class="auth" id="auth15">
+          <div class="authView" id="form15">
+            <div class="authTitle">Регистрация</div>
+            <label class="field" for="em15"><span>Email</span><input id="em15" type="email" value="trader@mail.com" autocomplete="off"></label>
+            <button class="loginBtn" id="btn15" type="button"><span class="lbl">Создать аккаунт</span><span class="spin" aria-hidden="true"><i></i></span></button>
+          </div>
+          <div class="authView okView hidden" id="ok15">
+            <svg class="okCircle" width="54" height="54" viewBox="0 0 54 54" aria-hidden="true"><circle cx="27" cy="27" r="24"/><path d="M17 28l7 7 13-15"/></svg>
+            <div class="authTitle">Проверь почту</div>
+            <div class="vdesc">Ссылка для входа отправлена на <b>trader@mail.com</b></div>
+            <div class="meterTxt num" id="timer15">Отправить ещё раз через 0:30</div>
+          </div>
+        </div>
+      </div>
+      <div class="vfoot"><span class="where">Где: после регистрации и после «Забыли пароль?».</span><button class="btn" type="button" data-replay="15">Повторить</button><label class="pick"><input type="checkbox" data-pick="15">Беру</label></div>
+    </section>
+    </div>
+  </section>
+
+  <section class="group">
+    <div class="ghead"><h2 class="gtitle">Дневник — само приложение</h2><p class="vdesc">Статистика, графики, календарь, сделки. Здесь анимации короткие: этим пользуются каждый день.</p></div>
+    <div class="grid">
+    <section class="variant" data-v="1">
+      <div class="vhead"><span class="vnum">07</span><h2>Карточки появляются по очереди</h2><span class="tag have">уже есть</span></div>
+      <p class="vdesc">При открытии страницы показатели выезжают снизу один за другим. Сейчас на сайте это есть, но быстрее и почти незаметно.</p>
+      <div class="stage" id="s1">
+        <div class="kpis four">
+          <div class="kpi rise" style="--i:0"><div class="l">Реализованный PnL</div><div class="v num up">+4 504,63 $</div></div>
+          <div class="kpi rise" style="--i:1"><div class="l">Винрейт</div><div class="v num">67,8 %</div></div>
+          <div class="kpi rise" style="--i:2"><div class="l">Profit factor</div><div class="v num">3,10</div></div>
+          <div class="kpi rise" style="--i:3"><div class="l">Макс. просадка</div><div class="v num down">−6,8 %</div></div>
+        </div>
+        <div class="kpis">
+          <div class="kpi rise" style="--i:4"><div class="l">Средний R</div><div class="v num">+1,25R</div></div>
+          <div class="kpi rise" style="--i:5"><div class="l">Матожидание</div><div class="v num up">+50,05 $</div></div>
+        </div>
+      </div>
+      <div class="vfoot"><span class="where">Где: дашборд, Разбор, календарь при открытии.</span><button class="btn" type="button" data-replay="1">Повторить</button><label class="pick"><input type="checkbox" data-pick="1">Беру</label></div>
+    </section>
+
+
+    <section class="variant" data-v="2">
+      <div class="vhead"><span class="vnum">08</span><h2>Цифры набегают, шкалы заполняются</h2><span class="tag have">уже есть, можно ярче</span></div>
+      <p class="vdesc">Число считается от нуля до значения, дуга винрейта дорисовывается вместе с ним. Даёт ощущение «живых» данных.</p>
+      <div class="stage" id="s2">
+        <div class="kpis">
+          <div class="kpi"><div class="l">Реализованный PnL</div><div class="v num up" id="c2pnl">+4 504,63 $</div><div class="l" style="margin-top:2px">+90,1 % к депозиту</div></div>
+          <div class="kpi">
+            <div class="l">Винрейт сделок</div>
+            <div class="gaugeRow">
+              <div><div class="v num" id="c2wr">67,8 %</div><div class="chips num"><span class="w">61 W</span><span>29 L</span></div></div>
+              <svg class="gauge" width="78" height="46" viewBox="0 0 78 46" aria-hidden="true"><path class="track" d="M7 40 A32 32 0 0 1 71 40"/><path class="fill" id="g2" d="M7 40 A32 32 0 0 1 71 40" pathLength="100" stroke-dasharray="100" stroke-dashoffset="32.2"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="vfoot"><span class="where">Где: верхний ряд дашборда, «Итог месяца», главная.</span><button class="btn" type="button" data-replay="2">Повторить</button><label class="pick"><input type="checkbox" data-pick="2">Беру</label></div>
+    </section>
+
+
+    <section class="variant" data-v="5">
+      <div class="vhead"><span class="vnum">09</span><h2>Кривая капитала рисуется</h2><span class="tag rec">рекомендую</span></div>
+      <p class="vdesc">Линия прорисовывается слева направо, под ней проявляется заливка, в конце «щёлкает» точка с итогом. Одна анимация, которая рассказывает историю счёта.</p>
+      <div class="stage" id="s5"><svg class="chart" id="eq5" viewBox="0 0 560 200" role="img" aria-label="Кривая капитала: от 0 до +4 504 $"></svg></div>
+      <div class="vfoot"><span class="where">Где: дашборд при открытии и при смене периода, главная.</span><button class="btn" type="button" data-replay="5">Повторить</button><label class="pick"><input type="checkbox" data-pick="5">Беру</label></div>
+    </section>
+
+
+    <section class="variant" data-v="6">
+      <div class="vhead"><span class="vnum">10</span><h2>Наведение на график</h2><span class="tag rec">рекомендую</span></div>
+      <p class="vdesc">Води по графику: вертикальная линия, точка и подсказка ездят за мышкой, а снизу подсвечивается тот же день в «PnL по дням», остальные приглушаются.</p>
+      <div class="stage" id="s6">
+        <div class="hoverBox" id="hb6">
+          <svg class="chart" id="eq6" viewBox="0 0 560 150" aria-hidden="true"></svg>
+          <svg class="chart bars" id="bars6" viewBox="0 0 560 70" aria-hidden="true"></svg>
+          <div class="tip" id="tip6"></div>
+        </div>
+      </div>
+      <div class="vfoot"><span class="where">Где: кривая капитала + «PnL по дням» на дашборде. На телефоне — пальцем.</span><label class="pick"><input type="checkbox" data-pick="6">Беру</label></div>
+    </section>
+
+
+    <section class="variant" data-v="7">
+      <div class="vhead"><span class="vnum">11</span><h2>Календарь волной</h2><span class="tag rec">рекомендую</span></div>
+      <p class="vdesc">Дни месяца появляются по диагонали, как волна. При наведении день приподнимается и обводится — понятно, что на него можно нажать.</p>
+      <div class="stage" id="s7"><div class="cal" id="cal7"></div></div>
+      <div class="vfoot"><span class="where">Где: вкладка «Календарь», переключение месяца, календарь на главной.</span><button class="btn" type="button" data-replay="7">Повторить</button><label class="pick"><input type="checkbox" data-pick="7">Беру</label></div>
+    </section>
+
+
+    <section class="variant" data-v="8">
+      <div class="vhead"><span class="vnum">12</span><h2>Пришла новая сделка</h2><span class="tag rec">рекомендую</span></div>
+      <p class="vdesc">Когда биржа присылает сделку, строка раздвигает список и коротко вспыхивает цветом результата, итог дня пересчитывается. Видно, что автоматика работает.</p>
+      <div class="stage" id="s8">
+        <div class="tradeHead"><span><span class="syncDot"></span>Bybit · синхронизировано только что</span><span>Итог дня: <b class="num" id="day8">+214,40 $</b></span></div>
+        <div class="list" id="list8"></div>
+      </div>
+      <div class="vfoot"><span class="where">Где: список сделок и дашборд после синхронизации с биржей.</span><button class="btn" type="button" data-replay="8">Пришла сделка</button><label class="pick"><input type="checkbox" data-pick="8">Беру</label></div>
+    </section>
+
+
+    <section class="variant" data-v="9">
+      <div class="vhead"><span class="vnum">13</span><h2>Смена периода</h2><span class="tag rec">рекомендую</span></div>
+      <p class="vdesc">Подложка переключателя плавно переезжает, цифры не прыгают, а прокручиваются: старое значение уходит вверх, новое приходит снизу.</p>
+      <div class="stage" id="s9">
+        <div class="seg" id="seg9" role="group" aria-label="Период">
+          <span class="pill" id="pill9"></span>
+          <button type="button" aria-pressed="false" data-p="0">Неделя</button>
+          <button type="button" aria-pressed="false" data-p="1">Месяц</button>
+          <button type="button" aria-pressed="true" data-p="2">Всё время</button>
+        </div>
+        <div class="kpis">
+          <div class="kpi"><div class="l">Реализованный PnL</div><div class="v num" id="r9a"></div></div>
+          <div class="kpi"><div class="l">Винрейт</div><div class="v num" id="r9b"></div></div>
+        </div>
+      </div>
+      <div class="vfoot"><span class="where">Где: «Неделя / Месяц / Всё время» на дашборде, в сделках и Разборе.</span><label class="pick"><input type="checkbox" data-pick="9">Беру</label></div>
+    </section>
+
+
+    <section class="variant" data-v="11">
+      <div class="vhead"><span class="vnum">14</span><h2>Загрузка без пустоты</h2><span class="tag rec">рекомендую</span></div>
+      <p class="vdesc">Пока данные грузятся, вместо крутилки — серые заготовки карточек с бегущим отблеском. Потом они мягко сменяются цифрами. Страница не «прыгает».</p>
+      <div class="stage" id="s11">
+        <div class="loadBox">
+          <div id="sk11" class="skelKpis hidden">
+            <div class="kpi"><div class="skel" style="height:12px;width:60%"></div><div class="skel" style="height:22px;width:80%"></div></div>
+            <div class="kpi"><div class="skel" style="height:12px;width:50%"></div><div class="skel" style="height:22px;width:55%"></div></div>
+            <div class="kpi"><div class="skel" style="height:12px;width:65%"></div><div class="skel" style="height:22px;width:45%"></div></div>
+            <div class="kpi"><div class="skel" style="height:12px;width:40%"></div><div class="skel" style="height:22px;width:70%"></div></div>
+          </div>
+          <div id="real11" class="kpis">
+            <div class="kpi"><div class="l">Реализованный PnL</div><div class="v num up">+4 504,63 $</div></div>
+            <div class="kpi"><div class="l">Винрейт</div><div class="v num">67,8 %</div></div>
+            <div class="kpi"><div class="l">Profit factor</div><div class="v num">3,10</div></div>
+            <div class="kpi"><div class="l">Макс. просадка</div><div class="v num down">−6,8 %</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="vfoot"><span class="where">Где: все страницы, пока идут данные из базы (вместо спиннера).</span><button class="btn" type="button" data-replay="11">Повторить</button><label class="pick"><input type="checkbox" data-pick="11">Беру</label></div>
+    </section>
+
+
+    <section class="variant" data-v="12">
+      <div class="vhead"><span class="vnum">15</span><h2>Кнопка «Сохранить сделку»</h2><span class="tag rec">рекомендую</span></div>
+      <p class="vdesc">Нажми: кнопка сжимается в крутилку, потом раскрывается зелёной с рисующейся галочкой. Понятно без всплывашек, что сделка сохранена.</p>
+      <div class="stage" id="s12">
+        <div class="saveRow">
+          <button class="save" id="save12" type="button" aria-live="polite">
+            <span class="lbl">Сохранить сделку</span>
+            <span class="spin" aria-hidden="true"><i></i></span>
+            <span class="ok" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 22 22"><path d="M5 11.5l4 4 8-9"/></svg></span>
+          </button>
+          <span class="toast" id="toast12">Нажми на кнопку</span>
+        </div>
+      </div>
+      <div class="vfoot"><span class="where">Где: форма сделки, настройки, подключение биржи.</span><label class="pick"><input type="checkbox" data-pick="12">Беру</label></div>
+    </section>
+
+    </div>
+  </section>
+
+  <footer class="note">Все варианты сделаны на чистом CSS и SVG, без тяжёлых библиотек: сайт не станет медленнее. У людей с включённым «уменьшить движение» анимации отключаются сами. Данные на витрине — примерные.</footer>
+</div>
+
+<div class="bar-pick">
+  <div class="in">
+    <div class="txt" id="pickTxt">Отметь «Беру» у понравившихся вариантов — здесь появится список.</div>
+    <button class="btn primary" id="copyPick" type="button" disabled>Скопировать для Claude</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const fmt = (n, d = 2) => n.toLocaleString('ru-RU', { minimumFractionDigits: d, maximumFractionDigits: d }).replace('-', '−');
+  const sign = (n) => (n > 0 ? '+' : n < 0 ? '−' : '');
+  const money = (n, d = 2) => sign(n) + fmt(Math.abs(n), d) + ' $';
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (tag, attrs = {}, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+
+  // Тема
+  const root = document.documentElement;
+  const themeBtn = $('#themeBtn');
+  const isDark = () => root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  const syncThemeBtn = () => { themeBtn.textContent = isDark() ? 'Светлая тема' : 'Тёмная тема'; };
+  themeBtn.addEventListener('click', () => { root.dataset.theme = isDark() ? 'light' : 'dark'; syncThemeBtn(); });
+  syncThemeBtn();
+
+  // Уменьшенное движение
+  const rm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (rm) $('#rmNotice').hidden = false;
+  $('#forceMotion').addEventListener('click', () => { document.body.classList.add('force-motion'); $('#rmNotice').hidden = true; replayAll(); });
+
+  // Детерминированные данные: кривая капитала за 60 сделок
+  let seed = 20261111;
+  const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  const pnls = Array.from({ length: 60 }, (_, i) => { const slump = i > 24 && i < 34; const win = rnd() < (slump ? .3 : .64); return Math.round((win ? 40 + rnd() * 190 : -(30 + rnd() * 130)) * 100) / 100; });
+  const cum = []; pnls.reduce((a, p, i) => (cum[i] = a + p), 0);
+  const days = Array.from({ length: 30 }, (_, i) => Math.round((pnls[i * 2] + pnls[i * 2 + 1]) * 100) / 100);
+  const dayCum = []; days.reduce((a, p, i) => (dayCum[i] = a + p), 0);
+  const dateOf = (i) => { const d = new Date(Date.UTC(2026, 9, 13 + i)); return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', timeZone: 'UTC' }); };
+
+  function scaleY(vals, top, bottom) {
+    const lo = Math.min(0, ...vals), hi = Math.max(...vals), pad = (hi - lo) * .08 || 1;
+    const a = lo - pad, b = hi + pad;
+    return (v) => bottom - ((v - a) / (b - a)) * (bottom - top);
+  }
+  function drawEquity(svg, vals, { w = 560, h = 200, left = 46, right = 70, top = 14, bottom = 26, labels = true } = {}) {
+    svg.innerHTML = '';
+    const X = (i) => left + (i / (vals.length - 1)) * (w - left - right);
+    const Y = scaleY(vals, top, h - bottom);
+    if (labels) {
+      const lo = Math.min(0, ...vals), hi = Math.max(...vals);
+      const step = Math.pow(10, Math.floor(Math.log10((hi - lo) / 3 || 1)));
+      const nice = [1, 2, 2.5, 5, 10].map((m) => m * step).find((s) => (hi - lo) / s <= 4) || step * 10;
+      for (let v = Math.ceil(lo / nice) * nice; v <= hi; v += nice) {
+        el('line', { x1: left, x2: w - right, y1: Y(v), y2: Y(v), class: v === 0 ? 'zero' : 'grid-line' }, svg);
+        const t = el('text', { x: left - 8, y: Y(v) + 3, 'text-anchor': 'end' }, svg); t.textContent = v >= 1000 ? fmt(v / 1000, 1).replace(',0', '') + ' тыс.' : fmt(v, 0) + ' $';
+      }
+      [0, Math.floor(vals.length / 2), vals.length - 1].forEach((i) => { const t = el('text', { x: X(i), y: h - 6, 'text-anchor': 'middle' }, svg); t.textContent = dateOf(Math.round(i / (vals.length - 1) * 29)); });
+    }
+    const pts = vals.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`);
+    const area = el('path', { d: `M${X(0)},${Y(0)} L${pts.join(' L')} L${X(vals.length - 1)},${Y(0)} Z`, class: 'eqArea' }, svg);
+    const line = el('path', { d: `M${pts.join(' L')}`, class: 'eqLine' }, svg);
+    return { X, Y, area, line };
+  }
+
+  // 1. каскад
+  const replay = {};
+  const restart = (node) => { node.classList.remove('go'); void node.offsetWidth; node.classList.add('go'); };
+  replay[1] = () => restart($('#s1'));
+
+  // 2. счёт и шкала
+  const ease = (t) => 1 - Math.pow(1 - t, 3);
+  function tween(ms, fn) { const t0 = performance.now(); const fast = rm && !document.body.classList.contains('force-motion'); return new Promise((res) => { const step = (now) => { const t = fast ? 1 : Math.min(1, (now - t0) / ms); fn(ease(t)); t < 1 ? requestAnimationFrame(step) : res(); }; requestAnimationFrame(step); }); }
+  replay[2] = () => tween(1100, (k) => {
+    $('#c2pnl').textContent = money(4504.63 * k);
+    $('#c2wr').textContent = fmt(67.8 * k, 1) + ' %';
+    $('#g2').setAttribute('stroke-dashoffset', String(100 - 67.8 * k));
+  });
+
+  // 3. подсветка
+  const spotGroup = $('#spotGroup');
+  const moveSpot = (e) => { for (const c of $$('.spot', spotGroup)) { const r = c.getBoundingClientRect(); c.style.setProperty('--x', e.clientX - r.left + 'px'); c.style.setProperty('--y', e.clientY - r.top + 'px'); } };
+  spotGroup.addEventListener('pointermove', moveSpot);
+  spotGroup.addEventListener('pointerdown', moveSpot);
+  spotGroup.addEventListener('pointerleave', () => $$('.spot', spotGroup).forEach((c) => { c.style.setProperty('--x', '-300px'); c.style.setProperty('--y', '-300px'); }));
+
+  // 4. наклон
+  const tilt = $('#tilt');
+  const sp = cum.slice(-30);
+  { const lo = Math.min(...sp), hi = Math.max(...sp); const P = sp.map((v, i) => `${(i / 29 * 300).toFixed(1)},${(42 - (v - lo) / (hi - lo) * 38).toFixed(1)}`); $('#sparkL').setAttribute('d', 'M' + P.join(' L')); $('#sparkA').setAttribute('d', `M0,46 L${P.join(' L')} L300,46 Z`); }
+  const tiltBox = $('#s4');
+  tiltBox.addEventListener('pointermove', (e) => {
+    const r = tilt.getBoundingClientRect(); const x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;
+    tilt.classList.add('active');
+    tilt.style.transform = `rotateY(${(x * 16).toFixed(2)}deg) rotateX(${(-y * 14).toFixed(2)}deg)`;
+    tilt.style.setProperty('--sx', (x + .5) * 100 + '%'); tilt.style.setProperty('--sy', (y + .5) * 100 + '%');
+  });
+  tiltBox.addEventListener('pointerleave', () => { tilt.classList.remove('active'); tilt.style.transform = ''; });
+
+  // 5. рисование кривой
+  const eq5 = $('#eq5');
+  replay[5] = () => {
+    const { X, Y, area, line } = drawEquity(eq5, cum);
+    const last = cum.length - 1;
+    el('circle', { cx: X(last), cy: Y(cum[last]), r: 4.5, class: 'endDot' }, eq5);
+    const lbl = el('text', { x: X(last) + 9, y: Y(cum[last]) + 4, class: 'endLbl' }, eq5); lbl.textContent = money(cum[last], 0);
+    area.classList.add('draw');
+    const len = line.getTotalLength();
+    line.style.strokeDasharray = len; line.style.strokeDashoffset = len;
+    line.getBoundingClientRect();
+    line.style.transition = (rm && !document.body.classList.contains('force-motion')) ? 'none' : 'stroke-dashoffset 1.3s cubic-bezier(.45,.05,.25,1)';
+    line.style.strokeDashoffset = 0;
+    restart($('#s5'));
+  };
+
+  // 6. наведение
+  const eq6 = $('#eq6'), bars6 = $('#bars6'), tip6 = $('#tip6'), hb6 = $('#hb6');
+  const g6 = drawEquity(eq6, dayCum, { h: 150, bottom: 20, right: 20 });
+  const cross = el('line', { y1: 10, y2: 132, class: 'cross', opacity: 0 }, eq6);
+  const dot = el('circle', { r: 4.5, class: 'endDot', opacity: 0 }, eq6);
+  { const max = Math.max(...days.map(Math.abs)); const bw = (560 - 66) / 30; days.forEach((v, i) => { const hgt = Math.abs(v) / max * 30; el('rect', { x: (46 + i * bw + 2).toFixed(1), y: v >= 0 ? 35 - hgt : 35, width: (bw - 4).toFixed(1), height: Math.max(1, hgt).toFixed(1), rx: 2, class: 'bar', fill: v >= 0 ? 'var(--up)' : 'var(--down)', 'data-i': i }, bars6); }); el('line', { x1: 46, x2: 540, y1: 35, y2: 35, class: 'zero' }, bars6); }
+  const hover6 = (e) => {
+    const r = eq6.getBoundingClientRect(); const sx = 560 / r.width;
+    const xv = (e.clientX - r.left) * sx; const i = Math.max(0, Math.min(29, Math.round((xv - 46) / (560 - 66) * 29)));
+    const x = g6.X(i), y = g6.Y(dayCum[i]);
+    cross.setAttribute('x1', x); cross.setAttribute('x2', x); cross.setAttribute('opacity', 1);
+    dot.setAttribute('cx', x); dot.setAttribute('cy', y); dot.setAttribute('opacity', 1);
+    bars6.classList.add('hovering'); $$('.bar', bars6).forEach((b) => b.classList.toggle('on', +b.dataset.i === i));
+    tip6.innerHTML = `${dateOf(i)}<b class="num">${money(dayCum[i])}</b><span class="num ${days[i] >= 0 ? 'up' : 'down'}">за день ${money(days[i])}</span>`;
+    tip6.style.opacity = 1;
+    const bx = hb6.getBoundingClientRect(); const px = x / sx; const tw = tip6.offsetWidth;
+    tip6.style.transform = `translate(${Math.min(bx.width - tw, Math.max(0, px + (px > bx.width / 2 ? -tw - 12 : 12)))}px, ${Math.max(0, y / sx - 30)}px)`;
+  };
+  hb6.addEventListener('pointermove', hover6);
+  hb6.addEventListener('pointerdown', hover6);
+  hb6.addEventListener('pointerleave', () => { cross.setAttribute('opacity', 0); dot.setAttribute('opacity', 0); tip6.style.opacity = 0; bars6.classList.remove('hovering'); });
+
+  // 7. календарь
+  const cal7 = $('#cal7');
+  ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].forEach((d) => { const s = document.createElement('div'); s.className = 'wd'; s.textContent = d; cal7.appendChild(s); });
+  const offset = 6; // 1 ноября 2026 — воскресенье
+  for (let k = 0; k < 35; k++) {
+    const day = k - offset + 1; const c = document.createElement('div'); c.className = 'cell'; c.style.setProperty('--k', String((k % 7) + Math.floor(k / 7)));
+    if (day >= 1 && day <= 30) {
+      const v = day <= 22 && rnd() < .78 ? Math.round((rnd() < .66 ? 30 + rnd() * 260 : -(20 + rnd() * 140))) : 0;
+      if (v) c.classList.add(v > 0 ? 'pos' : 'neg');
+      c.innerHTML = `<span class="d">${day}</span>${v ? `<b class="num">${v > 0 ? '+' : '−'}${Math.abs(v)}</b>` : ''}`;
+      if (v) c.title = `${day} ноября: ${money(v, 0)}`;
+    } else c.style.visibility = 'hidden';
+    cal7.appendChild(c);
+  }
+  replay[7] = () => restart($('#s7'));
+
+  // 8. новая сделка
+  const list8 = $('#list8');
+  const queue = [['SOLUSDT', 'Long', 63.92], ['ETHUSDT', 'Short', -41.3], ['BTCUSDT', 'Long', 128.5], ['XRPUSDT', 'Short', 22.18], ['DOGEUSDT', 'Long', -17.6]];
+  let qi = 0, day8 = 214.4;
+  const rowHtml = (s, side, p) => `<div class="trow"><span class="sym">${s}</span><span class="side">${side === 'Long' ? '↗' : '↘'} ${side}</span><span class="p num ${p >= 0 ? 'up' : 'down'}">${money(p)}</span></div>`;
+  [['BTCUSDT', 'Short', 152.1], ['ETHUSDT', 'Long', 97.2], ['SOLUSDT', 'Short', -34.9]].forEach((t) => { const w = document.createElement('div'); w.className = 'rowWrap'; w.innerHTML = `<div>${rowHtml(...t)}</div>`; list8.appendChild(w); });
+  replay[8] = () => {
+    const [s, side, p] = queue[qi++ % queue.length];
+    const w = document.createElement('div'); w.className = 'rowWrap enter'; w.innerHTML = `<div>${rowHtml(s, side, p)}</div>`;
+    list8.prepend(w); void w.offsetWidth; w.classList.remove('enter');
+    w.querySelector('.trow').classList.add(p >= 0 ? 'fu' : 'fd');
+    while (list8.children.length > 4) list8.lastElementChild.remove();
+    const from = day8; day8 = Math.round((day8 + p) * 100) / 100; const to = day8;
+    tween(700, (k) => { $('#day8').textContent = money(from + (to - from) * k); });
+  };
+
+  // 9. смена периода
+  const periods = [[612.4, 58.3], [2188.95, 64.1], [4504.63, 67.8]];
+  const seg = $('#seg9'), pill = $('#pill9');
+  function setRoll(node, text) {
+    const cur = node.querySelector('.roll');
+    if (!cur) { node.innerHTML = `<span class="roll"><span>${text}</span></span>`; return; }
+    const old = cur.lastElementChild; if (old.textContent === text) return;
+    const nu = document.createElement('span'); nu.className = 'in'; nu.textContent = text; cur.appendChild(nu);
+    void nu.offsetWidth; old.className = 'out'; nu.className = '';
+    setTimeout(() => old.remove(), 500);
+  }
+  function choose(i, animate = true) {
+    $$('button', seg).forEach((b) => b.setAttribute('aria-pressed', String(+b.dataset.p === i)));
+    const b = $(`button[data-p="${i}"]`, seg);
+    if (!animate) pill.style.transition = 'none';
+    pill.style.width = b.offsetWidth + 'px'; pill.style.transform = `translateX(${b.offsetLeft}px)`;
+    if (!animate) { void pill.offsetWidth; pill.style.transition = ''; }
+    const [pnl, wr] = periods[i];
+    setRoll($('#r9a'), money(pnl)); $('#r9a').className = 'v num up';
+    setRoll($('#r9b'), fmt(wr, 1) + ' %');
+  }
+  seg.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) choose(+b.dataset.p); });
+  let cur9 = 2;
+  replay[9] = () => { cur9 = (cur9 + 1) % 3; choose(cur9); };
+
+  // 10. 3D при прокрутке
+  const scroll10 = $('#scroll10'), mock10 = $('#mock10');
+  drawEquity($('#eq10'), cum, { h: 150, bottom: 20, right: 20 });
+  const upd10 = () => { const max = 170; const p = Math.max(0, 1 - scroll10.scrollTop / max); mock10.style.setProperty('--p', p.toFixed(3)); };
+  scroll10.addEventListener('scroll', upd10, { passive: true }); upd10();
+  replay[10] = () => { scroll10.scrollTo({ top: 0 }); setTimeout(() => scroll10.scrollTo({ top: 190, behavior: 'smooth' }), 250); };
+
+  // 11. загрузка
+  let t11;
+  replay[11] = () => { clearTimeout(t11); $('#sk11').classList.remove('hidden'); $('#real11').classList.add('hidden'); t11 = setTimeout(() => { $('#sk11').classList.add('hidden'); $('#real11').classList.remove('hidden'); restart($('#s11')); }, 1500); };
+
+  // 12. кнопка
+  const save = $('#save12'), toast = $('#toast12');
+  let busy12 = false;
+  save.addEventListener('click', () => {
+    if (busy12) return; busy12 = true;
+    save.classList.add('busy'); toast.textContent = 'Сохраняю…';
+    setTimeout(() => { save.classList.remove('busy'); save.classList.add('done'); toast.textContent = 'Сделка сохранена'; }, 900);
+    setTimeout(() => { save.classList.remove('done'); toast.textContent = 'Нажми ещё раз'; busy12 = false; }, 2600);
+  });
+
+  // 13. форма входа
+  const auth13 = $('#auth13'), em13 = $('#em13'), pw13 = $('#pw13'), btn13 = $('#btn13'), err13 = $('#err13');
+  const fastMo = () => rm && !document.body.classList.contains('force-motion');
+  const wait = (ms) => new Promise((r) => setTimeout(r, fastMo() ? 0 : ms));
+  async function typeInto(input, text) { input.focus({ preventScroll: true }); input.value = ''; for (const ch of text) { input.value += ch; await wait(45); } }
+  let try13 = 0, run13 = false;
+  async function login13(scripted) {
+    if (run13) return; run13 = true;
+    const ok = try13++ % 2 === 1;
+    $('#form13').classList.remove('hidden'); $('#ok13').classList.add('hidden');
+    err13.classList.remove('show'); pw13.classList.remove('bad');
+    if (scripted) { await typeInto(em13, 'trader@mail.com'); await wait(150); await typeInto(pw13, ok ? 'Btc2026!' : 'btc2025'); await wait(200); }
+    btn13.focus({ preventScroll: true }); btn13.classList.add('busy'); await wait(850); btn13.classList.remove('busy');
+    if (ok) { $('#form13').classList.add('hidden'); $('#ok13').classList.remove('hidden'); }
+    else { auth13.classList.remove('shake'); void auth13.offsetWidth; auth13.classList.add('shake'); err13.classList.add('show'); pw13.classList.add('bad'); }
+    run13 = false;
+  }
+  btn13.addEventListener('click', () => login13(false));
+  replay[13] = () => login13(true);
+
+  // 14. пароль
+  const pw14 = $('#pw14'), eye14 = $('#eye14'), meter14 = $$('#meter14 i'), mtxt14 = $('#mtxt14');
+  const COL = ['var(--down)', 'var(--warn)', 'var(--accent)', 'var(--up)'];
+  function rate14() {
+    const v = pw14.value; let sc = 0; const miss = [];
+    if (v.length >= 8) sc++; else miss.push('8+ символов');
+    if (/[0-9]/.test(v)) sc++; else miss.push('цифру');
+    if (/[a-zа-яё]/.test(v) && /[A-ZА-ЯЁ]/.test(v)) sc++; else miss.push('большую букву');
+    if (/[^a-zA-Zа-яА-ЯёЁ0-9]/.test(v) || v.length >= 14) sc++; else miss.push('символ вроде ! или #');
+    meter14.forEach((m, i) => { m.style.background = i < sc ? COL[Math.max(0, sc - 1)] : ''; m.style.transform = i < sc ? 'scaleY(1.25)' : ''; });
+    const word = ['Слабый', 'Слабый', 'Средний', 'Хороший', 'Надёжный'][sc];
+    mtxt14.textContent = v ? (sc === 4 ? 'Надёжный пароль' : `${word}: добавь ${miss[0]}`) : 'Начни печатать';
+  }
+  pw14.addEventListener('input', rate14); rate14();
+  eye14.addEventListener('click', () => { const show = pw14.type === 'password'; pw14.type = show ? 'text' : 'password'; eye14.setAttribute('aria-pressed', String(show)); eye14.setAttribute('aria-label', show ? 'Скрыть пароль' : 'Показать пароль'); });
+
+  // 15. регистрация
+  const btn15 = $('#btn15'); let t15, run15 = false;
+  async function reg15() {
+    if (run15) return; run15 = true; clearInterval(t15);
+    btn15.classList.add('busy'); await wait(850); btn15.classList.remove('busy');
+    $('#form15').classList.add('hidden'); $('#ok15').classList.remove('hidden');
+    let left = 30; const show = () => { $('#timer15').textContent = left > 0 ? `Отправить ещё раз через 0:${String(left).padStart(2, '0')}` : 'Можно отправить ещё раз'; };
+    show(); t15 = setInterval(() => { left--; show(); if (left <= 0) clearInterval(t15); }, 1000);
+    run15 = false;
+  }
+  btn15.addEventListener('click', reg15);
+  replay[15] = async () => { clearInterval(t15); $('#ok15').classList.add('hidden'); $('#form15').classList.remove('hidden'); await wait(500); reg15(); };
+
+  // Повторить
+  $$('[data-replay]').forEach((b) => b.addEventListener('click', () => replay[b.dataset.replay]?.()));
+  function replayAll() { [1, 2, 5, 7, 11, 15].forEach((k) => replay[k]()); }
+  $('#replayAll').addEventListener('click', replayAll);
+
+  // Выбор
+  const KEY = 'cj-anim-picks';
+  let picks = new Set();
+  try { picks = new Set(JSON.parse(localStorage.getItem(KEY) || '[]')); } catch { /* нет хранилища */ }
+  const names = {}, numOf = {};
+  $$('.variant').forEach((v, i) => { const n = i + 1; numOf[v.dataset.v] = n; v.querySelector('.vnum').textContent = String(n).padStart(2, '0'); names[v.dataset.v] = v.querySelector('h2').textContent; });
+  function syncPicks() {
+    $$('[data-pick]').forEach((c) => { c.checked = picks.has(c.dataset.pick); c.closest('.variant').classList.toggle('picked', c.checked); });
+    const arr = [...picks].sort((a, b) => numOf[a] - numOf[b]);
+    $('#pickTxt').innerHTML = arr.length ? `Беру: <code>${arr.map((v) => numOf[v]).join(', ')}</code> — ${arr.map((v) => names[v]).join('; ')}` : 'Отметь «Беру» у понравившихся вариантов — здесь появится список.';
+    $('#copyPick').disabled = !arr.length;
+    try { localStorage.setItem(KEY, JSON.stringify(arr)); } catch { /* нет хранилища */ }
+  }
+  $$('[data-pick]').forEach((c) => c.addEventListener('change', () => { c.checked ? picks.add(c.dataset.pick) : picks.delete(c.dataset.pick); syncPicks(); }));
+  $('#copyPick').addEventListener('click', async () => {
+    const arr = [...picks].sort((a, b) => numOf[a] - numOf[b]);
+    const text = `Анимации беру: ${arr.map((v) => `${numOf[v]} — ${names[v]}`).join('; ')}`;
+    const btn = $('#copyPick');
+    try { await navigator.clipboard.writeText(text); btn.textContent = 'Скопировано'; }
+    catch { const r = document.createRange(); r.selectNodeContents($('#pickTxt')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = 'Выделил — нажми Ctrl+C'; }
+    setTimeout(() => { btn.textContent = 'Скопировать для Claude'; }, 2200);
+  });
+  syncPicks();
+
+  // старт: всё уже видно, анимации разово проигрываются
+  choose(2, false);
+  replay[5]();
+  requestAnimationFrame(() => { replay[1](); replay[2](); replay[7](); });
+})();
+</script>
