@@ -50,23 +50,23 @@ export function AppLayout() {
   usePaletteSync()
 
   return (
-    <div className="min-h-dvh pb-20 md:pb-0 md:pl-[72px] lg:pl-[232px]">
+    <div className="min-h-dvh pb-20 md:pb-0 md:pl-[72px] lg:pl-[280px]">
       {/*
         Левая панель (компьютер). Широкий экран (lg): логотип с тарифом, пункты с подписями, внизу — лимит (Basic), язык, тема и профиль.
         Планшет (md): только иконки, подпись — при наведении.
       */}
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-[72px] flex-col border-r border-border bg-surface py-3 md:flex lg:w-[232px] lg:px-3">
-        {/* логотип; на широком экране под ним — тариф (пилюля открывает окошко с выбором тарифа) */}
-        <div className="mb-4 flex flex-col items-center lg:items-start">
-          <NavLink to="/dashboard" viewTransition aria-label={t.app.name} className="flex items-center rounded-xl p-1.5 lg:px-2">
+      <aside className="fixed inset-y-0 left-0 z-20 hidden w-[72px] flex-col border-r border-border bg-surface py-3 md:flex lg:w-[280px] lg:px-3">
+        {/* логотип; на широком экране справа от него в той же строке — тариф (пилюля открывает окошко с выбором тарифа) */}
+        <div className="mb-4 flex items-center justify-center gap-1 lg:justify-between">
+          <NavLink to="/dashboard" viewTransition aria-label={t.app.name} className="flex min-w-0 items-center rounded-xl p-1.5 lg:px-2">
             <span className="lg:hidden">
               <LogoMark className="size-8" />
             </span>
-            <span className="hidden lg:inline">
+            <span className="hidden min-w-0 lg:inline">
               <Logo />
             </span>
           </NavLink>
-          <div className="mt-1.5 hidden pl-2 lg:block">
+          <div className="hidden shrink-0 lg:block">
             <PlanMenu />
           </div>
         </div>
