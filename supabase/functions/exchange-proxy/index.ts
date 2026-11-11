@@ -10,7 +10,7 @@
  *  - к бирже — только адреса для чтения (BYBIT_READ_PATHS) и только разрешённые параметры;
  *  - Polymarket: только закрытые позиции адреса из подключения (чужой адрес не подставить; браузер не упирается в CORS);
  *    демо ({ demo: true }) — одна страница закрытых позиций фиксированного публичного кошелька;
- *  - тариф: Polymarket — Pro и выше, биржи — Pro Plus (как в базе, connection_plan_ok); демо — всем;
+ *  - тариф: как в базе (connection_active, 0016): Polymarket — Pro Plus, биржи и кошельки — Pro (1) и Pro Plus (до 5); демо — всем;
  *  - ключ с правом торговли отклоняет сайт при подключении (/v5/user/query-api → readOnly).
  *
  * Выкладка: Supabase → Edge Functions → exchange-proxy (или коннектор Supabase у Claude).
@@ -71,11 +71,10 @@ Deno.serve(async (req) => {
     const { data: conn } = await asUser.from('exchange_connections').select('id, exchange, api_key').eq('id', connectionId).maybeSingle()
     if (!conn) return json({ error: 'NOT_FOUND' }, 404)
 
-    // тариф: подключение работает, только пока тариф его позволяет (тариф мог закончиться)
-    const { data: usage } = await asUser.rpc('get_my_usage').maybeSingle()
-    const plan = (usage as { plan?: string } | null)?.plan ?? 'free'
-    const planOk = conn.exchange === 'polymarket' ? plan === 'pro' || plan === 'pro_plus' : plan === 'pro_plus'
-    if (!planOk) return json({ error: 'PLAN_REQUIRED' }, 403)
+    // тариф: подключение работает, только пока тариф его позволяет (тариф мог закончиться или подключение — сверх лимита).
+    // Та же проверка, что в базе: connection_active (0016) — тип подключения и «первые N» по дате подключения
+    const { data: active } = await asUser.rpc('connection_active', { p_id: conn.id })
+    if (active !== true) return json({ error: 'PLAN_REQUIRED' }, 403)
 
     // Polymarket: публичные данные, ключа нет — только закрытые позиции адреса этого подключения
     if (conn.exchange === 'polymarket') {

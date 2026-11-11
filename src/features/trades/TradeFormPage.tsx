@@ -1,3 +1,4 @@
+import { UpgradeLine } from '@/components/UpgradeLine'
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { fmt, useT } from '@/i18n'
@@ -146,7 +147,12 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
         )}
       </div>
 
-      {limitReached && <Alert tone="error">{fmt(t.tradeForm.limitBanner, { used: usage!.trades_created, limit: usage!.trade_limit! })}</Alert>}
+      {limitReached && (
+        <div className="flex flex-col gap-1">
+          <Alert tone="error">{fmt(t.tradeForm.limitBanner, { used: usage!.trades_created, limit: usage!.trade_limit! })}</Alert>
+          <UpgradeLine text={t.plans.upgrade.trades} />
+        </div>
+      )}
 
       <div className="grid gap-4 xl:grid-cols-2 xl:items-start">
         <div className="flex min-w-0 flex-col gap-4">

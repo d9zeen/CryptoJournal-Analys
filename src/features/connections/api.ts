@@ -15,7 +15,8 @@ import { pmPositionToTrade, type PmGet } from '@/lib/sync/polymarket'
 import { SyncError, errorCodeOf, runSync, toSyncError, type SyncResult } from '@/lib/sync/run'
 import { fetchExistingIds, runImport } from '@/features/import/api'
 import { useUsage } from '@/features/settings/api'
-import { canConnect } from '@/lib/plans'
+import { activeConnections } from '@/lib/plans'
+import { useIsAdmin } from '@/features/admin/api'
 
 export { SyncError, errorCodeOf, shortKey, type SyncResult } from '@/lib/sync/run'
 
@@ -202,6 +203,7 @@ export function useAutoSync() {
   const qc = useQueryClient()
   const { data: conns } = useConnections()
   const { data: usage } = useUsage()
+  const { data: isAdmin } = useIsAdmin()
   const plan = usage?.plan
   const running = useRef(false)
 
@@ -209,10 +211,11 @@ export function useAutoSync() {
     if (!user || !conns?.length || !plan) return
     const tick = async () => {
       if (running.current || document.visibilityState === 'hidden') return
+      const active = activeConnections(conns, plan, Boolean(isAdmin))
       const due = conns.filter((c) => {
         const code = errorCodeOf(c.last_error)
         if (code && code.startsWith('KEY_')) return false // сломанный ключ — ждём, пока человек поправит
-        if (!canConnect(c.exchange, plan)) return false // тариф закончился — подключение на паузе
+        if (!active.has(c.id)) return false // не по тарифу (Polymarket на Pro, сверх лимита, тариф закончился) — на паузе
         return !c.last_sync_at || Date.now() - Date.parse(c.last_sync_at) > AUTO_SYNC_MS
       })
       if (!due.length) return
@@ -236,5 +239,5 @@ export function useAutoSync() {
     void tick()
     const id = window.setInterval(() => void tick(), 60_000)
     return () => window.clearInterval(id)
-  }, [user, conns, qc, plan])
+  }, [user, conns, qc, plan, isAdmin])
 }

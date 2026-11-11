@@ -28,6 +28,9 @@ export type FakeDb = {
   bybitReadOnly?: number
   /** палитра в профиле (0015) */
   palette?: string
+  /** срок тарифа и пробный период в профиле (0016) */
+  planUntil?: string | null
+  planTrial?: boolean
 }
 
 export function makeTrade(i: number, over: Row = {}): Row {
@@ -112,7 +115,7 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
         const b = JSON.parse(req.postData() || '{}')
         if (b.palette) db.palette = b.palette
       }
-      return json({ id: UID, display_name: null, plan: db.usage.plan, plan_until: null, timezone: 'Europe/Moscow', starting_balance: 5000, locale: 'ru', palette: db.palette ?? 'classic' })
+      return json({ id: UID, display_name: null, plan: db.usage.plan, plan_until: db.planUntil ?? null, plan_trial: db.planTrial ?? false, timezone: 'Europe/Moscow', starting_balance: 5000, locale: 'ru', palette: db.palette ?? 'classic' })
     }
     if (['/rest/v1/setups', '/rest/v1/emotions', '/rest/v1/mistake_tags'].includes(path)) {
       const names = db.listNames ?? ['Пробой уровня']
@@ -170,7 +173,7 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
 /** Тест с фейковой базой и автоматической проверкой: нет ошибок JS и нарушений CSP */
 export const test = base.extend<{ db: FakeDb }>({
   db: async ({ page }, use) => {
-    const db: FakeDb = { trades: [], imports: [], inserted: [], factors: [], aal: 'aal1', usage: { plan: 'free', trades_created: 3, trade_limit: 30 } }
+    const db: FakeDb = { trades: [], imports: [], inserted: [], factors: [], aal: 'aal1', usage: { plan: 'free', trades_created: 3, trade_limit: 50 } }
     const problems: string[] = []
     page.on('pageerror', (e) => problems.push(`JS: ${e.message}`))
     page.on('console', (m) => {

@@ -40,27 +40,34 @@ where user_id = (select id from auth.users where email = 'user@example.com');
 
 ## Тарифы
 
-Basic (free) — 30 сделок в месяц; Pro — 50 сделок + Polymarket; Pro Plus — без лимита, биржи по API, Polymarket, синхронизация каждые 3 часа.
-Проще всего — на сайте: «Админка» → «Какой тариф выдать» → «30 дней» или «Навсегда». В SQL вместо `'pro'` можно писать `'pro_plus'`.
+Сетка (миграция 0016):
+- Basic (free) — 50 сделок в месяц, подключений нет, 2 скриншота на сделку, 3 палитры;
+- Pro ($10 / мес или $96 / год) — сделки без лимита, 1 подключение (Bybit или Hyperliquid, не Polymarket), синхронизация пока сайт открыт, 10 скриншотов, все палитры;
+- Pro Plus ($15 / мес или $144 / год) — без лимита, до 5 подключений в любом сочетании (и Polymarket), сервер каждые 3 часа, 10 скриншотов.
 
-## Выдать Pro
+Новый пользователь сам получает **пробный Pro Plus на 7 дней** (`plan_trial = true`); через 7 дней он сам становится Basic.
 
-На 30 дней:
+## Выдать тариф на срок
+
+Проще всего — на сайте: «Админка» → «Какой тариф выдать» (Pro / Pro Plus) → у пользователя **«1 мес», «1 год» или «бессрочно»**.
+Срок считается от сегодняшнего дня. Выдача тарифа снимает метку «пробный».
+
+То же в SQL Editor — на месяц:
 
 ```sql
-update public.profiles
-set plan = 'pro', plan_until = now() + interval '30 days'
-where id = (select id from auth.users where email = 'user@example.com');
+select public.admin_set_plan((select id from auth.users where email = 'user@example.com'), 'pro', now() + interval '1 month');
 ```
 
-Бессрочно — `plan_until = null`. Продлить — ещё раз с новой датой.
-Когда `plan_until` проходит, человек автоматически снова на Free (лимит 30 сделок в месяц).
+На год — `interval '1 year'`, бессрочно — `null`; Pro Plus — `'pro_plus'`. (`admin_set_plan` в SQL Editor работает, только если ты есть в `admins`;
+иначе — напрямую: `update public.profiles set plan = 'pro', plan_until = now() + interval '1 year', plan_trial = false where id = (...)`.)
+Продлить — ещё раз с новой датой. Когда `plan_until` проходит, человек автоматически снова на Basic (50 сделок в месяц);
+его подключения не удаляются, а встают на паузу.
 
 ## Снять Pro
 
 ```sql
 update public.profiles
-set plan = 'free', plan_until = null
+set plan = 'free', plan_until = null, plan_trial = false
 where id = (select id from auth.users where email = 'user@example.com');
 ```
 

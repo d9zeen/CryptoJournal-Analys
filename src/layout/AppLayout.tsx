@@ -1,6 +1,8 @@
 import { NavLink, Outlet } from 'react-router'
 import { useAuth } from '@/features/auth/AuthProvider'
-import { fmt, useT } from '@/i18n'
+import { fmt, plural, useT } from '@/i18n'
+import { planTerm } from '@/lib/plans'
+import { formatDateShort } from '@/lib/format'
 import { Logo, LogoMark } from '@/components/Logo'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { useIsAdmin } from '@/features/admin/api'
@@ -167,7 +169,9 @@ export function AppLayout() {
 function PlanCard() {
   const t = useT()
   const { data: usage } = useUsage()
+  const { data: profile } = useProfile()
   if (!usage) return null
+  const term = planTerm(profile, usage.plan)
   const limit = usage.trade_limit
   const share = limit ? Math.min(1, usage.trades_created / limit) : 0
   return (
@@ -176,6 +180,13 @@ function PlanCard() {
         <span className="font-semibold text-text">{t.plans.names[usage.plan]}</span>
         <span className="text-primary">{t.plans.title}</span>
       </div>
+      {term && (
+        <div data-plan-term className="mt-1.5 text-xs text-text">
+          {term.kind === 'trial'
+            ? fmt(t.plans.term.trial, { days: plural(term.daysLeft, t.plans.daysN) })
+            : fmt(t.plans.term.until, { plan: t.plans.names[term.plan], date: formatDateShort(term.until) })}
+        </div>
+      )}
       <div className="mt-2 text-xs text-muted">
         {limit ? fmt(t.settings.usageFree, { used: usage.trades_created, limit }) : fmt(t.settings.usagePro, { used: usage.trades_created })}
       </div>

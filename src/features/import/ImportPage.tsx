@@ -1,4 +1,5 @@
 import { SideBadge } from '@/components/SideBadge'
+import { UpgradeLine } from '@/components/UpgradeLine'
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { Link, useLocation } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
@@ -157,6 +158,7 @@ export function ImportPage() {
         )}
       </div>
 
+      {remaining === 0 && <UpgradeLine text={t.plans.upgrade.trades} />}
       {result && <ResultAlert result={result} />}
       {run.error && <Alert tone="error">{dbErrorMessage(run.error, t)}</Alert>}
 

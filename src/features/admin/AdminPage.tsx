@@ -82,16 +82,25 @@ export function AdminPage() {
         </div>
       )
     const small = '!px-2.5 !py-1.5 text-xs'
-    const in30 = new Date(Date.now() + 30 * 86_400_000).toISOString()
+    // срок: месяц и год — от сегодня (календарные), бессрочно — без даты
+    const addMonths = (n: number) => {
+      const d = new Date()
+      d.setMonth(d.getMonth() + n)
+      return d.toISOString()
+    }
     const give = (until: string | null) =>
       run(() => setPlan.mutateAsync({ userId: u.id, plan: giveTo, until }), fmt(a.done.give, { email, plan: t.plans.names[giveTo] }))
     return (
       <div className="flex flex-wrap items-center gap-1.5">
-        <Button className={small} disabled={busy} onClick={() => give(in30)}>
-          {t.plans.names[giveTo]} · {a.give30}
+        <span className="text-xs font-semibold text-text">{t.plans.names[giveTo]}:</span>
+        <Button className={small} disabled={busy} onClick={() => give(addMonths(1))}>
+          {a.giveMonth}
+        </Button>
+        <Button className={small} disabled={busy} onClick={() => give(addMonths(12))}>
+          {a.giveYear}
         </Button>
         <Button variant="secondary" className={small} disabled={busy} onClick={() => give(null)}>
-          {t.plans.names[giveTo]} · {a.giveForever}
+          {a.giveForever}
         </Button>
         {u.effective_plan !== 'free' && (
           <Button variant="secondary" className={small} disabled={busy} onClick={() => run(() => setPlan.mutateAsync({ userId: u.id, plan: 'free', until: null }), fmt(a.done.remove, { email }))}>
@@ -124,7 +133,12 @@ export function AdminPage() {
       : u.plan !== 'free' && u.plan_until
         ? fmt(a.planExpired, { plan: name, d: dateOnly.format(new Date(u.plan_until)) })
         : a.free
-    return <span className={`rounded-md px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${paid ? 'bg-primary/15 text-primary' : 'bg-surface-2 text-muted'}`}>{text}</span>
+    return (
+      <span className="inline-flex flex-wrap items-center gap-1">
+        <span className={`rounded-md px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${paid ? 'bg-primary/15 text-primary' : 'bg-surface-2 text-muted'}`}>{text}</span>
+        {paid && u.plan_trial && <span className="rounded-md border border-border px-1.5 py-0.5 text-xs whitespace-nowrap text-muted">{a.trialBadge}</span>}
+      </span>
+    )
   }
 
   const monthCell = (u: AdminUser) => {

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { fmt, useT } from '@/i18n'
+import { fmt, plural, useT } from '@/i18n'
+import { planTerm } from '@/lib/plans'
+import { formatDateShort } from '@/lib/format'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { useProfile, useUpdateProfile, useUsage } from './api'
 import { ListEditor } from './ListEditor'
@@ -146,6 +148,7 @@ function PlanCard() {
   const { data: profile } = useProfile()
   if (!usage) return <Card className="text-muted">{t.common.loading}</Card>
   const isPro = usage.plan !== 'free'
+  const term = planTerm(profile, usage.plan)
   const pct = usage.trade_limit ? Math.min(100, (usage.trades_created / usage.trade_limit) * 100) : 0
   return (
     <Card className="flex flex-col gap-3">
@@ -157,10 +160,14 @@ function PlanCard() {
         <Link to="/plans" className="ml-auto text-sm text-primary hover:underline">
           {t.settings.plansLink}
         </Link>
-        {isPro && profile?.plan_until && (
-          <span className="text-sm text-muted">{fmt(t.settings.planUntil, { date: new Date(profile.plan_until).toLocaleDateString('ru-RU') })}</span>
-        )}
       </div>
+      {term && (
+        <p className="text-sm">
+          {term.kind === 'trial'
+            ? fmt(t.plans.term.trial, { days: plural(term.daysLeft, t.plans.daysN) })
+            : fmt(t.plans.term.until, { plan: t.plans.names[term.plan], date: formatDateShort(term.until) })}
+        </p>
+      )}
       <p className="text-sm text-muted">
         {usage.trade_limit === null
           ? fmt(t.settings.usagePro, { used: usage.trades_created })
