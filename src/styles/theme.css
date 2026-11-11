@@ -51,6 +51,20 @@
   /* Текст и значки на заливке цветом прибыли (кнопка «Сохранено»): profit светлый — нужен тёмный, контраст ≥ 4.5:1 */
   --color-on-profit: #04241a;
 
+  /*
+   * Подсветка под курсором (№3) и блик наклона (№2): одно правило CSS на обе темы (.spot-frame, .spot-card::before, .tilt-sheen ниже),
+   * разница — только в токенах (размеры и цвета — здесь и в светлой теме, точки градиентов — блок «Подсветка: точки градиентов» ниже).
+   * Тёмная — мягкая (как задумано 11.11.2026), светлая — ярче: на светлом фоне иначе почти не видно.
+   */
+  --spot-ring-r: 180px;
+  --spot-glow-r: 220px;
+  --color-spot-glow: color-mix(in srgb, var(--color-primary) 13%, transparent);
+  /* блик наклона: в тёмной — чуть светлее текста, в светлой — белый свет */
+  --sheen-r: 260px;
+  --color-sheen: color-mix(in srgb, var(--color-text) 8%, transparent);
+  --sheen-end: 60%;
+  --sheen-blend: normal;
+
 
   /* Анимации (образец — docs/animations-showcase.html). Только transform и opacity (+ stroke-dashoffset в SVG) */
   --ease-snap: cubic-bezier(0.2, 0.7, 0.2, 1);
@@ -163,6 +177,17 @@
   --color-loss: #dc2f4a;
   --color-warning: #b0700a;
   --color-on-profit: #03170e;
+
+  /* Подсветка и блик в светлой теме ярче: шире круг, плотнее фиолетовый, рамка светится дальше от курсора, блик — белый */
+  --spot-ring-r: 260px;
+  --spot-glow-r: 220px;
+  --color-spot-glow: color-mix(in srgb, var(--color-primary) 32%, transparent);
+  --color-spot-glow-mid: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  --sheen-r: 340px;
+  --color-sheen: color-mix(in srgb, white 75%, transparent);
+  --sheen-end: 65%;
+  /* блик лежит поверх текста: «мягкий свет» осветляет фон, а тёмный текст под ним остаётся читаемым */
+  --sheen-blend: soft-light;
 }
 
 /*
@@ -319,6 +344,25 @@
 }
 
 /*
+ * Подсветка: точки градиентов (токены). Тёмная — ровно прежние две точки; светлая — с промежуточной (свет держится дальше от курсора).
+ * Рамку задаём на самой .spot-frame, а не на :root: цвет рамки в покое (--spot-rest, у Pro Plus — фиолетовый)
+ * задан у карточки, и var() внутри токена должен вычисляться у неё.
+ */
+:root {
+  --spot-glow-stops: var(--color-spot-glow), transparent 70%;
+}
+:root[data-theme='light'] {
+  --spot-glow-stops: var(--color-spot-glow), var(--color-spot-glow-mid) 55%, transparent 80%;
+}
+.spot-frame {
+  --spot-ring-stops: var(--color-primary), var(--spot-rest, var(--color-border)) 70%;
+}
+:root[data-theme='light'] .spot-frame {
+  --spot-ring-stops: var(--color-primary), color-mix(in srgb, var(--color-primary) 45%, var(--spot-rest, var(--color-border))) 40%,
+    var(--spot-rest, var(--color-border)) 80%;
+}
+
+/*
  * Подсветка под курсором (№3): обёртка .spot-frame (padding 1px — это и есть рамка) + карточка .spot-card внутри.
  * useSpotlight (src/lib/motion.ts) ставит каждой обёртке [data-spot] --x / --y. Только мышь: на телефоне — обычная рамка.
  */
@@ -334,7 +378,7 @@
 }
 @media (hover: hover) and (pointer: fine) {
   .spot-frame {
-    background: radial-gradient(180px circle at var(--x) var(--y), var(--color-primary), var(--spot-rest, var(--color-border)) 70%);
+    background: radial-gradient(var(--spot-ring-r) circle at var(--x) var(--y), var(--spot-ring-stops));
   }
   .spot-card::before {
     content: '';
@@ -343,7 +387,7 @@
     z-index: -1;
     border-radius: inherit;
     pointer-events: none;
-    background: radial-gradient(220px circle at var(--x) var(--y), color-mix(in srgb, var(--color-primary) 13%, transparent), transparent 70%);
+    background: radial-gradient(var(--spot-glow-r) circle at var(--x) var(--y), var(--spot-glow-stops));
   }
 }
 
@@ -360,7 +404,8 @@
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  background: radial-gradient(260px circle at var(--sx, 50%) var(--sy, 0%), color-mix(in srgb, var(--color-text) 8%, transparent), transparent 60%);
+  background: radial-gradient(var(--sheen-r) circle at var(--sx, 50%) var(--sy, 0%), var(--color-sheen), transparent var(--sheen-end));
+  mix-blend-mode: var(--sheen-blend);
   opacity: 0;
   transition: opacity 0.3s;
 }
