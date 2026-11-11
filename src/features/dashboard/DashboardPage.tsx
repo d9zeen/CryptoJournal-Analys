@@ -28,6 +28,7 @@ import type { EquityUnit } from './equityTime'
 import { Segmented } from '@/components/ui/Segmented'
 import { useMediaQuery } from '@/lib/useMediaQuery'
 import { Welcome } from './Welcome'
+import { PlanEndingBanner } from '@/features/plans/PlanEndingBanner'
 
 // Recharts тяжёлый — грузим графики отдельным файлом
 const EquityChart = lazy(() => import('./charts').then((m) => ({ default: m.EquityChart })))
@@ -86,6 +87,8 @@ export function DashboardPage() {
       </div>
 
       {error && <Alert tone="error">{t.errors.loadFailed}</Alert>}
+
+      <PlanEndingBanner />
 
       {stats.openCount > 0 && <p className="text-sm text-warning">{fmt(t.dashboard.openTrades, { n: stats.openCount })}</p>}
 

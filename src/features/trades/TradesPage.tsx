@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { fmt, useT } from '@/i18n'
 import { SideBadge } from '@/components/SideBadge'
+import { UpgradeLine } from '@/components/UpgradeLine'
 import { useTrades } from './api'
 import { applyFilters, EMPTY_FILTERS, hasActiveFilters, type TradeFilters } from './filters'
 import { useList, useUsage } from '@/features/settings/api'
@@ -62,6 +63,7 @@ export function TradesPage() {
           {fmt(t.tradeForm.usage, { used: usage.trades_created, limit: usage.trade_limit, plan: t.plans.names[usage.plan] })}
         </p>
       )}
+      {usage && usage.trade_limit !== null && usage.trades_created >= usage.trade_limit && <UpgradeLine text={t.plans.upgrade.trades} />}
 
       <div className="flex flex-wrap items-center gap-2">
         <PeriodFilter preset={preset} custom={custom} onPreset={setPreset} onCustom={setCustom} />

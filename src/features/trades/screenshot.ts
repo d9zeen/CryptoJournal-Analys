@@ -46,4 +46,3 @@ export async function screenshotUrls(paths: string[]): Promise<Map<string, strin
   return out
 }
 
-export const MAX_SCREENSHOTS = 10

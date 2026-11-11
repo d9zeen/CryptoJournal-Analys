@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { fmt, useT } from '@/i18n'
-import { compressImage, MAX_SCREENSHOTS, screenshotUrls } from './screenshot'
+import { compressImage, screenshotUrls } from './screenshot'
+import { useUsage } from '@/features/settings/api'
+import { planInfo } from '@/lib/plans'
+import { UpgradeLine } from '@/components/UpgradeLine'
 import { Button } from '@/components/ui/Button'
 import { ImageViewer } from './ImageViewer'
 import type { TradeScreenshot } from '@/types/db'
@@ -24,7 +27,10 @@ export function ScreenshotsField({ saved, pending, onAdd, onRemoveSaved, onRemov
   const [error, setError] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [viewIndex, setViewIndex] = useState<number | null>(null)
-  const free = MAX_SCREENSHOTS - saved.length - pending.length
+  // на Basic — 2 скриншота на сделку, на Pro и Pro Plus — 10 (то же проверяет база, 0016); админ — Pro Plus
+  const { data: usage } = useUsage()
+  const max = planInfo(usage?.plan).screenshots
+  const free = max - saved.length - pending.length
 
   const { data: savedUrls } = useQuery({
     queryKey: ['screenshotUrls', saved.map((s) => s.path)],
@@ -110,13 +116,16 @@ export function ScreenshotsField({ saved, pending, onAdd, onRemoveSaved, onRemov
           }}
           className={`flex flex-col items-center gap-3 rounded-lg border border-dashed p-5 text-center text-sm text-muted transition-colors ${dragOver ? 'border-primary bg-primary/5' : 'border-border'}`}
         >
-          <p>{processing ? t.tradeForm.screenshotProcessing : fmt(t.tradeForm.screenshotHint, { max: MAX_SCREENSHOTS })}</p>
+          <p>{processing ? t.tradeForm.screenshotProcessing : fmt(t.tradeForm.screenshotHint, { max })}</p>
           <Button type="button" variant="secondary" onClick={() => inputRef.current?.click()} loading={processing}>
             {items.length ? t.tradeForm.screenshotAdd : t.tradeForm.screenshotPick}
           </Button>
         </div>
       ) : (
-        <p className="text-xs text-muted">{fmt(t.tradeForm.screenshotsFull, { max: MAX_SCREENSHOTS })}</p>
+        <>
+          <p className="text-xs text-muted">{fmt(t.tradeForm.screenshotsFull, { max })}</p>
+          {max < planInfo('pro').screenshots && <UpgradeLine text={t.plans.upgrade.screenshots} />}
+        </>
       )}
       {error && <p className="text-xs text-loss">{t.tradeForm.screenshotError}</p>}
       <input

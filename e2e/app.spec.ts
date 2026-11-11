@@ -197,7 +197,7 @@ test.describe('оформление', () => {
 test.describe('админка', () => {
   const user = (over: Record<string, unknown>) => ({
     id: 'u1', email: 'friend@example.com', created_at: '2026-10-01T10:00:00Z', last_sign_in_at: '2026-11-04T10:00:00Z',
-    plan: 'free', plan_until: null, effective_plan: 'free', trades_month: 30, trades_total: 120, is_admin: false, ...over,
+    plan: 'free', plan_until: null, plan_trial: false, effective_plan: 'free', trades_month: 30, trades_total: 120, is_admin: false, ...over,
   })
 
   test('обычному пользователю пункт не виден, страница закрыта', async ({ page, db }) => {
@@ -211,7 +211,11 @@ test.describe('админка', () => {
 
   test('админ видит пользователей и выдаёт Pro', async ({ page, db }) => {
     db.isAdmin = true
-    db.adminUsers = [user({}), user({ id: 'u2', email: 'pro@example.com', plan: 'pro', effective_plan: 'pro', trades_month: 3, trades_total: 9 })]
+    db.adminUsers = [
+      user({}),
+      user({ id: 'u2', email: 'pro@example.com', plan: 'pro', effective_plan: 'pro', trades_month: 3, trades_total: 9 }),
+      user({ id: 'u3', email: 'new@example.com', plan: 'pro_plus', effective_plan: 'pro_plus', plan_until: new Date(Date.now() + 5 * 86_400_000).toISOString(), plan_trial: true }),
+    ]
     await fakeSupabase(page, db)
     // на телефоне админки нет в нижнем меню — ссылка внизу настроек
     await page.goto((page.viewportSize()?.width ?? 0) < 768 ? 'settings' : 'dashboard')
@@ -219,14 +223,24 @@ test.describe('админка', () => {
     await expect(page.getByRole('heading', { name: 'Админка' })).toBeVisible()
     await expect(page.getByText('friend@example.com')).toBeVisible()
     await expect(page.getByText('Pro навсегда').first()).toBeVisible()
-    // по умолчанию выдаётся Pro Plus; можно выбрать Pro
+    // пробный период виден в списке
+    await expect(page.getByText('пробный', { exact: true }).first()).toBeVisible()
+    // по умолчанию выдаётся Pro Plus; можно выбрать Pro; сроки — 1 мес / 1 год / бессрочно
     await page.getByLabel('Какой тариф выдать').selectOption('pro')
-    await page.getByRole('button', { name: 'Pro · 30 дней' }).first().click()
+    await page.getByRole('button', { name: '1 год' }).first().click()
     await expect(page.getByText('Готово: friend@example.com теперь на Pro.')).toBeVisible()
-    expect(db.adminCalls?.[0]).toMatchObject({ fn: 'admin_set_plan', body: { p_user: 'u1', p_plan: 'pro' } })
+    const year = db.adminCalls?.[0] as { fn: string; body: { p_user: string; p_plan: string; p_until: string } }
+    expect(year).toMatchObject({ fn: 'admin_set_plan', body: { p_user: 'u1', p_plan: 'pro' } })
+    const days = (Date.parse(year.body.p_until) - Date.now()) / 86_400_000
+    expect(days).toBeGreaterThan(360)
+    expect(days).toBeLessThan(370)
+    await page.getByRole('button', { name: '1 мес' }).first().click()
+    const month = (Date.parse((db.adminCalls?.[1] as { body: { p_until: string } }).body.p_until) - Date.now()) / 86_400_000
+    expect(month).toBeGreaterThan(27)
+    expect(month).toBeLessThan(32)
     await page.getByLabel('Какой тариф выдать').selectOption('pro_plus')
-    await page.getByRole('button', { name: 'Pro Plus · Навсегда' }).first().click()
-    expect(db.adminCalls?.[1]).toMatchObject({ fn: 'admin_set_plan', body: { p_user: 'u1', p_plan: 'pro_plus', p_until: null } })
+    await page.getByRole('button', { name: 'бессрочно' }).first().click()
+    expect(db.adminCalls?.[2]).toMatchObject({ fn: 'admin_set_plan', body: { p_user: 'u1', p_plan: 'pro_plus', p_until: null } })
     await page.getByRole('button', { name: 'Сбросить лимит' }).first().click()
     await expect(page.getByText('лимит friend@example.com в этом месяце сброшен')).toBeVisible()
     // выдать админку (с подтверждением)
@@ -237,8 +251,8 @@ test.describe('админка', () => {
   })
 })
 
-test('страница тарифов: Basic, Pro, Pro Plus; текущий тариф', async ({ page, db }) => {
-  db.usage = { plan: 'pro', trades_created: 3, trade_limit: 50 }
+test('страница тарифов: Basic, Pro, Pro Plus; месяц / год; текущий тариф', async ({ page, db }) => {
+  db.usage = { plan: 'pro', trades_created: 3, trade_limit: null }
   await fakeSupabase(page, db)
   // телефон: ссылка из настроек (тарифа в шапке нет); компьютер: карточка тарифа в левой панели
   const phone = (page.viewportSize()?.width ?? 0) < 768
@@ -247,14 +261,24 @@ test('страница тарифов: Basic, Pro, Pro Plus; текущий та
   else await page.getByRole('link', { name: /^Pro(\s|$)/ }).filter({ visible: true }).first().click()
   await expect(page.getByRole('heading', { name: 'Тарифы' })).toBeVisible()
   for (const name of ['Basic', 'Pro', 'Pro Plus']) await expect(page.getByRole('heading', { name, exact: true })).toBeVisible()
-  await expect(page.getByText('$10 / мес')).toBeVisible()
-  await expect(page.getByText('$15 / мес')).toBeVisible()
+  const head = page.locator('thead')
+  await expect(head).toContainText('$10')
+  await expect(head).toContainText('$15')
   await expect(page.getByText('Твой тариф')).toBeVisible()
+  await expect(page.getByText('Всё автоматически')).toBeVisible()
   await expect(page.getByText('Сделок в месяц', { exact: true }).locator('visible=true')).toBeVisible()
-  await expect(page.getByRole('row').filter({ hasText: 'без лимита' })).toContainText(/30.*50.*без лимита/)
-  await expect(page.getByText(/каждые 3 часа — даже когда сайт закрыт/).locator('visible=true')).toBeVisible()
-  await page.getByRole('button', { name: 'Хочу этот тариф' }).click()
-  await expect(page.getByText(/напиши администратору сайта/)).toBeVisible()
+  await expect(page.getByRole('row').filter({ hasText: 'без лимита' })).toContainText(/50.*без лимита.*без лимита/)
+  await expect(page.getByText('Биржи и кошельки: Bybit по ключу, Hyperliquid по адресу').locator('visible=true')).toBeVisible()
+  await expect(page.getByText(/Цена основателя: Pro Plus за \$99 в год/)).toBeVisible()
+  // за год: −20 %, цена в пересчёте на месяц
+  await page.getByRole('radio', { name: /Год/ }).click()
+  await expect(page.getByRole('radio', { name: /Год/ })).toContainText('−20 %')
+  await expect(head).toContainText('$8')
+  await expect(head).toContainText('$12')
+  await expect(head).toContainText('$144 в год')
+  // оплаты на сайте пока нет и про администратора не пишем
+  await expect(page.getByText(/администратор/)).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /Хочу этот тариф|Оплатить/ })).toHaveCount(0)
 })
 
 test('главная: гость видит страницу о сервисе с живым демо, вошедший — сразу дашборд', async ({ page, db }) => {
@@ -363,4 +387,51 @@ test('«Данные и безопасность»: открывается бе�
   await page.goto('register')
   await page.getByRole('link', { name: 'Данные и безопасность' }).click()
   await expect(page).toHaveURL(/\/privacy$/)
+})
+
+test('пробный Pro Plus: в карточке тарифа — сколько дней осталось, за 2 дня — плашка на дашборде', async ({ page, db }) => {
+  db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
+  db.planTrial = true
+  db.planUntil = new Date(Date.now() + 1.5 * 86_400_000).toISOString()
+  db.trades = [makeTrade(1, { pnl: 50 })]
+  await fakeSupabase(page, db)
+  await page.goto('dashboard')
+  const banner = page.locator('[data-plan-ending]')
+  await expect(banner).toContainText('Пробный Pro Plus закончится через 2 дня.')
+  await expect(banner.getByRole('link', { name: 'Тарифы' })).toBeVisible()
+  if ((page.viewportSize()?.width ?? 0) >= 1024) await expect(page.locator('[data-plan-term]')).toContainText('Pro Plus — пробный, осталось 2 дня')
+})
+
+test('Pro со сроком: «Pro до …», за 3 дня — плашка «Продлить»; раньше плашки нет', async ({ page, db }) => {
+  db.usage = { plan: 'pro', trades_created: 3, trade_limit: null }
+  db.planUntil = new Date(Date.now() + 10 * 86_400_000).toISOString()
+  db.trades = [makeTrade(1, { pnl: 50 })]
+  await fakeSupabase(page, db)
+  await page.goto('settings')
+  await expect(page.getByText(/^Pro до \d\d\.\d\d\.\d{4}$/).locator('visible=true').first()).toBeVisible()
+  await page.goto('dashboard')
+  await expect(page.locator('[data-plan-ending]')).toHaveCount(0)
+  db.planUntil = new Date(Date.now() + 2.5 * 86_400_000).toISOString()
+  await page.reload()
+  await expect(page.locator('[data-plan-ending]').getByRole('link', { name: 'Продлить' })).toBeVisible()
+})
+
+test('лимит Basic 50 сделок: строка с предложением тарифа на странице сделок', async ({ page, db }) => {
+  db.usage = { plan: 'free', trades_created: 50, trade_limit: 50 }
+  await fakeSupabase(page, db)
+  await page.goto('trades')
+  const line = page.locator('[data-upgrade]').filter({ hasText: 'Лимит Basic — 50 сделок в месяц' })
+  await expect(line).toBeVisible()
+  await expect(line.getByRole('link', { name: 'Тарифы' })).toBeVisible()
+  await page.goto('trades/new')
+  await expect(page.getByText('Лимит Basic исчерпан: 50 из 50 сделок в этом месяце.')).toBeVisible()
+})
+
+test('Basic: два скриншота на сделку, дальше — строка про Pro', async ({ page, db }) => {
+  const shot = (n: number) => ({ id: `sh${n}`, trade_id: '00000000-0000-0000-0000-000000000001', path: `${'11111111-1111-1111-1111-111111111111'}/t/${n}.webp`, sort_order: n, created_at: '' })
+  db.trades = [makeTrade(1, { trade_screenshots: [shot(1), shot(2)] })]
+  await fakeSupabase(page, db)
+  await page.goto('trades/00000000-0000-0000-0000-000000000001')
+  await expect(page.getByText('Добавлено максимум для тарифа — 2 шт.')).toBeVisible()
+  await expect(page.locator('[data-upgrade]').filter({ hasText: 'На Basic — 2 скриншота на сделку' })).toBeVisible()
 })

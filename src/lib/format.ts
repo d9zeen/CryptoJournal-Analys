@@ -42,6 +42,11 @@ export function formatDateTime(iso: string | null | undefined): string {
   return new Intl.DateTimeFormat(LOCALE, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(iso))
 }
 
+/** Дата без времени: 12.12.2026 (в часовом поясе браузера) */
+export function formatDateShort(d: Date | string): string {
+  return new Intl.DateTimeFormat(LOCALE, { dateStyle: 'short' }).format(typeof d === 'string' ? new Date(d) : d)
+}
+
 /** ISO → значение для <input type="datetime-local"> в локальном времени */
 export function isoToLocalInput(iso: string | null | undefined): string {
   if (!iso) return ''

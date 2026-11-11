@@ -66,7 +66,7 @@ test.describe('вредный код в данных показывается к
 
 // здесь нарушения CSP — ожидаемый результат (браузер блокирует подсунутое), поэтому без общего контроля fixtures
 plainTest('подсунутый скрипт не выполняется (защита CSP)', async ({ page }) => {
-  const db: FakeDb = { trades: [], imports: [], inserted: [], factors: [], aal: 'aal1', usage: { plan: 'free', trades_created: 0, trade_limit: 30 } }
+  const db: FakeDb = { trades: [], imports: [], inserted: [], factors: [], aal: 'aal1', usage: { plan: 'free', trades_created: 0, trade_limit: 50 } }
   const blocked: string[] = []
   page.on('console', (m) => /Content Security Policy/i.test(m.text()) && blocked.push(m.text()))
   await fakeSupabase(page, db, { signedIn: false })

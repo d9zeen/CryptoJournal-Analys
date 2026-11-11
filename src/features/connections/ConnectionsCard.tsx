@@ -13,8 +13,10 @@ import { exchangeName } from '@/lib/exchanges'
 import { dbErrorMessage } from '@/lib/errors'
 import { formatDateTime } from '@/lib/format'
 import { useUsage } from '@/features/settings/api'
-import { Link } from 'react-router'
-import { canConnect, planFor, planInfo } from '@/lib/plans'
+import { activeConnections, connectBlock, connectionTypeOk, planFor, planInfo } from '@/lib/plans'
+import { useIsAdmin } from '@/features/admin/api'
+import { UpgradeLine } from '@/components/UpgradeLine'
+import type { Plan } from '@/types/db'
 import { PolymarketDemoDialog } from './PolymarketDemoDialog'
 import {
   CONNECTABLE,
@@ -35,7 +37,7 @@ export function connectionError(e: unknown, t: Dict): string {
   const c = t.connections.errors as Record<string, string>
   if (e instanceof SyncError) return c[e.code] ?? c.UNKNOWN
   const msg = e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : ''
-  for (const code of ['BAD_WALLET', 'BAD_API_KEY', 'TOO_MANY_CONNECTIONS', 'CONNECTION_EXISTS', 'EXCHANGE_NOT_SUPPORTED', 'PLAN_REQUIRED']) if (msg.includes(code)) return c[code]
+  for (const code of ['BAD_WALLET', 'BAD_API_KEY', 'CONNECTION_LIMIT_REACHED', 'TOO_MANY_CONNECTIONS', 'CONNECTION_EXISTS', 'EXCHANGE_NOT_SUPPORTED', 'PLAN_REQUIRED']) if (msg.includes(code)) return c[code]
   return dbErrorMessage(e, t)
 }
 
@@ -44,7 +46,12 @@ export function ConnectionsCard() {
   const c = t.connections
   const { data: conns = [], isLoading } = useConnections()
   const { data: usage } = useUsage()
-  const pro = planInfo(usage?.plan).serverSync // Pro Plus: синхронизация на сервере каждые 3 часа
+  const { data: isAdmin } = useIsAdmin()
+  const plan = usage?.plan
+  const admin = Boolean(isAdmin)
+  const pro = planInfo(plan).serverSync // Pro Plus: синхронизация на сервере каждые 3 часа
+  // работают только подключения в пределах тарифа; остальные (Polymarket на Pro, сверх лимита) — на паузе, не удаляются
+  const active = activeConnections(conns, plan, admin)
   const [adding, setAdding] = useState(false)
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
 
@@ -72,6 +79,8 @@ export function ConnectionsCard() {
 
       {adding && (
         <AddForm
+          count={conns.length}
+          admin={admin}
           onDone={(name) => {
             setAdding(false)
             setNotice({ tone: 'success', text: fmt(c.added, { name }) })
@@ -86,20 +95,13 @@ export function ConnectionsCard() {
         !adding && (
           <>
             <p className="text-sm text-muted">{c.empty}</p>
-            {!planInfo(usage?.plan).polymarket && (
-              <p className="text-xs text-muted">
-                {c.lockedHint}{' '}
-                <Link to="/plans" className="text-primary hover:underline">
-                  {t.plans.compare}
-                </Link>
-              </p>
-            )}
+            {usage && !admin && planInfo(plan).connections === 0 && <UpgradeLine text={t.plans.upgrade.connectionsFree} />}
           </>
         )
       ) : (
         <ul className="flex flex-col">
           {conns.map((conn) => (
-            <ConnectionRow key={conn.id} conn={conn} pro={pro} onSynced={onSynced} onError={(text) => setNotice({ tone: 'error', text })} />
+            <ConnectionRow key={conn.id} conn={conn} pro={pro} paused={!active.has(conn.id)} plan={plan} onSynced={onSynced} onError={(text) => setNotice({ tone: 'error', text })} />
           ))}
         </ul>
       )}
@@ -108,10 +110,39 @@ export function ConnectionsCard() {
   )
 }
 
+/** Почему нельзя подключить — одна строка с предложением тарифа */
+function upgradeText(t: Dict, block: 'type' | 'limit', exchange: string, plan: Plan | undefined): string {
+  const u = t.plans.upgrade
+  if (block === 'type') return exchange === 'polymarket' && plan === 'pro' ? u.polymarket : planInfo(plan).connections === 0 ? u.connectionsFree : u.polymarket
+  return plan === 'pro_plus' ? u.connectionsMax : u.connectionsPro
+}
+
+/** Подключение на паузе: какой тариф нужен (Basic → тариф для этого типа, Pro → Pro Plus; на Pro Plus — сверх 5) */
+function pausedText(t: Dict, exchange: string, plan: Plan | undefined): string {
+  if (plan === 'pro_plus') return t.connections.pausedMax
+  const need: Plan = plan === 'pro' ? 'pro_plus' : planFor(exchange)
+  return fmt(t.connections.paused, { plan: t.plans.names[need] })
+}
+
 const DAY_MS = 86_400_000
 const dateOnly = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' })
 
-function ConnectionRow({ conn, pro, onSynced, onError }: { conn: Connection; pro: boolean; onSynced: (r: SyncResult) => void; onError: (text: string) => void }) {
+function ConnectionRow({
+  conn,
+  pro,
+  paused,
+  plan,
+  onSynced,
+  onError,
+}: {
+  conn: Connection
+  pro: boolean
+  /** не по тарифу — синхронизация не идёт («нужен Pro Plus»), подключение не удаляется */
+  paused: boolean
+  plan: Plan | undefined
+  onSynced: (r: SyncResult) => void
+  onError: (text: string) => void
+}) {
   const t = useT()
   const c = t.connections
   const sync = useSyncConnection()
@@ -134,13 +165,13 @@ function ConnectionRow({ conn, pro, onSynced, onError }: { conn: Connection; pro
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-sm font-medium">
-            <span className={`size-2 shrink-0 rounded-full ${errText ? 'bg-loss' : conn.last_sync_at ? 'bg-profit' : 'bg-muted'}`} aria-hidden />
+            <span className={`size-2 shrink-0 rounded-full ${paused ? 'bg-muted' : errText ? 'bg-loss' : conn.last_sync_at ? 'bg-profit' : 'bg-muted'}`} aria-hidden />
             {exchangeName(conn.exchange, t.exchange.other)}
             <span className="num truncate text-xs font-normal text-muted">{conn.label ?? shortKey(conn.api_key)}</span>
           </div>
           <div className="mt-0.5 text-xs text-muted">
             {sync.isPending ? c.syncing : conn.last_sync_at ? fmt(c.lastSync, { date: formatDateTime(conn.last_sync_at) }) : c.neverSynced}
-            {!sync.isPending && pro && !errText && <span> · {c.autoPro}</span>}
+            {!sync.isPending && pro && !errText && !paused && <span> · {c.autoPro}</span>}
           </div>
         </div>
         <div className="flex shrink-0 gap-1">
@@ -148,6 +179,7 @@ function ConnectionRow({ conn, pro, onSynced, onError }: { conn: Connection; pro
             variant="secondary"
             className="!px-2.5 !py-1.5 text-xs"
             loading={sync.isPending}
+            disabled={paused}
             onClick={() => sync.mutate(conn, { onSuccess: onSynced, onError: (e) => onError(connectionError(e, t)) })}
           >
             {c.sync}
@@ -164,13 +196,14 @@ function ConnectionRow({ conn, pro, onSynced, onError }: { conn: Connection; pro
           </Button>
         </div>
       </div>
-      {errText && !sync.isPending && <p className="text-xs text-loss">{errText}</p>}
+      {paused && <UpgradeLine className="!text-xs" text={pausedText(t, conn.exchange, plan)} />}
+      {errText && !sync.isPending && !paused && <p className="text-xs text-loss">{errText}</p>}
       {expiry && !errText && <p className={`text-xs ${expiry.tone}`}>{expiry.text}</p>}
     </li>
   )
 }
 
-function AddForm({ onDone, onCancel }: { onDone: (name: string) => void; onCancel: () => void }) {
+function AddForm({ count, admin, onDone, onCancel }: { count: number; admin: boolean; onDone: (name: string) => void; onCancel: () => void }) {
   const t = useT()
   const c = t.connections
   const add = useAddConnection()
@@ -178,8 +211,9 @@ function AddForm({ onDone, onCancel }: { onDone: (name: string) => void; onCance
   const { data: usage } = useUsage()
   const plan = usage?.plan
   // по умолчанию — первое подключение, доступное на тарифе
-  const [exchange, setExchange] = useState<ConnectableId>(() => CONNECTABLE.find((x) => canConnect(x.id, plan))?.id ?? 'bybit')
-  const allowed = canConnect(exchange, plan)
+  const [exchange, setExchange] = useState<ConnectableId>(() => CONNECTABLE.find((x) => admin || connectionTypeOk(x.id, plan))?.id ?? 'bybit')
+  const block = connectBlock(exchange, plan, count, admin)
+  const allowed = block === null
   const [apiKey, setApiKey] = useState('')
   const [secret, setSecret] = useState('')
   const [label, setLabel] = useState('')
@@ -207,7 +241,7 @@ function AddForm({ onDone, onCancel }: { onDone: (name: string) => void; onCance
         {CONNECTABLE.map((x) => (
           <option key={x.id} value={x.id}>
             {exchangeName(x.id, '')} · {c.kind[x.kind]}
-            {canConnect(x.id, plan) ? '' : ` · ${t.plans.names[planFor(x.id)]}`}
+            {admin || connectionTypeOk(x.id, plan) ? '' : ` · ${t.plans.names[planFor(x.id)]}`}
           </option>
         ))}
       </SelectField>
@@ -231,12 +265,7 @@ function AddForm({ onDone, onCancel }: { onDone: (name: string) => void; onCance
       )}
 
       {!allowed ? (
-        <Alert tone="info">
-          {fmt(t.plans.needPlan, { plan: t.plans.names[planFor(exchange)] })}{' '}
-          <Link to="/plans" className="text-primary underline">
-            {t.plans.compare}
-          </Link>
-        </Alert>
+        <UpgradeLine text={upgradeText(t, block!, exchange, plan)} />
       ) : (
         <>
           {kind === 'cex' ? (
