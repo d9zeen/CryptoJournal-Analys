@@ -1,7 +1,7 @@
 # CryptoJournal — контекст для Claude
 
 Онлайн-дневник сделок для русскоязычных криптотрейдеров (фьючерсы Bybit / BingX / OKX + спот):
-запись сделок, статистика, импорт CSV. Тарифы Basic (free) / Pro / Pro Plus — `src/lib/plans.ts` + база (0013); оплаты пока нет, тариф выдаёт админ.
+запись сделок, статистика, импорт CSV. Тарифы Basic (free) / Pro / Pro Plus — `src/lib/plans.ts` + база (0016); новичкам 7 дней Pro Plus; оплаты на сайте пока нет (будет отдельным PR), тариф выдаёт админ.
 
 Владелец — не профессиональный разработчик: объяснять простым языком, маленькие шаги,
 после каждого шага — как проверить результат. Общение на русском.
@@ -112,13 +112,17 @@ docs/SECURITY.md       вся защита (база, сайт, сборка) + 
 | `VITE_SUPABASE_ANON_KEY` | anon key или publishable key (публичный) |
 | `BASE_PATH` | только при сборке для GitHub Pages: `/CryptoJournal-Analys/` (ставит workflow) |
 
-Проект Supabase: `cryptojournal`, ref `dkjavndvuulnzflowdhj` (Frankfurt), миграции 0001–0015 применены (0005 — админка, владелец добавлен в `admins`; 0006 — подключения бирж; 0007–0008 — синхронизация по расписанию; 0009 — админ без лимитов; 0010–0011 — Polymarket, рынок `prediction`, `trades.title`; 0012–0013 — тарифы Pro / Pro Plus; 0014 — выдача админки на сайте, 05.11.2026; 0015 — палитра profiles.palette, 07.11.2026).
+Проект Supabase: `cryptojournal`, ref `dkjavndvuulnzflowdhj` (Frankfurt), миграции 0001–0015 применены (0016 — новые тарифы, ждёт применения) (0005 — админка, владелец добавлен в `admins`; 0006 — подключения бирж; 0007–0008 — синхронизация по расписанию; 0009 — админ без лимитов; 0010–0011 — Polymarket, рынок `prediction`, `trades.title`; 0012–0013 — тарифы Pro / Pro Plus; 0014 — выдача админки на сайте, 05.11.2026; 0015 — палитра profiles.palette, 07.11.2026).
 Подключения бирж (как TradeZella): `features/connections` + `lib/sync` + серверная функция `supabase/functions/exchange-proxy` (выложена; при изменении — выложить заново через коннектор Supabase, verify_jwt = true). Секреты ключей — в Vault, браузер их не видит. Новые биржи: `connection_kind` в новой миграции + модуль в `lib/sync` + `CONNECTABLE`.
 Синхронизация по расписанию (Pro Plus, каждые 3 ч): pg_cron `cj-sync` → `dispatch_sync()` → pg_net → функция `sync-worker` (verify_jwt = false, проверяет секрет `cj_sync_secret` из Vault).
 Логика одна для браузера и сервера: `src/lib/sync/run.ts`; `supabase/functions/sync-worker/engine.js` собирается `npm run build:functions` (CI проверяет, что он свежий).
 Выкладка sync-worker: в index.ts импорт `./engine.js` заменить на `https://cdn.jsdelivr.net/gh/d9zeen/CryptoJournal-Analys@<SHA коммита>/supabase/functions/sync-worker/engine.js` (коммит уже запушен) и выложить через коннектор Supabase.
-Тарифы: Basic — 30 сделок/мес; Pro ($10) — 50 сделок/мес + Polymarket; Pro Plus ($15) — без лимита, биржи по API, Polymarket, сервер каждые 3 ч.
-Проверки тарифа — в базе (`plan_trade_limit`, `connection_plan_ok`, `dispatch_sync`), в exchange-proxy / sync-worker и в интерфейсе (`canConnect`). Страница `/plans`.
+Тарифы (0016): Basic — 50 сделок/мес, подключений 0, скриншотов 2, палитры 3; Pro ($10/мес или $96/год) — сделки без лимита, 1 подключение (Bybit / Hyperliquid, НЕ Polymarket),
+синхронизация пока сайт открыт, скриншотов 10, все палитры; Pro Plus ($15/мес или $144/год) — без лимита, до 5 подключений (и Polymarket), сервер каждые 3 ч, скриншотов 10.
+Пробный период: новый пользователь — Pro Plus на 7 дней (`handle_new_user`, `profiles.plan_trial`), потом сам Basic (effective_plan по plan_until).
+Проверки тарифа — в базе (`plan_trade_limit`, `connection_plan_ok`, `plan_connection_limit` → `CONNECTION_LIMIT_REACHED`, `plan_screenshot_limit`,
+`connection_active` / `connection_ok`, `dispatch_sync`), в exchange-proxy / sync-worker (`connection_active`) и в интерфейсе (`canConnect`, `activeConnections`, `planTerm`).
+Лишние подключения (Polymarket на Pro, сверх лимита) не удаляются — «на паузе». Апгрейд предлагается одной строкой (`components/UpgradeLine`). Страница `/plans` (месяц / год).
 Админка: `/admin` (features/admin); админ всегда Pro Plus и без потолков записей (`effective_plan`, 0009); таблица `admins` + функции `is_admin`, `admin_list_users`, `admin_set_plan`, `admin_reset_usage`; админку выдаёт / снимает админ на сайте (`admin_set_admin`; себя и последнего админа снять нельзя) или SQL Editor (docs/ADMIN.md).
 Скриншоты: таблица `trade_screenshots` (до 10 на сделку), файлы `{user_id}/{trade_id}/{uuid}.webp`; старое поле `trades.screenshot_path` не используется.
 Публичные URL и publishable key вписаны в `.env.example` и `.github/workflows/pages.yml` (секреты репозитория НЕ используются — старый секрет однажды перебил адрес).
