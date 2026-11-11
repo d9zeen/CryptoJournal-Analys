@@ -1,10 +1,12 @@
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import { supabase } from '@/lib/supabase'
-import { useT } from '@/i18n'
+import { fmt, useT } from '@/i18n'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
-import { Alert } from '@/components/ui/Alert'
+import { FormError } from '@/components/FormError'
+import { useShake } from '@/lib/motion'
+import { CheckEmail } from './CheckEmail'
 import { AuthLayout } from './AuthLayout'
 import { authErrorMessage } from './errors'
 import { appUrl } from '@/lib/url'
@@ -14,30 +16,51 @@ export function ResetPasswordPage() {
   const t = useT()
   const [email, setEmail] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [sent, setSent] = useState(false)
+  const [sent, setSent] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [cardRef, shake] = useShake<HTMLDivElement>()
+
+  const send = async (to: string) => (await supabase.auth.resetPasswordForEmail(to, { redirectTo: appUrl('update-password') })).error
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
     setLoading(true)
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: appUrl('update-password'),
-    })
+    const to = email.trim()
+    const error = await send(to)
     setLoading(false)
-    if (error) return setError(authErrorMessage(error, t))
-    setSent(true)
+    if (error) {
+      setError(authErrorMessage(error, t))
+      shake()
+      return
+    }
+    setSent(to)
   }
 
   return (
-    <AuthLayout title={t.auth.reset.title}>
+    <AuthLayout title={t.auth.reset.title} cardRef={cardRef}>
       {sent ? (
-        <Alert tone="success">{t.auth.reset.sent}</Alert>
+        // №6: «Проверь почту» и «Отправить ещё раз» (через 0:30)
+        <CheckEmail
+          text={fmt(t.auth.checkEmail.reset, { email: sent })}
+          onResend={async () => {
+            const error = await send(sent)
+            return error ? authErrorMessage(error, t) : null
+          }}
+        />
       ) : (
         <form onSubmit={onSubmit} className="flex flex-col gap-4">
           <p className="text-sm text-muted">{t.auth.reset.hint}</p>
-          {error && <Alert tone="error">{error}</Alert>}
-          <Input label={t.auth.email} type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          <FormError message={error} />
+          <Input
+            label={t.auth.email}
+            type="email"
+            autoComplete="email"
+            required
+            invalid={Boolean(error)}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
           <Button type="submit" loading={loading}>
             {t.auth.reset.submit}
           </Button>

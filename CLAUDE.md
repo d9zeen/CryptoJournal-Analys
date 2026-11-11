@@ -39,11 +39,11 @@ src/
   styles/theme.css     ВСЕ цвета, шрифты и анимации (Tailwind @theme), стиль «Аврора». Классы: bg-bg, bg-surface, bg-surface-2,
                        border-border, text-text, text-muted, text-primary (фиолет: кнопки), text-accent (мята: данные),
                        text-profit, text-loss, font-display (заголовки), num (цифры моно), rise (появление, --i), card-lift.
-                       Без свечений, пульсаций и градиентов — сайт не должен выглядеть «сгенерированным». Светлая тема — :root[data-theme='light'] в том же файле
+                       Без пульсаций и кричащих градиентов. Разрешены только: мягкая подсветка под курсором (spotlight) и отблеск заготовок при загрузке (skeleton) — сайт не должен выглядеть «сгенерированным». Светлая тема — :root[data-theme='light'] в том же файле
   lib/theme.ts         светлая (по умолчанию) / тёмная тема (localStorage; до загрузки приложения — public/theme-init.js, без вспышки), useTheme / setTheme; кнопка — components/ThemeToggle.tsx
   lib/palette.ts       палитра прибыли / убытка (по умолчанию classic — зелёный / красный; classic, teal_salmon, sky_coral — всем, остальные 5 — Pro / Pro Plus, проверка и триггером 0015; выбор — полоска PaletteStrip в «Настройки → Оформление», features/palette):
                        data-palette на <html>, цвета в theme.css; --color-up / --color-down = profit / loss
-  lib/motion.ts        prefersReducedMotion, useCountUp — анимации уважают «уменьшить движение»
+  lib/motion.ts        хуки анимаций (раздел «Анимации» ниже): prefersReducedMotion, useCountUp, useShown, useTilt, useSpotlight, useShake, pause
   i18n/ru.ts           ВСЕ тексты интерфейса. Новый язык = файл с той же структурой (тип Dict)
   i18n/index.ts        useT(), fmt(), plural() — числа со словом («1 сделка / 2 сделки / 5 сделок»)
   lib/supabase.ts      клиент Supabase (только публичный ключ)
@@ -103,6 +103,20 @@ docs/SECURITY.md       вся защита (база, сайт, сборка) + 
 5. **Деньги** — формулы в `src/lib/calc/`, покрыты тестами (Vitest). Время хранится в UTC (`timestamptz`).
 6. **Вёрстка** — текст не мельче 12px (`text-xs`), кроме подписей осей графиков. Mobile-first, проверять на ширине 390px **и на широком мониторе (1920px)**: контейнер до 2200px, прижат к левой панели (без пустой полосы слева), на xl блоки раскладываются в колонки рядом (владелец не любит узкую ленту по центру и длинную прокрутку).
 7. После каждого этапа: краткий отчёт «что сделано / как проверить», коммит с понятным сообщением, обновить статус этапов в `docs/PLAN.md`.
+
+## Анимации (11.11.2026, образец — docs/animations-showcase.html)
+
+- Только transform и opacity (+ stroke-dashoffset в SVG). Ширина анимируется только у одной кнопки SaveButton, никогда — в длинных списках.
+- Без библиотек: ключевые кадры и utility — `src/styles/theme.css` (rise, skeleton, cell-in, rows-open, shake, pop, roll, flash-up / flash-down,
+  .spot-frame / .spot-card, .tilt / .tilt-sheen, .draw-path, .eq-curtain, .cal-day-link); хуки — `src/lib/motion.ts`;
+  компоненты — `src/components`: Skeleton (+ заготовки страниц), RollNumber, AnimatedNumber, PasswordInput, CheckMark, FormError, SaveButton.
+- «Уменьшить движение» — общий блок в theme.css; итоговое состояние задаётся в базовых стилях, анимация только «приводит» к нему.
+- Наклон (№2, useTilt) — только главная: карточки тарифов и превью дашборда. Подсветка под курсором (№3, useSpotlight) — ряд показателей,
+  тарифы, «Путь одной сделки». Оба — только мышь `(hover: hover) and (pointer: fine)`.
+- Числа: AnimatedNumber — первый показ набегает, смена периода (rollKey) — прокрутка, новые сделки — плавный пересчёт.
+  Ключ периода «на экране» берётся только когда пришли данные (useTrades с keepPreviousData, isPlaceholderData).
+- Новые сделки от синхронизации: `lib/arrivals.ts` (markSynced + useArrivals), не больше 10, не при импорте файла.
+- Ошибки форм: useShake (карточка «мотает головой») + FormError (выезжает) + `invalid` у поля.
 
 ## Переменные окружения
 

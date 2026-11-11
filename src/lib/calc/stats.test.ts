@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  barFor,
   byHour,
   bySetup,
   bySide,
@@ -231,5 +232,18 @@ describe('графики: прореживание и укрупнение', () 
     expect(m.unit).toBe('month')
     expect(m.bars[0]).toEqual({ date: '2025-01-01', pnl: 310, count: 31 })
     expect(m.bars.reduce((a, b) => a + b.count, 0)).toBe(400)
+  })
+})
+
+describe('barFor', () => {
+  it('день, неделя, месяц: столбик, в который попадает день', () => {
+    const days = [{ date: '2026-11-02' }, { date: '2026-11-05' }]
+    expect(barFor(days, '2026-11-05')).toBe('2026-11-05')
+    const weeks = [{ date: '2026-10-26' }, { date: '2026-11-02' }, { date: '2026-11-09' }]
+    expect(barFor(weeks, '2026-11-04')).toBe('2026-11-02')
+    expect(barFor(weeks, '2026-11-15')).toBe('2026-11-09')
+    const months = [{ date: '2026-09-01' }, { date: '2026-10-01' }]
+    expect(barFor(months, '2026-10-31')).toBe('2026-10-01')
+    expect(barFor(months, '2026-08-31')).toBeNull()
   })
 })

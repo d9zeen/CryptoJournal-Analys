@@ -17,6 +17,8 @@ import { SecurityCard } from './SecurityCard'
 import { Segmented } from '@/components/ui/Segmented'
 import { setTheme, useTheme, type Theme } from '@/lib/theme'
 import { PaletteStrip } from '@/features/palette/PaletteStrip'
+import { SaveButton, type SaveState } from '@/components/SaveButton'
+import { pause } from '@/lib/motion'
 import { useIsAdmin } from '@/features/admin/api'
 
 export function SettingsPage() {
@@ -104,6 +106,9 @@ function ProfileCard() {
     setBalance(toInput(profile.starting_balance))
   }, [profile])
 
+  // №15: «Сохранить» — крутилка в круге, галочка цветом прибыли
+  const [saveState, setSaveState] = useState<SaveState>('idle')
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     setStatus(null)
@@ -112,12 +117,16 @@ function ProfileCard() {
       setStatus({ tone: 'error', text: t.tradeForm.errors.number })
       return
     }
+    setSaveState('busy')
     try {
       await update.mutateAsync({ timezone: tz, starting_balance: startingBalance })
+      setSaveState('done')
       setStatus({ tone: 'success', text: t.common.saved })
+      await pause(600)
     } catch (error) {
       setStatus({ tone: 'error', text: dbErrorMessage(error, t) })
     }
+    setSaveState('idle')
   }
 
   return (
@@ -134,9 +143,9 @@ function ProfileCard() {
         </SelectField>
         <NumberField label={t.settings.startingBalance} hint={t.settings.startingBalanceHint} value={balance} onChange={(e) => setBalance(e.target.value)} />
         {status && <Alert tone={status.tone}>{status.text}</Alert>}
-        <Button type="submit" loading={update.isPending} disabled={!profile} className="self-start">
+        <SaveButton state={saveState} disabled={!profile} className="self-start">
           {t.common.save}
-        </Button>
+        </SaveButton>
       </form>
     </Card>
   )
@@ -174,7 +183,12 @@ function PlanCard() {
           : fmt(t.settings.usageFree, { used: usage.trades_created, limit: usage.trade_limit })}
       </p>
       {usage.trade_limit !== null && (
-        <div className="h-2 overflow-hidden rounded-full bg-surface-2" role="progressbar" aria-valuenow={usage.trades_created} aria-valuemax={usage.trade_limit}>
+        <div
+          className="h-2 overflow-hidden rounded-full bg-surface-2"
+          role="progressbar"
+          aria-valuenow={usage.trades_created}
+          aria-valuemax={usage.trade_limit}
+        >
           <div className={`h-full ${pct >= 100 ? 'bg-loss' : 'bg-primary'}`} style={{ width: `${pct}%` }} />
         </div>
       )}
@@ -253,7 +267,14 @@ function DataCard() {
               >
                 {deleting ? d.deleting : d.deleteConfirm}
               </Button>
-              <Button variant="ghost" onClick={() => { setConfirming(false); setTyped('') }} disabled={deleting}>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setConfirming(false)
+                  setTyped('')
+                }}
+                disabled={deleting}
+              >
                 {t.common.cancel}
               </Button>
             </div>

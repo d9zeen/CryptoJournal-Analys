@@ -26,6 +26,75 @@ test.describe('вход', () => {
     await expect(page.getByText('Пароль должен быть не короче 6 символов')).toBeVisible()
   })
 
+  test('глазик показывает и прячет пароль', async ({ page, db }) => {
+    await fakeSupabase(page, db, { signedIn: false })
+    await page.goto('login')
+    const field = page.getByLabel('Пароль', { exact: true })
+    await field.fill('secret12')
+    await expect(field).toHaveAttribute('type', 'password')
+    await page.getByRole('button', { name: 'Показать пароль' }).click()
+    await expect(field).toHaveAttribute('type', 'text')
+    await expect(page.getByRole('button', { name: 'Скрыть пароль' })).toHaveAttribute('aria-pressed', 'true')
+    await page.getByRole('button', { name: 'Скрыть пароль' }).click()
+    await expect(field).toHaveAttribute('type', 'password')
+  })
+
+  test('неверный пароль: ошибка выезжает, поле подсвечено', async ({ page, db }) => {
+    db.loginFails = true
+    await fakeSupabase(page, db, { signedIn: false })
+    await page.goto('login')
+    await page.getByLabel('Email').fill('trader@example.com')
+    await page.getByLabel('Пароль', { exact: true }).fill('wrong-pass')
+    await page.getByRole('button', { name: 'Войти' }).click()
+    await expect(page.getByRole('alert')).toHaveText('Неверный email или пароль')
+    await expect(page.getByLabel('Пароль', { exact: true })).toHaveAttribute('aria-invalid', 'true')
+    await expect(page).toHaveURL(/\/login$/)
+  })
+
+  test('вход: галочка в кнопке и переход в дневник', async ({ page, db }) => {
+    await fakeSupabase(page, db, { signedIn: false })
+    await page.goto('login')
+    await page.getByLabel('Email').fill('trader@example.com')
+    await page.getByLabel('Пароль', { exact: true }).fill('secret12')
+    await page.getByRole('button', { name: 'Войти' }).click()
+    await expect(page).toHaveURL(/\/dashboard$/)
+  })
+
+  test('регистрация с подтверждением почты: экран «Проверь почту», повторная отправка через 0:30', async ({ page, db }) => {
+    db.confirmEmail = true
+    await fakeSupabase(page, db, { signedIn: false })
+    await page.clock.install()
+    await page.goto('register')
+    await page.getByLabel('Email').fill('new@example.com')
+    await page.getByLabel('Пароль', { exact: true }).fill('qwerty')
+    // полоска надёжности только подсказывает: простой пароль из 6 символов разрешён
+    await expect(page.getByText('Слабый')).toBeVisible()
+    await page.getByLabel('Повтори пароль').fill('qwerty')
+    await page.getByRole('button', { name: 'Создать аккаунт' }).click()
+    const box = page.locator('[data-check-email]')
+    await expect(box.getByRole('heading', { name: 'Проверь почту' })).toBeVisible()
+    await expect(box).toContainText('new@example.com')
+    const resend = box.getByRole('button', { name: /Отправить ещё раз/ })
+    await expect(resend).toBeDisabled()
+    await expect(resend).toContainText('0:30')
+    await page.clock.runFor(31_000)
+    await expect(resend).toBeEnabled()
+    await resend.click()
+    await expect(box.getByText('Отправили ещё раз.')).toBeVisible()
+    expect(db.authCalls?.some((c) => c.path === '/auth/v1/resend')).toBe(true)
+  })
+
+  test('регистрация без подтверждения почты: сразу в дневник', async ({ page, db }) => {
+    await fakeSupabase(page, db, { signedIn: false })
+    await page.goto('register')
+    await page.getByLabel('Email').fill('new@example.com')
+    await page.getByLabel('Пароль', { exact: true }).fill('qwerty12')
+    await page.getByLabel('Повтори пароль').fill('qwerty12')
+    await page.getByRole('button', { name: 'Создать аккаунт' }).click()
+    await expect(page).toHaveURL(/\/dashboard$/)
+    await expect(page.locator('[data-check-email]')).toHaveCount(0)
+  })
+
   test('при включённой 2FA после пароля спрашивается код', async ({ page, db }) => {
     db.factors = [{ id: 'f1', factor_type: 'totp', status: 'verified', friendly_name: 'x', created_at: '', updated_at: '' }]
     await fakeSupabase(page, db)
@@ -434,4 +503,42 @@ test('Basic: два скриншота на сделку, дальше — ст�
   await page.goto('trades/00000000-0000-0000-0000-000000000001')
   await expect(page.getByText('Добавлено максимум для тарифа — 2 шт.')).toBeVisible()
   await expect(page.locator('[data-upgrade]').filter({ hasText: 'На Basic — 2 скриншота на сделку' })).toBeVisible()
+})
+
+test('кнопка «Сохранить сделку»: крутилка в круге → галочка → назад к сделкам', async ({ page, db }) => {
+  await fakeSupabase(page, db)
+  // ответ на сохранение — с задержкой, чтобы увидеть состояние «идёт сохранение»
+  await page.route('https://fake.supabase.test/rest/v1/trades*', async (route) => {
+    if (route.request().method() === 'POST') await new Promise((r) => setTimeout(r, 400))
+    await route.fallback()
+  })
+  await page.goto('trades/new')
+  await page.getByLabel('Пара').fill('BTCUSDT')
+  await page.getByLabel('Цена входа').fill('60000')
+  await page.getByLabel('Цена выхода').fill('61000')
+  await page.getByLabel('Размер позиции, $').fill('600')
+  const btn = page.getByRole('button', { name: 'Сохранить сделку' })
+  await btn.click()
+  const save = page.locator('button[data-state]')
+  await expect(save).toHaveAttribute('data-state', 'busy')
+  await expect(save).toHaveAttribute('data-state', 'done')
+  await expect(save.getByText('Готово')).toBeAttached()
+  await expect(page).toHaveURL(/\/trades$/)
+})
+
+test('кнопка «Сохранить сделку»: ошибка — кнопка возвращается, ошибка видна', async ({ page, db }) => {
+  await fakeSupabase(page, db)
+  await page.route('https://fake.supabase.test/rest/v1/trades*', async (route) => {
+    if (route.request().method() === 'POST') return route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ message: 'FREE_LIMIT_REACHED', code: 'P0001' }) })
+    await route.fallback()
+  })
+  await page.goto('trades/new')
+  await page.getByLabel('Пара').fill('BTCUSDT')
+  await page.getByLabel('Цена входа').fill('60000')
+  await page.getByLabel('Цена выхода').fill('61000')
+  await page.getByLabel('Размер позиции, $').fill('600')
+  await page.getByRole('button', { name: 'Сохранить сделку' }).click()
+  await expect(page.getByRole('alert')).toContainText('Достигнут лимит Basic')
+  await expect(page.locator('button[data-state]')).toHaveAttribute('data-state', 'idle')
+  await expect(page).toHaveURL(/\/trades\/new$/)
 })

@@ -3,19 +3,30 @@
  * «Ключевые цифры» («Оценку трейдера» убрали 08.11.2026; расчёт traderScore остался — из него винрейт дней).
  * Шкалы — свой лёгкий SVG (pathLength = 100), при первом показе плавно заполняются.
  */
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useId, useMemo, useRef, type CSSProperties, type ReactNode } from 'react'
 import { fmt, plural, useT } from '@/i18n'
 import { formatNumber, formatPercent, formatPnl, formatR, formatRatio, formatUsd } from '@/lib/format'
 import { recentForm, type DrawdownPeriod, type EquityPoint, type Outcome, type Summary } from '@/lib/calc/stats'
 import type { TraderScore } from '@/lib/calc/score'
-import { prefersReducedMotion, useCountUp } from '@/lib/motion'
+import { useShown, useSpotlight } from '@/lib/motion'
+import { AnimatedNumber } from '@/components/AnimatedNumber'
 import { daysBetween, withTime } from './equityTime'
 
 /** Цвета шкал — в тон кривой капитала (выбор владельца 06.11.2026): выигрыш фиолетовый, проигрыш приглушённый */
-const TONE = { aStroke: 'stroke-primary', bStroke: 'stroke-muted/40', aBg: 'bg-primary', bBg: 'bg-muted/40', aPill: 'bg-primary/15 text-primary', bPill: 'bg-surface-2 text-muted', aText: 'text-text', bText: 'text-muted' }
+const TONE = {
+  aStroke: 'stroke-primary',
+  bStroke: 'stroke-muted/40',
+  aBg: 'bg-primary',
+  bBg: 'bg-muted/40',
+  aPill: 'bg-primary/15 text-primary',
+  bPill: 'bg-surface-2 text-muted',
+  aText: 'text-text',
+  bText: 'text-muted',
+}
 
-/** Мини-кривая капитала в карточке PnL: фиолетовая линия с мягкой заливкой, как большая кривая */
-function Sparkline({ points }: { points: EquityPoint[] }) {
+/** Мини-кривая капитала в карточке PnL: фиолетовая линия с мягкой заливкой, как большая кривая; рисуется слева направо (№9), drawKey — перерисовать */
+function Sparkline({ points, drawKey }: { points: EquityPoint[]; drawKey?: unknown }) {
+  const id = useId().replace(/:/g, '')
   if (points.length < 2) return null
   const W = 120
   const H = 36
@@ -26,26 +37,22 @@ function Sparkline({ points }: { points: EquityPoint[] }) {
   const y = (v: number) => 2 + (1 - (v - lo) / (hi - lo || 1)) * (H - 4)
   const line = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(p.cum).toFixed(1)}`).join('')
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-8 w-full overflow-visible" aria-hidden>
-      <path d={`${line}L${W} ${H}L0 ${H}Z`} className="fill-primary/15" />
-      <path d={line} fill="none" className="stroke-primary" strokeWidth={1.75} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+    <svg key={String(drawKey)} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-8 w-full overflow-visible" aria-hidden>
+      <defs>
+        <clipPath id={`${id}c`}>
+          <rect className="reveal-x" x={-2} y={-4} width={W + 4} height={H + 8} />
+        </clipPath>
+      </defs>
+      <g clipPath={`url(#${id}c)`}>
+        <path d={`${line}L${W} ${H}L0 ${H}Z`} className="fill-primary/15" />
+        <path d={line} fill="none" className="stroke-primary" strokeWidth={1.75} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      </g>
     </svg>
   )
 }
 
-
-/** false на первом кадре, потом true — чтобы шкалы «доросли» до значения (без анимации — сразу true) */
-function useShown(): boolean {
-  const [shown, setShown] = useState(prefersReducedMotion)
-  useEffect(() => {
-    if (shown) return
-    const f = requestAnimationFrame(() => requestAnimationFrame(() => setShown(true)))
-    return () => cancelAnimationFrame(f)
-  }, [shown])
-  return shown
-}
-
-const growCls = 'transition-[stroke-dasharray,stroke-dashoffset] duration-[900ms] ease-out motion-reduce:transition-none'
+/* шкалы дорастают за ~1 с — синхронно с набегающим числом (№8, useCountUp) */
+const growCls = 'transition-[stroke-dasharray,stroke-dashoffset] duration-1000 ease-out motion-reduce:transition-none'
 
 /* ---------- Шкалы ---------- */
 
@@ -62,7 +69,15 @@ export function HalfGauge({ a, b, live }: { a: number; b: number; live?: boolean
     <svg viewBox="0 0 92 50" className="h-[36px] w-[66px] shrink-0 sm:h-[46px] sm:w-[84px]" aria-hidden>
       <path d={d} pathLength={100} fill="none" className="stroke-surface-2" strokeWidth={8} strokeLinecap="round" />
       {pa > 0 && (
-        <path d={d} pathLength={100} fill="none" className={`${TONE.aStroke} ${grow}`} strokeWidth={8} strokeLinecap="round" strokeDasharray={`${shown ? pa : 0} 100`} />
+        <path
+          d={d}
+          pathLength={100}
+          fill="none"
+          className={`${TONE.aStroke} ${grow}`}
+          strokeWidth={8}
+          strokeLinecap="round"
+          strokeDasharray={`${shown ? pa : 0} 100`}
+        />
       )}
       {pb > 0 && (
         <path
@@ -106,59 +121,107 @@ function PairBars({ win, loss }: { win: number; loss: number }) {
 
 /* ---------- Верхний ряд ---------- */
 
-export function Widget({ label, hint, aside, children, className = '' }: { label: string; hint: string; aside?: ReactNode; children: ReactNode; className?: string }) {
+/**
+ * Карточка показателя. Рамка — обёртка .spot-frame (подсветка под курсором №3, только мышь);
+ * i — номер в лесенке появления (№7): карточки выезжают по очереди при первом показе страницы.
+ */
+export function Widget({
+  label,
+  hint,
+  aside,
+  children,
+  className = '',
+  i,
+}: {
+  label: string
+  hint: string
+  aside?: ReactNode
+  children: ReactNode
+  className?: string
+  i?: number
+}) {
   return (
-    <section className={`card-lift flex min-w-0 flex-col gap-3 rounded-lg border border-border bg-surface p-4 ${className}`}>
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="flex items-center gap-1.5 text-xs font-medium text-muted">
-          {label}
-          <span title={hint} aria-label={hint} className="inline-flex size-3.5 cursor-help items-center justify-center rounded-full border border-current text-[9px] leading-none opacity-70">
-            i
-          </span>
-        </h2>
-        {aside}
-      </div>
-      {children}
-    </section>
+    <div
+      data-spot
+      className={`spot-frame min-w-0 rounded-lg ${i !== undefined ? 'rise' : ''} ${className}`}
+      style={i !== undefined ? ({ '--i': i } as CSSProperties) : undefined}
+    >
+      <section className="spot-card flex h-full min-w-0 flex-col gap-3 rounded-[calc(0.5rem-1px)] bg-surface p-4">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="flex items-center gap-1.5 text-xs font-medium text-muted">
+            {label}
+            <span
+              title={hint}
+              aria-label={hint}
+              className="inline-flex size-3.5 cursor-help items-center justify-center rounded-full border border-current text-[9px] leading-none opacity-70"
+            >
+              i
+            </span>
+          </h2>
+          {aside}
+        </div>
+        {children}
+      </section>
+    </div>
   )
 }
 
 export const big = 'num min-w-0 truncate text-xl leading-tight font-semibold sm:text-2xl'
 
-export function KpiRow({ summary: s, score, startingBalance, equity = [] }: { summary: Summary; score: TraderScore; startingBalance: number | null; equity?: EquityPoint[] }) {
+/**
+ * Верхний ряд. rollKey — что выбрано (период): при его смене числа прокручиваются (№13),
+ * при первом показе набегают от нуля (№8), а если сделки добавились сами (синхронизация) — плавно пересчитываются (№12).
+ */
+export function KpiRow({
+  summary: s,
+  score,
+  startingBalance,
+  equity = [],
+  rollKey,
+}: {
+  summary: Summary
+  score: TraderScore
+  startingBalance: number | null
+  equity?: EquityPoint[]
+  rollKey?: unknown
+}) {
   const t = useT()
   const k = t.dashboard.kpi
   const grossWin = (s.avgWin ?? 0) * s.wins
   const grossLoss = -(s.avgLoss ?? 0) * s.losses
-  const pnl = useCountUp(s.totalPnl)
+  const spotRef = useRef<HTMLDivElement>(null)
+  useSpotlight(spotRef)
+  const num = (value: number | null, format: (n: number) => string) =>
+    value === null || !Number.isFinite(value) ? <>{value === null ? '—' : format(value)}</> : <AnimatedNumber value={value} format={format} rollKey={rollKey} />
   const ratio = s.avgWin !== null && s.avgLoss !== null && s.avgLoss < 0 ? s.avgWin / -s.avgLoss : null
   const toDeposit = startingBalance ? fmt(k.toDeposit, { p: signedPercent(s.totalPnl / startingBalance) }) : null
 
   return (
-    <div data-shot="kpi" className="rise grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-[minmax(0,1.35fr)_repeat(4,minmax(0,1fr))]">
+    <div ref={spotRef} data-shot="kpi" className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-[minmax(0,1.35fr)_repeat(4,minmax(0,1fr))]">
       <Widget
         label={k.totalPnl}
         hint={k.hints.totalPnl}
         className="col-span-2 md:col-span-4 xl:col-span-1"
+        i={0}
         aside={<span className="num shrink-0 rounded-md bg-surface-2 px-2 py-0.5 text-xs text-muted">{fmt(k.trades, { n: s.closed })}</span>}
       >
         <div>
-          <div className={`${big} text-[30px]`}>{formatPnl(pnl)}</div>
+          <div className={`${big} text-[30px]`}>{num(s.totalPnl, formatPnl)}</div>
           {toDeposit && <p className="mt-0.5 text-xs text-muted">{toDeposit}</p>}
         </div>
-        <Sparkline points={equity} />
+        <Sparkline points={equity} drawKey={rollKey} />
       </Widget>
 
-      <Widget label={k.tradeWinrate} hint={k.hints.tradeWinrate}>
+      <Widget label={k.tradeWinrate} hint={k.hints.tradeWinrate} i={1}>
         <div className="flex flex-col-reverse items-start gap-2 min-[420px]:flex-row min-[420px]:items-end min-[420px]:justify-between">
-          <div className={big}>{formatPercent(s.winrate)}</div>
+          <div className={big}>{num(s.winrate, (v) => formatPercent(v))}</div>
           <HalfGauge a={s.wins} b={s.losses} />
         </div>
         <Counts a={s.wins} b={s.losses} />
       </Widget>
 
-      <Widget label={k.profitFactor} hint={k.hints.profitFactor}>
-        <div className={big}>{formatRatio(s.profitFactor)}</div>
+      <Widget label={k.profitFactor} hint={k.hints.profitFactor} i={2}>
+        <div className={big}>{s.profitFactor !== null && Number.isFinite(s.profitFactor) ? num(s.profitFactor, formatRatio) : formatRatio(s.profitFactor)}</div>
         <PfCaption pf={s.profitFactor} />
         <div className="num flex justify-between gap-2 text-xs">
           <span className={TONE.aText}>{formatUsd(grossWin)}</span>
@@ -166,16 +229,16 @@ export function KpiRow({ summary: s, score, startingBalance, equity = [] }: { su
         </div>
       </Widget>
 
-      <Widget label={k.dayWinrate} hint={k.hints.dayWinrate}>
+      <Widget label={k.dayWinrate} hint={k.hints.dayWinrate} i={3}>
         <div className="flex flex-col-reverse items-start gap-2 min-[420px]:flex-row min-[420px]:items-end min-[420px]:justify-between">
-          <div className={big}>{formatPercent(score.dayWinrate)}</div>
+          <div className={big}>{num(score.dayWinrate, (v) => formatPercent(v))}</div>
           <HalfGauge a={score.dayWins} b={score.dayLosses} />
         </div>
         <Counts a={score.dayWins} b={score.dayLosses} />
       </Widget>
 
-      <Widget label={k.avgWinLoss} hint={k.hints.avgWinLoss}>
-        <div className={big}>{ratio === null ? '—' : formatNumber(ratio, 2)}</div>
+      <Widget label={k.avgWinLoss} hint={k.hints.avgWinLoss} i={4}>
+        <div className={big}>{num(ratio, (v) => formatNumber(v, 2))}</div>
         <PairBars win={s.avgWin ?? 0} loss={-(s.avgLoss ?? 0)} />
         <div className="num flex justify-between gap-2 text-xs">
           <span className={TONE.aText}>{formatPnl(s.avgWin)}</span>
@@ -251,7 +314,7 @@ function KeysPanels({ summary: s, rwl, ddValue, ddDays, recovered, children }: K
   const loss = Math.abs(rwl.avgLossR ?? 0)
   const panel = 'rounded-md bg-surface-2/50 p-3'
   return (
-    <section data-shot="keys" className="rise card-lift flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 [--i:3]">
+    <section data-shot="keys" className="rise card-lift flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 [--i:5]">
       <h2 className="font-semibold">{k.keyNumbers}</h2>
       {children}
       {/* разброс: от худшей до лучшей сделки, отметка — матожидание */}
@@ -264,7 +327,10 @@ function KeysPanels({ summary: s, rwl, ddValue, ddDays, recovered, children }: K
         <div className="relative mt-3 h-2 rounded-full bg-surface-2">
           <i className="absolute inset-y-0 rounded-l-full bg-muted/45" style={{ left: 0, width: pos(0) }} />
           <i className="absolute inset-y-0 rounded-r-full bg-primary/70" style={{ left: pos(0), right: 0 }} />
-          <i className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-surface bg-primary" style={{ left: pos(s.expectancy ?? 0) }} />
+          <i
+            className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-surface bg-primary"
+            style={{ left: pos(s.expectancy ?? 0) }}
+          />
         </div>
         <div className="num mt-2 flex items-baseline justify-between text-sm font-semibold">
           <span className="text-muted">{formatPnl(s.worst)}</span>
@@ -279,7 +345,10 @@ function KeysPanels({ summary: s, rwl, ddValue, ddDays, recovered, children }: K
           <span className="num text-lg font-semibold">{ddValue}</span>
         </div>
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-2">
-          <i className="block h-full rounded-full bg-primary transition-[width] duration-[900ms] ease-out" style={{ width: shown ? `${Math.min(1, dd / 0.5) * 100}%` : 0 }} />
+          <i
+            className="block h-full rounded-full bg-primary transition-[width] duration-[900ms] ease-out"
+            style={{ width: shown ? `${Math.min(1, dd / 0.5) * 100}%` : 0 }}
+          />
         </div>
         {ddDays !== null && (
           <div className="mt-2 text-xs text-muted">

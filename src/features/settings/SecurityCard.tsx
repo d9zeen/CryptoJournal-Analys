@@ -1,3 +1,4 @@
+import { PasswordInput } from '@/components/PasswordInput'
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { useT } from '@/i18n'
@@ -157,8 +158,8 @@ function PasswordBlock() {
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-3">
       <h3 className="text-sm font-medium">{s.passwordTitle}</h3>
-      <TextField label={s.passwordNew} type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} hint={s.passwordHint} />
-      <TextField label={s.passwordRepeat} type="password" autoComplete="new-password" value={pw2} onChange={(e) => setPw2(e.target.value)} />
+      <PasswordInput label={s.passwordNew} autoComplete="new-password" meter hint={s.passwordHint} invalid={msg?.tone === 'error'} value={pw} onChange={(e) => setPw(e.target.value)} />
+      <PasswordInput label={s.passwordRepeat} autoComplete="new-password" invalid={msg?.tone === 'error'} value={pw2} onChange={(e) => setPw2(e.target.value)} />
       <Button type="submit" variant="secondary" className="self-start" loading={busy} disabled={!pw}>
         {s.passwordSave}
       </Button>

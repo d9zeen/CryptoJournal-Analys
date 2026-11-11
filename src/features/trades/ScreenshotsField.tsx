@@ -86,10 +86,17 @@ export function ScreenshotsField({ saved, pending, onAdd, onRemoveSaved, onRemov
         <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {items.map((it, i) => (
             <li key={it.key} className="relative overflow-hidden rounded-lg border border-border bg-surface-2">
-              <button type="button" className="block aspect-video w-full" onClick={() => setViewIndex(i)} aria-label={fmt(t.tradeForm.viewerCount, { i: i + 1, n: items.length })}>
+              <button
+                type="button"
+                className="block aspect-video w-full"
+                onClick={() => setViewIndex(i)}
+                aria-label={fmt(t.tradeForm.viewerCount, { i: i + 1, n: items.length })}
+              >
                 {it.url ? <img src={it.url} alt="" className="size-full object-cover" loading="lazy" /> : <span className="block size-full animate-pulse" />}
               </button>
-              {it.isNew && <span className="absolute left-1.5 top-1.5 rounded bg-primary px-1.5 py-0.5 text-xs text-on-primary">{t.tradeForm.screenshotNew}</span>}
+              {it.isNew && (
+                <span className="absolute left-1.5 top-1.5 rounded bg-primary px-1.5 py-0.5 text-xs text-on-primary">{t.tradeForm.screenshotNew}</span>
+              )}
               <button
                 type="button"
                 onClick={it.remove}

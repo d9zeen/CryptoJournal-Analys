@@ -1,4 +1,6 @@
-import { lazy, Suspense, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { lazy, Suspense, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { DashboardSkeleton, Skeleton } from '@/components/Skeleton'
+import { zonedParts } from '@/lib/tz'
 import { useNavigate, useSearchParams } from 'react-router'
 import { fmt, useT } from '@/i18n'
 import { useTrades } from '@/features/trades/api'
@@ -10,17 +12,7 @@ import { Alert } from '@/components/ui/Alert'
 import { rangeFor, type CustomRange, type PeriodPreset } from '@/lib/period'
 import { browserTimeZone } from '@/lib/tz'
 import { formatUsd } from '@/lib/format'
-import {
-  closedTrades,
-  downsampleEquity,
-  drawdownPeriod,
-  equityCurve,
-  pnlBars,
-  pnlByDay,
-  rWinLoss,
-  summarize,
-  type StatTrade,
-} from '@/lib/calc/stats'
+import { barFor, closedTrades, downsampleEquity, drawdownPeriod, equityCurve, pnlBars, pnlByDay, rWinLoss, summarize, type StatTrade } from '@/lib/calc/stats'
 import { KeyNumbers, KpiRow } from './Widgets'
 import { traderScore } from '@/lib/calc/score'
 import { EquityTableDialog } from './EquityTableDialog'
@@ -41,7 +33,12 @@ export function DashboardPage() {
   const [custom, setCustom] = useState<CustomRange>({ from: '', to: '' })
   const range = useMemo(() => rangeFor(preset, custom), [preset, custom])
 
-  const { data: trades, isLoading, error } = useTrades(range)
+  const { data: trades, isLoading, error, isPlaceholderData } = useTrades(range)
+  // ключ показанных данных: меняется, когда на экране сделки нового периода (а не прежние, пока грузятся) —
+  // тогда числа прокручиваются (№13) и кривая рисуется заново (№9); новые сделки с биржи ключ не меняют (№12 — плавный пересчёт)
+  const periodKey = `${preset}|${custom.from}|${custom.to}`
+  const shownKey = useRef(periodKey)
+  if (!isPlaceholderData && !isLoading) shownKey.current = periodKey
   const { data: profile } = useProfile()
 
   const tz = profile?.timezone || browserTimeZone()
@@ -77,6 +74,9 @@ export function DashboardPage() {
   const isNew = params.get('welcome') === '1' || (preset === 'all' && !isLoading && !error && (trades ?? []).length === 0)
   const score = useMemo(() => traderScore(stats.summary, stats.days), [stats])
   const bars = useMemo(() => pnlBars(stats.days), [stats.days])
+  // №10: наведение на кривую капитала подсвечивает столбик того дня / недели / месяца, где эта сделка
+  const [hoverAt, setHoverAt] = useState<string | null>(null)
+  const highlight = hoverAt ? barFor(bars.bars, zonedParts(hoverAt, tz).date) : null
 
   return (
     <div className="flex flex-col gap-4">
@@ -93,7 +93,7 @@ export function DashboardPage() {
       {stats.openCount > 0 && <p className="text-sm text-warning">{fmt(t.dashboard.openTrades, { n: stats.openCount })}</p>}
 
       {isLoading ? (
-        <p className="text-muted">{t.common.loading}</p>
+        <DashboardSkeleton />
       ) : isNew ? (
         <Welcome />
       ) : stats.closed.length === 0 ? (
@@ -109,16 +109,18 @@ export function DashboardPage() {
       ) : (
         <>
           {/* верхний ряд: PnL, винрейт сделок, profit factor, винрейт дней, выигрыш / проигрыш */}
-          <KpiRow summary={s} score={score} startingBalance={balance} equity={stats.equity} />
+          <KpiRow summary={s} score={score} startingBalance={balance} equity={stats.equity} rollKey={shownKey.current} />
 
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] xl:grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)]">
             {/* «Оценку трейдера» убрали (решение владельца 08.11.2026): слева — ключевые цифры */}
             <KeyNumbers summary={s} curve={stats.curve} period={stats.period} rwl={stats.rwl} />
-            <Card className="rise !p-4 [--i:2]">
+            <Card className="rise !p-4 [--i:6]">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h2 className="font-semibold">{ch.equity}</h2>
-                  <p className="mt-0.5 text-xs text-muted">{eqUnit === 'pct' && balance ? fmt(ch.equityHintPct, { b: formatUsd(balance) }) : ch.equityHintUsd}</p>
+                  <p className="mt-0.5 text-xs text-muted">
+                    {eqUnit === 'pct' && balance ? fmt(ch.equityHintPct, { b: formatUsd(balance) }) : ch.equityHintUsd}
+                  </p>
                 </div>
                 <div className="flex items-center gap-2">
                   {balance && (
@@ -137,15 +139,25 @@ export function DashboardPage() {
                 </div>
               </div>
               <div className="mt-3 -ml-2">
-                <Suspense fallback={<div className="flex h-[260px] items-center justify-center text-sm text-muted">{t.common.loading}</div>}>
-                  <EquityChart points={stats.equity} unit={eqUnit} balance={balance} height={wide ? 420 : 260} />
+                <Suspense fallback={<Skeleton className="ml-2 h-[260px]" />}>
+                  <EquityChart
+                    points={stats.equity}
+                    unit={eqUnit}
+                    balance={balance}
+                    height={wide ? 420 : 260}
+                    drawKey={`${shownKey.current}|${eqUnit}`}
+                    onHover={setHoverAt}
+                  />
                 </Suspense>
               </div>
             </Card>
           </div>
 
-          <ChartCard i={4} title={bars.unit === 'month' ? t.dashboard.charts.monthly : bars.unit === 'week' ? t.dashboard.charts.weekly : t.dashboard.charts.daily}>
-            <DailyPnlChart days={bars.bars} unit={bars.unit} height={wide ? 300 : 220} />
+          <ChartCard
+            i={7}
+            title={bars.unit === 'month' ? t.dashboard.charts.monthly : bars.unit === 'week' ? t.dashboard.charts.weekly : t.dashboard.charts.daily}
+          >
+            <DailyPnlChart days={bars.bars} unit={bars.unit} height={wide ? 300 : 220} highlight={highlight} />
           </ChartCard>
 
           <EquityTableDialog open={tableOpen} onClose={() => setTableOpen(false)} curve={stats.curve} unit={eqUnit} balance={balance} />
@@ -156,13 +168,12 @@ export function DashboardPage() {
 }
 
 function ChartCard({ title, hint, i = 0, children }: { title: string; hint?: string; i?: number; children: ReactNode }) {
-  const t = useT()
   return (
     <Card className="rise !p-4" style={{ '--i': i } as CSSProperties}>
       <h2 className="font-semibold">{title}</h2>
       {hint && <p className="mt-0.5 text-xs text-muted">{hint}</p>}
       <div className="mt-3 -ml-2">
-        <Suspense fallback={<div className="flex h-[180px] items-center justify-center text-sm text-muted">{t.common.loading}</div>}>{children}</Suspense>
+        <Suspense fallback={<Skeleton className="ml-2 h-[180px]" />}>{children}</Suspense>
       </div>
     </Card>
   )

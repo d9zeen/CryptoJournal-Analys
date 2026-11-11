@@ -11,7 +11,7 @@ test('календарь прибыли: дни, итоги и листание 
   ]
   await fakeSupabase(page, db)
   await page.goto('calendar')
-  const cal = page.getByText('Календарь прибыли').locator('xpath=ancestor::div[contains(@class,"rise")][1]')
+  const cal = page.locator('[data-shot="calendar"]')
   await expect(cal).toBeVisible()
   // подпись месяца: «Ноябрь 2026» — с большой буквы и без «г.»
   const label = (d: Date) => {

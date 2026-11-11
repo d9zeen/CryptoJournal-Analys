@@ -2,21 +2,8 @@
  * Графики дашборда (Recharts). Файл грузится отдельно (lazy), чтобы не утяжелять первый экран.
  * Цвета — только CSS-переменные из theme.css.
  */
-import { useId, useMemo, type ReactNode } from 'react'
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  ReferenceDot,
-  ReferenceLine,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
+import { useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { fmt, useT } from '@/i18n'
 import { formatDateTime, formatDay, formatDayShort, formatNumber, formatPnl, formatUsdShort, pnlClass } from '@/lib/format'
 import { useMediaQuery } from '@/lib/useMediaQuery'
@@ -43,7 +30,8 @@ const axisProps = {
 const HEIGHT = 220
 
 // графики «прорисовываются» при открытии (кроме режима «уменьшить движение»)
-const anim = () => (prefersReducedMotion() ? { isAnimationActive: false } : { isAnimationActive: true, animationDuration: 900, animationEasing: 'ease-out' as const })
+const anim = () =>
+  prefersReducedMotion() ? { isAnimationActive: false } : { isAnimationActive: true, animationDuration: 900, animationEasing: 'ease-out' as const }
 
 /** Всплывающая подсказка в стиле приложения */
 function Tip({ children }: { children: ReactNode }) {
@@ -61,8 +49,30 @@ type EqRow = TimedPoint & { v: number; trade: number; fromPeak: number; i: numbe
  * под ней мягкая заливка тем же цветом, сходящая на нет; ноль — тонкий пунктир.
  * Ось X — по номеру сделки (без длинных прямых отрезков в паузах между сделками), подписи — даты этих сделок.
  */
-export function EquityChart({ points, unit, balance, height = HEIGHT + 40 }: { points: EquityPoint[]; unit: EquityUnit; balance: number | null; height?: number }) {
+export function EquityChart({
+  points,
+  unit,
+  balance,
+  height = HEIGHT + 40,
+  drawKey,
+  onHover,
+}: {
+  points: EquityPoint[]
+  unit: EquityUnit
+  balance: number | null
+  height?: number
+  /** сменился — кривая рисуется заново слева направо (№9): период, $ / % */
+  drawKey?: unknown
+  /** наведение на точку: время закрытия сделки (ISO) или null — для подсветки столбика «PnL по дням» (№10) */
+  onHover?: (at: string | null) => void
+}) {
   const t = useT()
+  const hovered = useRef<string | null>(null)
+  const hover = (at: string | null) => {
+    if (hovered.current === at) return
+    hovered.current = at
+    onHover?.(at)
+  }
   const wide = useMediaQuery('(min-width: 640px)')
   const color = C.primary
   const data = useMemo<EqRow[]>(() => {
@@ -78,10 +88,21 @@ export function EquityChart({ points, unit, balance, height = HEIGHT + 40 }: { p
   const axis = useMemo(() => niceAxis(data.map((d) => d.v)), [data])
   const pctDigits = axis.ticks.some((v) => !Number.isInteger(v)) ? 1 : 0
   const yTick = (v: number) => (unit === 'usd' ? formatUsdShort(v) : `${formatNumber(v, pctDigits)} %`)
+  const right = wide ? 104 : 16
   return (
-    <div>
+    // №9: кривая и заливка открываются слева направо — над областью графика едет «шторка» цвета карточки (только transform);
+    // в конце точка «щёлкает» и появляется подпись итога (.eq-draw в theme.css). key — нарисовать заново
+    <div key={String(drawKey)} className="eq-draw relative">
       <ResponsiveContainer width="100%" height={height}>
-        <AreaChart data={data} margin={{ top: 22, right: wide ? 104 : 16, bottom: 0, left: 0 }}>
+        <AreaChart
+          data={data}
+          margin={{ top: 22, right, bottom: 0, left: 0 }}
+          onMouseMove={(st) => {
+            const idx = typeof st?.activeTooltipIndex === 'number' ? st.activeTooltipIndex : Number(st?.activeTooltipIndex)
+            hover(Number.isFinite(idx) ? (data[idx]?.at ?? null) : null)
+          }}
+          onMouseLeave={() => hover(null)}
+        >
           <defs>
             <linearGradient id={`${id}f`} x1="0" y1="0" x2="0" y2="1">
               <stop offset={0} stopColor={color} stopOpacity={0.26} />
@@ -89,7 +110,14 @@ export function EquityChart({ points, unit, balance, height = HEIGHT + 40 }: { p
             </linearGradient>
           </defs>
           <CartesianGrid stroke={C.grid} vertical={false} />
-          <XAxis dataKey="i" type="number" domain={['dataMin', 'dataMax']} {...axisProps} tickFormatter={(i: number) => (data[i] ? shortDate(data[i].t) : '')} minTickGap={40} />
+          <XAxis
+            dataKey="i"
+            type="number"
+            domain={['dataMin', 'dataMax']}
+            {...axisProps}
+            tickFormatter={(i: number) => (data[i] ? shortDate(data[i].t) : '')}
+            minTickGap={40}
+          />
           <YAxis {...axisProps} width={60} tickFormatter={yTick} domain={[axis.lo, axis.hi]} ticks={axis.ticks} allowDataOverflow />
           <ReferenceLine y={0} stroke={C.muted} strokeOpacity={0.45} strokeDasharray="4 4" />
           <Tooltip
@@ -125,8 +153,8 @@ export function EquityChart({ points, unit, balance, height = HEIGHT + 40 }: { p
             fill={`url(#${id}f)`}
             strokeWidth={2}
             dot={false}
-            activeDot={{ r: 5, fill: color, stroke: 'var(--color-surface)', strokeWidth: 2 }}
-            {...anim()}
+            activeDot={{ r: 4.5, fill: color, stroke: 'var(--color-surface)', strokeWidth: 2 }}
+            isAnimationActive={false}
           />
           {last && (
             <ReferenceDot
@@ -150,6 +178,10 @@ export function EquityChart({ points, unit, balance, height = HEIGHT + 40 }: { p
           )}
         </AreaChart>
       </ResponsiveContainer>
+      {/* шторка над областью графика: слева ось Y (60px), справа подпись итога, снизу ось X */}
+      <div aria-hidden className="pointer-events-none absolute top-0 bottom-[30px] left-[60px] overflow-hidden" style={{ right }}>
+        <div className="eq-curtain size-full bg-surface" />
+      </div>
     </div>
   )
 }
@@ -162,12 +194,36 @@ function barLabels(unit: BarUnit, t: ReturnType<typeof useT>) {
   return { tick: formatDayShort, title: formatDay }
 }
 
-export function DailyPnlChart({ days, unit = 'day', height = HEIGHT }: { days: DayPnl[]; unit?: BarUnit; height?: number }) {
+/**
+ * PnL по дням / неделям / месяцам. №10: наведённый столбик — целиком, остальные — бледнее (0.3);
+ * highlight — столбик, подсвеченный снаружи (наведение на кривую капитала).
+ */
+export function DailyPnlChart({
+  days,
+  unit = 'day',
+  height = HEIGHT,
+  highlight = null,
+}: {
+  days: DayPnl[]
+  unit?: BarUnit
+  height?: number
+  highlight?: string | null
+}) {
   const t = useT()
   const labels = barLabels(unit, t)
+  const [hovered, setHovered] = useState<string | null>(null)
+  const active = hovered ?? highlight
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={days} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+      <BarChart
+        data={days}
+        margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
+        onMouseMove={(st) => {
+          const idx = Number(st?.activeTooltipIndex)
+          setHovered(Number.isFinite(idx) ? (days[idx]?.date ?? null) : null)
+        }}
+        onMouseLeave={() => setHovered(null)}
+      >
         <CartesianGrid stroke={C.grid} vertical={false} />
         <XAxis dataKey="date" {...axisProps} tickFormatter={labels.tick} minTickGap={16} />
         <YAxis {...axisProps} width={56} tickFormatter={formatUsdShort} />
@@ -188,12 +244,19 @@ export function DailyPnlChart({ days, unit = 'day', height = HEIGHT }: { days: D
         />
         {/* в тон кривой (выбор владельца 06.11.2026): прибыльный день — фиолетовый, убыточный — приглушённый серый */}
         <Bar dataKey="pnl" radius={[4, 4, 0, 0]} maxBarSize={28} {...anim()}>
-          {days.map((d) => (
-            <Cell key={d.date} fill={d.pnl >= 0 ? C.primary : C.muted} fillOpacity={d.pnl >= 0 ? 1 : 0.45} />
-          ))}
+          {days.map((d) => {
+            const base = d.pnl >= 0 ? 1 : 0.45
+            return (
+              <Cell
+                key={d.date}
+                fill={d.pnl >= 0 ? C.primary : C.muted}
+                fillOpacity={active && d.date !== active ? base * 0.3 : base}
+                style={{ transition: 'fill-opacity 0.15s' }}
+              />
+            )
+          })}
         </Bar>
       </BarChart>
     </ResponsiveContainer>
   )
 }
-

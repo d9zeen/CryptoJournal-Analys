@@ -336,6 +336,19 @@ export function pnlBars(days: DayPnl[], maxBars = 120): { unit: BarUnit; bars: D
   return { unit: 'month', bars: group((d) => `${d.slice(0, 7)}-01`) }
 }
 
+/**
+ * В какой столбик «PnL по дням / неделям / месяцам» попадает день (YYYY-MM-DD): столбик подписан датой начала дня / недели / месяца,
+ * значит нужен последний столбик с датой ≤ дня. Для связи «наведение на кривую капитала → подсветка столбика».
+ */
+export function barFor(bars: { date: string }[], date: string): string | null {
+  let found: string | null = null
+  for (const b of bars) {
+    if (b.date <= date) found = b.date
+    else break
+  }
+  return found
+}
+
 /** Итог одной сделки без денег: в плюс, в минус или в ноль */
 export type Outcome = 'win' | 'loss' | 'even'
 
