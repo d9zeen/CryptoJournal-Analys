@@ -72,7 +72,7 @@ test('Pro Plus: синхронизация на сервере каждые 3 ч
   ]
   await fakeSupabase(page, db)
   await page.goto('import')
-  await expect(page.getByText(/Pro Plus: сделки подтягиваются на сервере каждые 3 часа/)).toBeVisible()
+  await expect(page.getByText(/Сделки подтягиваются на сервере каждые 3 часа/)).toBeVisible()
   await expect(page.getByText(/дальше — сам каждые 3 часа/)).toBeVisible()
   await expect(page.getByText(/Ключ Bybit перестанет работать/)).toBeVisible()
 })
@@ -80,8 +80,8 @@ test('Pro Plus: синхронизация на сервере каждые 3 ч
 test('Basic (Free): подключения закрыты, подсказка про тарифы, демо Polymarket работает', async ({ page, db }) => {
   await fakeSupabase(page, db)
   await page.goto('import')
-  await expect(page.getByText(/На Pro Plus — сами на сервере каждые 3 часа/)).toBeVisible()
-  await expect(page.getByText(/Polymarket — с тарифа Pro, биржи по API — на Pro Plus/)).toBeVisible()
+  await expect(page.getByText(/На Pro Plus — на сервере каждые 3 часа/)).toBeVisible()
+  await expect(page.getByText(/Polymarket — с Pro, биржи по API — с Pro Plus/)).toBeVisible()
   await page.getByRole('button', { name: '+ Подключить' }).click()
   await expect(page.getByText('Доступно на тарифе Pro Plus.')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Подключить', exact: true })).toBeDisabled()

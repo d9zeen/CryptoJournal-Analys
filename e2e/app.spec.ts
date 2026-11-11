@@ -213,8 +213,9 @@ test.describe('админка', () => {
     db.isAdmin = true
     db.adminUsers = [user({}), user({ id: 'u2', email: 'pro@example.com', plan: 'pro', effective_plan: 'pro', trades_month: 3, trades_total: 9 })]
     await fakeSupabase(page, db)
-    await page.goto('dashboard')
-    await page.getByRole('link', { name: 'Админка' }).click()
+    // на телефоне админки нет в нижнем меню — ссылка внизу настроек
+    await page.goto((page.viewportSize()?.width ?? 0) < 768 ? 'settings' : 'dashboard')
+    await page.getByRole('link', { name: 'Админка' }).filter({ visible: true }).first().click()
     await expect(page.getByRole('heading', { name: 'Админка' })).toBeVisible()
     await expect(page.getByText('friend@example.com')).toBeVisible()
     await expect(page.getByText('Pro навсегда').first()).toBeVisible()
@@ -236,12 +237,14 @@ test.describe('админка', () => {
   })
 })
 
-test('страница тарифов: Basic, Pro, Pro Plus; текущий тариф и тариф в шапке', async ({ page, db }) => {
+test('страница тарифов: Basic, Pro, Pro Plus; текущий тариф', async ({ page, db }) => {
   db.usage = { plan: 'pro', trades_created: 3, trade_limit: 50 }
   await fakeSupabase(page, db)
-  await page.goto('dashboard')
-  // тариф в шапке (телефон) или карточка тарифа в левой панели (компьютер)
-  await page.getByRole('link', { name: /^Pro(\s|$)/ }).filter({ visible: true }).first().click()
+  // телефон: ссылка из настроек (тарифа в шапке нет); компьютер: карточка тарифа в левой панели
+  const phone = (page.viewportSize()?.width ?? 0) < 768
+  await page.goto(phone ? 'settings' : 'dashboard')
+  if (phone) await page.getByRole('link', { name: 'Сравнить тарифы' }).click()
+  else await page.getByRole('link', { name: /^Pro(\s|$)/ }).filter({ visible: true }).first().click()
   await expect(page.getByRole('heading', { name: 'Тарифы' })).toBeVisible()
   for (const name of ['Basic', 'Pro', 'Pro Plus']) await expect(page.getByRole('heading', { name, exact: true })).toBeVisible()
   await expect(page.getByText('$10 / мес')).toBeVisible()
@@ -320,9 +323,9 @@ test('ключевые цифры: последние 10 сделок буква
   await expect(form.getByLabel('Поражение')).toHaveCount(3)
 })
 
-test('палитра под календарём на Basic: три бесплатные, остальные под замком', async ({ page, db }) => {
+test('палитра в «Настройки → Оформление» на Basic: три бесплатные, остальные под замком', async ({ page, db }) => {
   await fakeSupabase(page, db)
-  await page.goto('calendar')
+  await page.goto('settings')
   const strip = page.locator('[data-shot="palette"]')
   await expect(strip.getByRole('link', { name: 'Ещё 5 палитр — в Pro' })).toBeVisible()
   await expect(strip.getByRole('radio', { name: 'Палитра 4' })).toBeDisabled()
@@ -332,10 +335,10 @@ test('палитра под календарём на Basic: три беспла
   await expect.poll(() => db.palette).toBe('teal_salmon')
 })
 
-test('палитра на Pro: выбор под календарём сохраняется в профиле и ставится на страницу', async ({ page, db }) => {
+test('палитра на Pro: выбор в настройках сохраняется в профиле и ставится на страницу', async ({ page, db }) => {
   db.usage.plan = 'pro'
   await fakeSupabase(page, db)
-  await page.goto('calendar')
+  await page.goto('settings')
   const strip = page.locator('[data-shot="palette"]')
   await strip.getByRole('radio', { name: 'Палитра 4' }).click()
   await expect(page.locator('html')).toHaveAttribute('data-palette', 'cyan_wine')
