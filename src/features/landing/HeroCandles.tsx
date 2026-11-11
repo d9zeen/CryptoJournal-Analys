@@ -29,11 +29,27 @@ function nextCandle(prev: number, rnd: () => number): Candle {
   return { o, h, l, c }
 }
 
+/**
+ * Цвета свечей — свои токены theme.css (--hero-up / --hero-down, прозрачности --hero-*-a, --hero-hollow-up: 1 — растущие свечи пустые, только контур).
+ * Если токена нет — цвета палитры прибыли / убытка и прозрачности по умолчанию (DARK / LIGHT).
+ */
 function readColors() {
   const s = getComputedStyle(document.documentElement)
   const v = (n: string) => s.getPropertyValue(n).trim()
   const light = document.documentElement.dataset.theme === 'light'
-  return { up: v('--color-up'), down: v('--color-down'), bg: v('--color-bg'), light }
+  const base = light ? LIGHT : DARK
+  const num = (n: string, d: number) => {
+    const x = parseFloat(v(n))
+    return Number.isFinite(x) ? x : d
+  }
+  return {
+    up: v('--hero-up') || v('--color-up'),
+    down: v('--hero-down') || v('--color-down'),
+    bg: v('--color-bg'),
+    light,
+    alpha: { wick: num('--hero-wick-a', base.wick), up: num('--hero-up-a', base.up), down: num('--hero-down-a', base.down) },
+    hollowUp: v('--hero-hollow-up') === '1',
+  }
 }
 
 export function HeroCandles({ className = '', style }: { className?: string; style?: CSSProperties }) {
@@ -117,7 +133,7 @@ export function HeroCandles({ className = '', style }: { className?: string; sty
         const x = x0 + i * STEP
         if (x < -STEP || x > w + STEP) return
         const up = c.c >= c.o
-        const a = colors.light ? LIGHT : DARK
+        const a = colors.alpha
         ctx.globalAlpha = a.wick
         ctx.strokeStyle = up ? colors.up : colors.down
         ctx.fillStyle = up ? colors.up : colors.down
@@ -139,8 +155,14 @@ export function HeroCandles({ className = '', style }: { className?: string; sty
         ctx.globalAlpha = up ? a.up : a.down
         ctx.fillStyle = up ? colors.up : colors.down
         ctx.beginPath()
-        ctx.roundRect(bx, top, BODY, bh, 1.5)
-        ctx.fill()
+        if (up && colors.hollowUp) {
+          // «пустая» растущая свеча, как в классических графиках: только контур
+          ctx.roundRect(bx + 0.5, top + 0.5, BODY - 1, Math.max(1, bh - 1), 1.5)
+          ctx.stroke()
+        } else {
+          ctx.roundRect(bx, top, BODY, bh, 1.5)
+          ctx.fill()
+        }
       })
 
       ctx.globalAlpha = 1
