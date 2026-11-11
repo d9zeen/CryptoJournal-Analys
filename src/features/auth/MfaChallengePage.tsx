@@ -2,7 +2,8 @@ import { useState, type FormEvent } from 'react'
 import { useT } from '@/i18n'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
-import { Alert } from '@/components/ui/Alert'
+import { FormError } from '@/components/FormError'
+import { useShake } from '@/lib/motion'
 import { AuthLayout } from './AuthLayout'
 import { useAuth } from './AuthProvider'
 import { useFactors, useRefreshSecurity, verifyCode } from './mfa'
@@ -17,6 +18,7 @@ export function MfaChallengePage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const factor = factors?.verified[0]
+  const [cardRef, shake] = useShake<HTMLDivElement>()
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -29,17 +31,19 @@ export function MfaChallengePage() {
     } catch {
       setError(t.security.codeWrong)
       setCode('')
+      shake()
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <AuthLayout title={t.security.challengeTitle}>
+    <AuthLayout title={t.security.challengeTitle} cardRef={cardRef}>
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
         <p className="text-sm text-muted">{t.security.challengeHint}</p>
-        {error && <Alert tone="error">{error}</Alert>}
+        <FormError message={error} />
         <Input
+          invalid={Boolean(error)}
           label={t.security.code}
           inputMode="numeric"
           autoComplete="one-time-code"

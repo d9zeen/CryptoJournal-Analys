@@ -18,6 +18,7 @@ import { useIsAdmin } from '@/features/admin/api'
 import { UpgradeLine } from '@/components/UpgradeLine'
 import type { Plan } from '@/types/db'
 import { PolymarketDemoDialog } from './PolymarketDemoDialog'
+import { PasswordInput } from '@/components/PasswordInput'
 import {
   CONNECTABLE,
   SyncError,
@@ -271,7 +272,7 @@ function AddForm({ count, admin, onDone, onCancel }: { count: number; admin: boo
           {kind === 'cex' ? (
             <>
               <TextField label={c.apiKey} value={apiKey} onChange={(e) => setApiKey(e.target.value)} autoComplete="off" spellCheck={false} required />
-              <TextField label={c.secret} value={secret} onChange={(e) => setSecret(e.target.value)} type="password" autoComplete="new-password" required hint={c.secretHint} />
+              <PasswordInput label={c.secret} value={secret} onChange={(e) => setSecret(e.target.value)} autoComplete="new-password" required hint={c.secretHint} />
             </>
           ) : (
             <TextField label={c.wallet} value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="0x…" autoComplete="off" spellCheck={false} required hint={exchange === 'polymarket' ? c.walletHintPolymarket : c.walletHint} />

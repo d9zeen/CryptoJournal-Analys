@@ -31,6 +31,12 @@ export type FakeDb = {
   /** срок тарифа и пробный период в профиле (0016) */
   planUntil?: string | null
   planTrial?: boolean
+  /** вход: неверный пароль (ответ 400 invalid_credentials) */
+  loginFails?: boolean
+  /** регистрация с подтверждением почты: signUp возвращает пользователя без сессии («Проверь почту») */
+  confirmEmail?: boolean
+  /** вызовы входа / регистрации / писем: путь и тело */
+  authCalls?: { path: string; body: unknown }[]
 }
 
 export function makeTrade(i: number, over: Row = {}): Row {
@@ -65,8 +71,13 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
     const body = () => { try { return JSON.parse(req.postData() ?? 'null') } catch { return null } }
 
     if (path === '/auth/v1/user') return json(session(db).user)
+    if (['/auth/v1/token', '/auth/v1/signup', '/auth/v1/resend', '/auth/v1/recover'].includes(path)) (db.authCalls ??= []).push({ path, body: body() })
+    if (path === '/auth/v1/token' && db.loginFails)
+      return json({ code: 'invalid_credentials', error_code: 'invalid_credentials', msg: 'Invalid login credentials' }, 400)
     if (path === '/auth/v1/token') return json(session(db))
+    if (path === '/auth/v1/signup' && db.confirmEmail) return json({ ...session(db).user, identities: [{ id: 'x' }], confirmation_sent_at: new Date().toISOString() })
     if (path === '/auth/v1/signup') return json({ ...session(db), user: { ...session(db).user, identities: [{ id: 'x' }] } })
+    if (path === '/auth/v1/resend' || path === '/auth/v1/recover') return json({})
     if (path === '/auth/v1/factors' && method === 'POST')
       return json({ id: 'f-new', type: 'totp', friendly_name: 'x', totp: { qr_code: '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8"/></svg>', secret: 'JBSWY3DPEHPK3PXP', uri: 'otpauth://totp/x' } })
     if (path === '/auth/v1/logout') return route.fulfill({ status: 204 })

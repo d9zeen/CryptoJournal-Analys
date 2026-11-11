@@ -136,3 +136,21 @@ export function useReplay(): [number, () => void] {
   const [n, setN] = useState(0)
   return [n, () => setN((x) => x + 1)]
 }
+
+/** №4 Карточка формы «мотает головой» при ошибке: shake() перезапускает анимацию (класс animate-shake) */
+export function useShake<T extends HTMLElement>(): [RefObject<T | null>, () => void] {
+  const ref = useRef<T>(null)
+  const shake = () => {
+    const el = ref.current
+    if (!el || prefersReducedMotion()) return
+    el.classList.remove('animate-shake')
+    void el.offsetWidth // перезапуск анимации
+    el.classList.add('animate-shake')
+  }
+  return [ref, shake]
+}
+
+/** Подождать: короткая пауза, чтобы успела нарисоваться галочка (без «уменьшить движение»; иначе — сразу) */
+export function pause(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, prefersReducedMotion() ? 0 : ms))
+}
