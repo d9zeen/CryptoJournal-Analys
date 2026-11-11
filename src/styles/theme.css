@@ -417,7 +417,8 @@
 
 /*
  * Тарифы на главной — как Prism UI «Pricing» (21st.dev), но «главная» карточка — та, что под мышкой (без мышки — Pro Plus).
- * PlanCards ставит data-pos: active — поднята на 20px; before / after — слева / справа от неё: 94 % и придвинуты к ней на 30px.
+ * PlanCards ставит data-pos: active — поднята на 20px; before / after — слева / справа от неё: 94 % и придвинуты к ней на 10px
+ * (в образце 30px, но на экранах ~1300px карточки наезжали друг на друга — 11.11.2026; e2e проверяет зазор ≥ 8px).
  * Карточки плоские (без 3D), как в образце. Только компьютер с мышью и от 768px; на телефоне — друг под другом.
  */
 .plan-card {
@@ -429,10 +430,10 @@
     z-index: 10;
   }
   .plan-card[data-pos='before'] {
-    transform: translateX(30px) scale(0.94);
+    transform: translateX(10px) scale(0.94);
   }
   .plan-card[data-pos='after'] {
-    transform: translateX(-30px) scale(0.94);
+    transform: translateX(-10px) scale(0.94);
   }
 }
 

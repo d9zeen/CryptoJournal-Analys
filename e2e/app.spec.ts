@@ -582,3 +582,24 @@ test('тарифы на главной: вперёд выходит карточ
   await expect(page.getByRole('switch')).toHaveCount(0)
   await expect(card('pro_plus')).toContainText('$15')
 })
+
+test('тарифы на главной: карточки не заезжают друг на друга ни на одной ширине и ни при каком наведении', async ({ page, db, isMobile }) => {
+  test.skip(isMobile, 'на телефоне карточки друг под другом')
+  await fakeSupabase(page, db, { signedIn: false })
+  const ids = ['free', 'pro', 'pro_plus']
+  for (const width of [800, 1024, 1300, 1440, 1920]) {
+    await page.setViewportSize({ width, height: 1000 })
+    await page.goto('')
+    await page.locator('[data-plan="pro_plus"]').scrollIntoViewIfNeeded()
+    for (const hover of [null, ...ids]) {
+      if (hover) await page.locator(`[data-plan="${hover}"]`).hover()
+      else await page.mouse.move(1, 1)
+      await page.waitForTimeout(800) // переход 0.6s
+      const boxes = await Promise.all(ids.map(async (id) => (await page.locator(`[data-plan="${id}"]`).boundingBox())!))
+      for (let i = 0; i < 2; i++) {
+        const gap = boxes[i + 1].x - (boxes[i].x + boxes[i].width)
+        expect(gap, `ширина ${width}, мышка на ${hover ?? 'ничём'}: зазор между ${ids[i]} и ${ids[i + 1]}`).toBeGreaterThanOrEqual(8)
+      }
+    }
+  }
+})
