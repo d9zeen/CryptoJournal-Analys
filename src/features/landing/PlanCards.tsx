@@ -1,9 +1,11 @@
 /**
  * Тарифы на главной — три карточки рядом (на телефоне друг под другом), над ними переключатель «Месяц / Год».
- * Pro Plus (главный) выделен рамкой и плашкой «Всё автоматически». Страница /plans показывает таблицу (PlansTable).
+ * Образец — Prism UI «Pricing» (21st.dev), переделан под сайт: вперёд выходит карточка под мышкой (или в фокусе с клавиатуры),
+ * остальные отходят назад и разворачиваются к ней (.plan-card[data-pos] в theme.css). Пока мышки нет — впереди Pro Plus.
+ * Pro Plus (главный) — значок в углу; у карточки впереди — фиолетовая рамка и главная кнопка. Страница /plans — таблица (PlansTable).
  */
 import { useRef, useState, type ReactNode } from 'react'
-import { useSpotlight, useTilt } from '@/lib/motion'
+import { useSpotlight } from '@/lib/motion'
 import { fmt, plural, useT } from '@/i18n'
 import { MAIN_PLAN, PLANS, type Billing, type PlanInfo } from '@/lib/plans'
 import { BillingToggle } from '@/features/plans/BillingToggle'
@@ -12,6 +14,8 @@ import { Reveal } from './Reveal'
 
 const CHECK = 'M4 10.5l3.5 3.5L16 5.5'
 const DASH = 'M5 10h10'
+const STAR = 'M10 2.5l2.3 4.7 5.2.8-3.8 3.6.9 5.1L10 14.3l-4.6 2.4.9-5.1L2.5 8l5.2-.8L10 2.5z'
+const MAIN_INDEX = PLANS.findIndex((x) => x.id === MAIN_PLAN)
 
 function Mark({ on }: { on: boolean }) {
   return (
@@ -26,20 +30,32 @@ function Mark({ on }: { on: boolean }) {
   )
 }
 
-export function PlanCards({ action }: { action: (plan: PlanInfo) => ReactNode }) {
+/** action(plan, front) — кнопка внизу карточки; front = карточка сейчас впереди (у неё кнопка главная) */
+export function PlanCards({ action }: { action: (plan: PlanInfo, front: boolean) => ReactNode }) {
   const t = useT()
   const p = t.plans
   const [billing, setBilling] = useState<Billing>('month')
+  const [hover, setHover] = useState<number | null>(null)
   const spotRef = useRef<HTMLDivElement>(null)
   useSpotlight(spotRef)
+  const front = hover ?? MAIN_INDEX
   return (
     <div className="flex flex-col gap-6">
       <div className="self-start">
         <BillingToggle value={billing} onChange={setBilling} />
       </div>
-      <div ref={spotRef} className="grid gap-4 md:grid-cols-3 md:items-stretch">
+      <div
+        ref={spotRef}
+        className="plan-stage grid gap-4 md:grid-cols-3 md:items-stretch md:pt-6"
+        onPointerLeave={() => setHover(null)}
+        onBlur={(e) => {
+          // фокус ушёл из блока тарифов (Tab дальше) — впереди снова Pro Plus
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setHover(null)
+        }}
+      >
         {PLANS.map((plan, i) => {
-          const best = plan.id === MAIN_PLAN
+          const main = plan.id === MAIN_PLAN
+          const pos = i === front ? 'active' : i < front ? 'before' : 'after'
           const items: [string, boolean][] = [
             [plan.tradeLimit === null ? p.tradesUnlimitedLine : fmt(p.tradesLine, { n: plan.tradeLimit }), true],
             [p.features.base, true],
@@ -52,46 +68,51 @@ export function PlanCards({ action }: { action: (plan: PlanInfo) => ReactNode })
           ]
           return (
             <Reveal key={plan.id} delay={i * 110} className="flex">
-              <TiltCard best={best}>
-                {best && <span className="absolute -top-3 left-6 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-on-primary">{p.best}</span>}
-                <h3 className="text-lg font-bold">{p.names[plan.id]}</h3>
-                <div className="mt-4 min-h-14">
-                  <PlanPrice plan={plan} billing={billing} size="lg" />
+              <div
+                data-pos={pos}
+                data-plan={plan.id}
+                onPointerEnter={(e) => e.pointerType === 'mouse' && setHover(i)}
+                onFocus={() => setHover(i)}
+                className="plan-card flex w-full"
+              >
+                <div
+                  data-spot
+                  className={`spot-frame relative flex w-full rounded-2xl transition-shadow duration-300 ${
+                    pos === 'active' ? '[--spot-rest:var(--color-primary)] ring-1 ring-primary' : main ? '[--spot-rest:color-mix(in_srgb,var(--color-primary)_45%,var(--color-border))]' : ''
+                  }`}
+                >
+                  <div className="spot-card relative flex w-full flex-col overflow-hidden rounded-[calc(1rem-1px)] bg-surface p-6 sm:p-7">
+                    {main && (
+                      <span className="absolute top-0 right-0 flex items-center gap-1 rounded-bl-xl bg-primary px-2.5 py-1 text-xs font-semibold text-on-primary">
+                        <svg viewBox="0 0 20 20" className="size-3.5" fill="currentColor" aria-hidden>
+                          <path d={STAR} />
+                        </svg>
+                        {p.best}
+                      </span>
+                    )}
+                    <div className="text-center">
+                      <h3 className="text-sm font-semibold tracking-wider text-muted uppercase">{p.names[plan.id]}</h3>
+                      <div className="mt-4 flex min-h-16 justify-center">
+                        <PlanPrice plan={plan} billing={billing} size="lg" center />
+                      </div>
+                    </div>
+                    <ul className="mt-6 flex flex-1 flex-col gap-3 border-t border-border pt-6 text-sm leading-relaxed">
+                      {items.map(([label, on]) => (
+                        <li key={label} className={`flex gap-3 ${on ? '' : 'text-muted'}`}>
+                          <Mark on={on} />
+                          <span>{label}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="mt-7">{action(plan, pos === 'active')}</div>
+                  </div>
                 </div>
-                <ul className="mt-6 flex flex-1 flex-col gap-3 border-t border-border pt-6 text-sm leading-relaxed">
-                  {items.map(([label, on]) => (
-                    <li key={label} className={`flex gap-3 ${on ? '' : 'text-muted'}`}>
-                      <Mark on={on} />
-                      <span>{label}</span>
-                    </li>
-                  ))}
-                </ul>
-                <div className="mt-7">{action(plan)}</div>
-              </TiltCard>
+              </div>
             </Reveal>
           )
         })}
       </div>
       <p className="text-sm text-muted">{p.founder}</p>
-    </div>
-  )
-}
-
-/**
- * Карточка тарифа: наклон к курсору (№2) и подсветка под курсором (№3) — только мышь.
- * Рамка — обёртка .spot-frame (padding 1px), у главного тарифа она фиолетовая (--spot-rest).
- */
-function TiltCard({ best, children }: { best: boolean; children: ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null)
-  useTilt(ref)
-  return (
-    <div
-      ref={ref}
-      data-spot
-      className={`spot-frame tilt relative flex w-full rounded-2xl ${best ? '[--spot-rest:color-mix(in_srgb,var(--color-primary)_70%,transparent)] ring-1 ring-primary/30' : ''}`}
-    >
-      <div className="spot-card relative flex w-full flex-col rounded-[calc(1rem-1px)] bg-surface p-6 sm:p-7">{children}</div>
-      <span aria-hidden className="tilt-sheen" />
     </div>
   )
 }

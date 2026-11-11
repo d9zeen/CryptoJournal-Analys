@@ -68,6 +68,8 @@
 
   /* Анимации (образец — docs/animations-showcase.html). Только transform и opacity (+ stroke-dashoffset в SVG) */
   --ease-snap: cubic-bezier(0.2, 0.7, 0.2, 1);
+  /* с лёгким «перелётом» — карточка тарифа «выпрыгивает» вперёд (как пружина) */
+  --ease-spring: cubic-bezier(0.34, 1.32, 0.64, 1);
   --animate-rise: rise 0.5s var(--ease-snap) backwards;
   --animate-flash: flash 1.6s ease-out;
   --animate-flash-up: flash-up 1.6s ease-out both;
@@ -411,6 +413,35 @@
 }
 .tilt[data-active] .tilt-sheen {
   opacity: 1;
+}
+
+/*
+ * Тарифы на главной (образец — Prism UI «Pricing» с 21st.dev, переделан: вперёд выходит карточка под мышкой).
+ * PlanCards ставит каждой карточке data-pos: active — под мышкой (или Pro Plus, пока мышки нет), before / after — слева / справа от неё.
+ * Активная поднимается на 20px; остальные — 94 %, сдвинуты к ней на 24px и развёрнуты к ней в 3D (как раскрытая книга).
+ * Только компьютер с мышью и от 768px (три карточки в ряд); на телефоне карточки просто друг под другом.
+ */
+.plan-stage {
+  perspective: 1200px;
+}
+.plan-card {
+  transition:
+    transform 0.6s var(--ease-spring),
+    opacity 0.3s;
+}
+@media (min-width: 768px) and (hover: hover) and (pointer: fine) {
+  .plan-card[data-pos='active'] {
+    transform: translateY(-20px);
+    z-index: 10;
+  }
+  .plan-card[data-pos='before'] {
+    transform: translateX(24px) translateZ(-40px) rotateY(8deg) scale(0.94);
+    transform-origin: right center;
+  }
+  .plan-card[data-pos='after'] {
+    transform: translateX(-24px) translateZ(-40px) rotateY(-8deg) scale(0.94);
+    transform-origin: left center;
+  }
 }
 
 /* Кривая рисуется (№9): <rect class="reveal-x"> внутри clipPath; точка в конце «щёлкает», подпись проявляется */

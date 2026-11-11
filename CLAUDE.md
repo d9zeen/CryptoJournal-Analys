@@ -117,7 +117,10 @@ docs/SECURITY.md       вся защита (база, сайт, сборка) + 
   .spot-frame / .spot-card, .tilt / .tilt-sheen, .draw-path, .eq-curtain, .cal-day-link); хуки — `src/lib/motion.ts`;
   компоненты — `src/components`: Skeleton (+ заготовки страниц), RollNumber, AnimatedNumber, PasswordInput, CheckMark, FormError, SaveButton.
 - «Уменьшить движение» — общий блок в theme.css; итоговое состояние задаётся в базовых стилях, анимация только «приводит» к нему.
-- Наклон (№2, useTilt) — только главная: карточки тарифов и превью дашборда. Подсветка под курсором (№3, useSpotlight) — ряд показателей,
+- Наклон (№2, useTilt) — только главная: превью дашборда.
+- Тарифы на главной (PlanCards, образец — Prism UI «Pricing» с 21st.dev): вперёд выходит карточка под мышкой / в фокусе (без мышки — Pro Plus),
+  она поднята на 20px, с фиолетовой рамкой и главной кнопкой; остальные — 94 %, к ней на 24px и развёрнуты к ней (rotateY 8°).
+  CSS — `.plan-stage` / `.plan-card[data-pos=active|before|after]` в theme.css, `--ease-spring`; только мышь и от 768px. Цена при «Месяц / Год» — RollNumber. Подсветка под курсором (№3, useSpotlight) — ряд показателей,
   тарифы, «Путь одной сделки». Оба — только мышь `(hover: hover) and (pointer: fine)`.
 - Подсветка и блик — одно правило CSS на обе темы, разница только в токенах theme.css: `--spot-ring-r`, `--spot-ring-stops` (на .spot-frame —
   чтобы `--spot-rest` рамки Pro Plus бралась у карточки), `--spot-glow-r`, `--color-spot-glow(-mid)`, `--spot-glow-stops`,

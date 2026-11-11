@@ -204,8 +204,9 @@ export function LandingPage() {
           </Reveal>
           <div className="mt-10">
             <PlanCards
-              action={(plan) => (
-                <Link to="/register" className={`${plan.id === 'pro_plus' ? btnPrimary : btnSecondary} w-full !py-3`}>
+              action={(_plan, front) => (
+                // кнопка карточки, что сейчас впереди (под мышкой или Pro Plus), — главная
+                <Link to="/register" className={`${front ? btnPrimary : btnSecondary} w-full !py-3`}>
                   {l.pick}
                 </Link>
               )}
