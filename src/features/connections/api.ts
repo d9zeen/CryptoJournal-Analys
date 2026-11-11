@@ -17,6 +17,7 @@ import { fetchExistingIds, runImport } from '@/features/import/api'
 import { useUsage } from '@/features/settings/api'
 import { activeConnections } from '@/lib/plans'
 import { useIsAdmin } from '@/features/admin/api'
+import { markSynced } from '@/lib/arrivals'
 
 export { SyncError, errorCodeOf, shortKey, type SyncResult } from '@/lib/sync/run'
 
@@ -190,6 +191,9 @@ export function useSyncConnection() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (conn: Connection) => syncConnection(conn, remainingTrades),
+    onSuccess: (r) => {
+      if (r.inserted > 0) markSynced()
+    },
     onSettled: () => invalidateAll(qc),
   })
 }
@@ -232,7 +236,10 @@ export function useAutoSync() {
         }
       } finally {
         running.current = false
-        if (changed) invalidateAll(qc)
+        if (changed) {
+          markSynced() // №12: новые сделки в списке раздвинут его и вспыхнут
+          invalidateAll(qc)
+        }
         else qc.invalidateQueries({ queryKey: ['connections'] })
       }
     }

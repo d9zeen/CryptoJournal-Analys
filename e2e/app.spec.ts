@@ -504,3 +504,41 @@ test('Basic: два скриншота на сделку, дальше — ст�
   await expect(page.getByText('Добавлено максимум для тарифа — 2 шт.')).toBeVisible()
   await expect(page.locator('[data-upgrade]').filter({ hasText: 'На Basic — 2 скриншота на сделку' })).toBeVisible()
 })
+
+test('кнопка «Сохранить сделку»: крутилка в круге → галочка → назад к сделкам', async ({ page, db }) => {
+  await fakeSupabase(page, db)
+  // ответ на сохранение — с задержкой, чтобы увидеть состояние «идёт сохранение»
+  await page.route('https://fake.supabase.test/rest/v1/trades*', async (route) => {
+    if (route.request().method() === 'POST') await new Promise((r) => setTimeout(r, 400))
+    await route.fallback()
+  })
+  await page.goto('trades/new')
+  await page.getByLabel('Пара').fill('BTCUSDT')
+  await page.getByLabel('Цена входа').fill('60000')
+  await page.getByLabel('Цена выхода').fill('61000')
+  await page.getByLabel('Размер позиции, $').fill('600')
+  const btn = page.getByRole('button', { name: 'Сохранить сделку' })
+  await btn.click()
+  const save = page.locator('button[data-state]')
+  await expect(save).toHaveAttribute('data-state', 'busy')
+  await expect(save).toHaveAttribute('data-state', 'done')
+  await expect(save.getByText('Готово')).toBeAttached()
+  await expect(page).toHaveURL(/\/trades$/)
+})
+
+test('кнопка «Сохранить сделку»: ошибка — кнопка возвращается, ошибка видна', async ({ page, db }) => {
+  await fakeSupabase(page, db)
+  await page.route('https://fake.supabase.test/rest/v1/trades*', async (route) => {
+    if (route.request().method() === 'POST') return route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ message: 'FREE_LIMIT_REACHED', code: 'P0001' }) })
+    await route.fallback()
+  })
+  await page.goto('trades/new')
+  await page.getByLabel('Пара').fill('BTCUSDT')
+  await page.getByLabel('Цена входа').fill('60000')
+  await page.getByLabel('Цена выхода').fill('61000')
+  await page.getByLabel('Размер позиции, $').fill('600')
+  await page.getByRole('button', { name: 'Сохранить сделку' }).click()
+  await expect(page.getByRole('alert')).toContainText('Достигнут лимит Basic')
+  await expect(page.locator('button[data-state]')).toHaveAttribute('data-state', 'idle')
+  await expect(page).toHaveURL(/\/trades\/new$/)
+})

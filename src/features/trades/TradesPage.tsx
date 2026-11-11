@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { fmt, useT } from '@/i18n'
 import { SideBadge } from '@/components/SideBadge'
+import { RollNumber } from '@/components/RollNumber'
+import { TradesSkeleton } from '@/components/Skeleton'
+import { useArrivals } from '@/lib/arrivals'
 import { UpgradeLine } from '@/components/UpgradeLine'
 import { useTrades } from './api'
 import { applyFilters, EMPTY_FILTERS, hasActiveFilters, type TradeFilters } from './filters'
@@ -33,7 +36,15 @@ export function TradesPage() {
   const [showFilters, setShowFilters] = useState(false)
 
   const range = useMemo(() => rangeFor(preset, custom), [preset, custom])
-  const { data: trades, isLoading, error } = useTrades(range)
+  const { data: trades, isLoading, error, isPlaceholderData } = useTrades(range)
+  const ready = !isLoading && !isPlaceholderData
+  const periodKey = `${preset}|${custom.from}|${custom.to}`
+  // №13: итоги прокручиваются при смене периода (ключ — период, чьи сделки уже на экране)
+  const shownKey = useRef(periodKey)
+  if (ready) shownKey.current = periodKey
+  // №12: сделки, пришедшие от синхронизации с биржей, пока страница открыта, — раздвигают список и вспыхивают
+  const ids = useMemo(() => trades?.map((tr) => tr.id), [trades])
+  const fresh = useArrivals(ids, ready, periodKey)
   const { data: setups = [] } = useList('setups')
   const { data: tags = [] } = useList('mistake_tags')
   const { data: usage } = useUsage()
@@ -129,7 +140,7 @@ export function TradesPage() {
       {error && <Alert tone="error">{t.errors.loadFailed}</Alert>}
 
       {isLoading ? (
-        <p className="text-muted">{t.common.loading}</p>
+        <TradesSkeleton cards={!desktop} />
       ) : filtered.length === 0 ? (
         <Card className="text-center">
           <p className="text-muted">{trades?.length ? t.trades.emptyFiltered : preset !== 'all' ? t.trades.emptyPeriod : t.trades.empty}</p>
@@ -151,11 +162,11 @@ export function TradesPage() {
         <>
           <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm text-muted">
             <span>
-              {fmt(t.trades.count, { n: filtered.length })}
+              <RollNumber text={fmt(t.trades.count, { n: filtered.length })} token={shownKey.current} />
               {openCount > 0 && ` · ${fmt(t.trades.openCount, { n: openCount })}`}
             </span>
             <span>
-              {t.trades.totalPnl}: <span className={`num font-semibold ${pnlClass(totalPnl)}`}>{formatPnl(totalPnl)}</span>
+              {t.trades.totalPnl}: <RollNumber className={`num font-semibold ${pnlClass(totalPnl)}`} text={formatPnl(totalPnl)} token={shownKey.current} />
             </span>
           </div>
 
@@ -187,26 +198,45 @@ export function TradesPage() {
                     <tr
                       key={tr.id}
                       onClick={() => navigate(`/trades/${tr.id}`)}
-                      className="cursor-pointer border-t border-border transition-colors hover:bg-surface-2/60"
+                      data-fresh={fresh.has(tr.id) || undefined}
+                      className={`cursor-pointer border-t border-border transition-colors hover:bg-surface-2/60 ${fresh.has(tr.id) ? flashCls(tr.pnl) : ''}`}
                     >
-                      <td className="num whitespace-nowrap px-4 py-3 text-xs text-muted">{formatDateTime(tr.entry_at)}</td>
+                      <td className="num whitespace-nowrap px-4 py-3 text-xs text-muted">
+                        <Grow open={fresh.has(tr.id)}>{formatDateTime(tr.entry_at)}</Grow>
+                      </td>
                       <td className="num px-4 py-3 font-semibold">
-                        <Link to={`/trades/${tr.id}`} onClick={(e) => e.stopPropagation()} className="hover:underline" title={tr.title ?? undefined}>
-                          {tr.title ? <span className="line-clamp-2 max-w-80 font-sans">{tr.title}</span> : tr.symbol}
-                        </Link>
-                        <ShotsBadge trade={tr} />
+                        <Grow open={fresh.has(tr.id)}>
+                          <Link to={`/trades/${tr.id}`} onClick={(e) => e.stopPropagation()} className="hover:underline" title={tr.title ?? undefined}>
+                            {tr.title ? <span className="line-clamp-2 max-w-80 font-sans">{tr.title}</span> : tr.symbol}
+                          </Link>
+                          <ShotsBadge trade={tr} />
+                        </Grow>
                       </td>
-                      <td className="px-4 py-3 text-muted">{exchangeName(tr.exchange, t.exchange.other)}</td>
+                      <td className="px-4 py-3 text-muted">
+                        <Grow open={fresh.has(tr.id)}>{exchangeName(tr.exchange, t.exchange.other)}</Grow>
+                      </td>
                       <td className="px-4 py-3">
-                        <SideBadge side={tr.side} />
+                        <Grow open={fresh.has(tr.id)}>
+                          <SideBadge side={tr.side} />
+                        </Grow>
                       </td>
-                      <td className="num whitespace-nowrap px-4 py-3">{formatUsd(tr.size_usd)}</td>
+                      <td className="num whitespace-nowrap px-4 py-3">
+                        <Grow open={fresh.has(tr.id)}>{formatUsd(tr.size_usd)}</Grow>
+                      </td>
                       <td className="num whitespace-nowrap px-4 py-3 text-muted">
-                        {formatPrice(tr.entry_price)} → {tr.exit_price !== null ? formatPrice(tr.exit_price) : <OpenBadge />}
+                        <Grow open={fresh.has(tr.id)}>
+                          {formatPrice(tr.entry_price)} → {tr.exit_price !== null ? formatPrice(tr.exit_price) : <OpenBadge />}
+                        </Grow>
                       </td>
-                      <td className="px-4 py-3 text-muted">{tr.setup_id ? setupName.get(tr.setup_id) : '—'}</td>
-                      <td className={`num whitespace-nowrap px-4 py-3 text-right font-semibold ${pnlClass(tr.pnl)}`}>{formatPnl(tr.pnl)}</td>
-                      <td className={`num whitespace-nowrap px-4 py-3 text-right ${pnlClass(tr.r_multiple)}`}>{formatR(tr.r_multiple)}</td>
+                      <td className="px-4 py-3 text-muted">
+                        <Grow open={fresh.has(tr.id)}>{tr.setup_id ? setupName.get(tr.setup_id) : '—'}</Grow>
+                      </td>
+                      <td className={`num whitespace-nowrap px-4 py-3 text-right font-semibold ${pnlClass(tr.pnl)}`}>
+                        <Grow open={fresh.has(tr.id)}>{formatPnl(tr.pnl)}</Grow>
+                      </td>
+                      <td className={`num whitespace-nowrap px-4 py-3 text-right ${pnlClass(tr.r_multiple)}`}>
+                        <Grow open={fresh.has(tr.id)}>{formatR(tr.r_multiple)}</Grow>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -215,7 +245,7 @@ export function TradesPage() {
           ) : (
             <ul className="flex flex-col gap-2">
               {visible.map((tr) => (
-                <TradeCard key={tr.id} trade={tr} setupName={tr.setup_id ? setupName.get(tr.setup_id) : undefined} />
+                <TradeCard key={tr.id} trade={tr} fresh={fresh.has(tr.id)} setupName={tr.setup_id ? setupName.get(tr.setup_id) : undefined} />
               ))}
             </ul>
           )}
@@ -252,28 +282,47 @@ function OpenBadge() {
   return <span className="rounded bg-warning/15 px-1.5 py-0.5 text-xs text-warning">{t.trades.open}</span>
 }
 
-function TradeCard({ trade: tr, setupName }: { trade: TradeWithTags; setupName?: string }) {
+/** Строка таблицы раздвигает список: содержимое ячеек растёт по высоте (grid-rows 0fr → 1fr) — у <tr> так нельзя */
+function Grow({ open, children }: { open: boolean; children: React.ReactNode }) {
+  if (!open) return <>{children}</>
+  return (
+    <div className="rows-open">
+      <div className="min-h-0 overflow-hidden">{children}</div>
+    </div>
+  )
+}
+
+/** Вспышка новой строки цветом результата (№12) */
+const flashCls = (pnl: number | null) => (pnl !== null && pnl < 0 ? 'animate-flash-down' : 'animate-flash-up')
+
+function TradeCard({ trade: tr, setupName, fresh = false }: { trade: TradeWithTags; setupName?: string; fresh?: boolean }) {
   const t = useT()
   return (
-    <li>
-      <Link to={`/trades/${tr.id}`} className="block rounded-xl border border-border bg-surface p-4 transition-colors active:bg-surface-2">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className={tr.title ? 'line-clamp-2 font-semibold' : 'num font-semibold'}>{tr.title ?? tr.symbol}</span>
-            <SideBadge side={tr.side} />
-            <ShotsBadge trade={tr} />
-            {tr.exit_at === null && <OpenBadge />}
+    // новая сделка с биржи раздвигает список (grid-rows 0fr → 1fr) и вспыхивает
+    <li data-fresh={fresh || undefined} className={fresh ? 'rows-open' : undefined}>
+      <div className={fresh ? 'min-h-0 overflow-hidden' : undefined}>
+        <Link
+          to={`/trades/${tr.id}`}
+          className={`block rounded-xl border border-border bg-surface p-4 transition-colors active:bg-surface-2 ${fresh ? flashCls(tr.pnl) : ''}`}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className={tr.title ? 'line-clamp-2 font-semibold' : 'num font-semibold'}>{tr.title ?? tr.symbol}</span>
+              <SideBadge side={tr.side} />
+              <ShotsBadge trade={tr} />
+              {tr.exit_at === null && <OpenBadge />}
+            </div>
+            <span className={`num font-semibold ${pnlClass(tr.pnl)}`}>{formatPnl(tr.pnl)}</span>
           </div>
-          <span className={`num font-semibold ${pnlClass(tr.pnl)}`}>{formatPnl(tr.pnl)}</span>
-        </div>
-        <div className="mt-1.5 flex items-center justify-between gap-2 text-xs text-muted">
-          <span>
-            {formatDateTime(tr.entry_at)} · {exchangeName(tr.exchange, t.exchange.other)}
-            {setupName && ` · ${setupName}`}
-          </span>
-          <span className={`num ${pnlClass(tr.r_multiple)}`}>{formatR(tr.r_multiple)}</span>
-        </div>
-      </Link>
+          <div className="mt-1.5 flex items-center justify-between gap-2 text-xs text-muted">
+            <span>
+              {formatDateTime(tr.entry_at)} · {exchangeName(tr.exchange, t.exchange.other)}
+              {setupName && ` · ${setupName}`}
+            </span>
+            <span className={`num ${pnlClass(tr.r_multiple)}`}>{formatR(tr.r_multiple)}</span>
+          </div>
+        </Link>
+      </div>
     </li>
   )
 }

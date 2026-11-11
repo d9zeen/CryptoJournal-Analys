@@ -64,7 +64,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
   return (
     // широкий экран (выбор владельца — вариант 2): высота ~86 % экрана, по краям небольшие поля (до 2000 px по центру);
     // панель итогов справа той же высоты, что и календарь
-    <div className="mx-auto grid w-full max-w-[2000px] gap-4 xl:min-h-[max(680px,86dvh)] xl:grid-cols-[minmax(0,1fr)_360px]">
+    <div data-shot="calendar" className="mx-auto grid w-full max-w-[2000px] gap-4 xl:min-h-[max(680px,86dvh)] xl:grid-cols-[minmax(0,1fr)_360px]">
       <section className="rise flex flex-col rounded-lg border border-border bg-surface p-4 sm:p-5 xl:h-full">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-lg font-semibold">{c.title}</h1>
