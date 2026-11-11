@@ -5,6 +5,7 @@ import { planTerm } from '@/lib/plans'
 import { formatDateShort } from '@/lib/format'
 import { Logo, LogoMark } from '@/components/Logo'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { LangSwitch } from '@/components/LangSwitch'
 import { useIsAdmin } from '@/features/admin/api'
 import { useAutoSync } from '@/features/connections/api'
 import { useProfile, useUsage } from '@/features/settings/api'
@@ -105,6 +106,7 @@ export function AppLayout() {
             <span className="min-w-0 flex-1 truncate text-xs text-muted" title={user?.email ?? ''}>
               {user?.email}
             </span>
+            <LangSwitch up compact />
             <ThemeToggle />
             <button type="button" onClick={signOut} aria-label={t.nav.logout} title={t.nav.logout} className="rounded-lg p-2 text-muted transition-colors hover:bg-surface-2 hover:text-text">
               <Icon d="M15 4h3a2 2 0 012 2v12a2 2 0 01-2 2h-3M10 16l-4-4 4-4M6 12h10" />
@@ -127,6 +129,7 @@ export function AppLayout() {
             <span className="hidden md:contents">
               <PlanBadge />
             </span>
+            <LangSwitch />
             <ThemeToggle />
             <NavLink to="/settings" aria-label={t.nav.settings} title={t.nav.settings} className={`${headerBtn} md:hidden`}>
               <Icon d={SETTINGS_ICON} />

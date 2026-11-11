@@ -3,6 +3,7 @@
  * Первый клик — начало, второй — конец (если раньше начала — меняем местами), при наведении диапазон подсвечивается.
  * Ничего не применяется, пока не нажата «Применить». На телефоне — панель снизу экрана.
  */
+import { intlLocale } from '@/lib/locale'
 import { useEffect, useMemo, useState, type RefObject } from 'react'
 import { fmt, useT } from '@/i18n'
 import { daysInRange, monthGrid, parseYmd, QUICK_RANGES, quickRange, ymd, type CustomRange } from '@/lib/period'
@@ -17,14 +18,14 @@ type Props = {
   anchor: RefObject<HTMLElement | null>
 }
 
-const monthName = new Intl.DateTimeFormat('ru-RU', { month: 'long' })
-const dayLong = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' })
-const fullDate = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+const monthName = () => new Intl.DateTimeFormat(intlLocale(), { month: 'long' })
+const dayLong = () => new Intl.DateTimeFormat(intlLocale(), { day: 'numeric', month: 'long' })
+const fullDate = () => new Intl.DateTimeFormat(intlLocale(), { day: 'numeric', month: 'long', year: 'numeric' })
 
 /** «5 ноября», год — только если не текущий */
 export function formatDay(s: string, now = new Date()): string {
   const d = parseYmd(s)
-  return d.getFullYear() === now.getFullYear() ? dayLong.format(d) : fullDate.format(d)
+  return d.getFullYear() === now.getFullYear() ? dayLong().format(d) : fullDate().format(d)
 }
 
 /** «6 — 18 октября», «28 сентября — 3 октября», «5 ноября» */
@@ -129,7 +130,7 @@ export function DateRangePicker({ value, onApply, onClose, anchor }: Props) {
                 <div className="mb-2 flex h-8 items-center justify-between">
                   {mi === 0 ? <NavBtn dir={-1} label={p.prevMonth} onClick={() => shift(-1)} /> : <span className="size-8" />}
                   <span className="text-sm font-semibold capitalize">
-                    {monthName.format(m)} {m.getFullYear()}
+                    {monthName().format(m)} {m.getFullYear()}
                   </span>
                   {mi === months.length - 1 ? <NavBtn dir={1} label={p.nextMonth} onClick={() => shift(1)} /> : <span className="size-8" />}
                 </div>
@@ -161,7 +162,7 @@ export function DateRangePicker({ value, onApply, onClose, anchor }: Props) {
                           type="button"
                           onClick={() => pick(key)}
                           onPointerEnter={() => setHover(key)}
-                          aria-label={fullDate.format(d)}
+                          aria-label={fullDate().format(d)}
                           aria-pressed={edge}
                           className={`num relative mx-auto flex size-9 items-center justify-center rounded-full text-[13px] transition-colors ${
                             edge

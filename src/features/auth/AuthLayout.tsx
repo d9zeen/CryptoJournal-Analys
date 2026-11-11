@@ -2,12 +2,19 @@ import type { ReactNode, RefObject } from 'react'
 import { Card } from '@/components/ui/Card'
 import { Logo } from '@/components/Logo'
 import { useT } from '@/i18n'
+import { LangSwitch } from '@/components/LangSwitch'
+import { ThemeToggle } from '@/components/ThemeToggle'
 
 /** cardRef — карточка формы (useShake: «мотает головой» при ошибке) */
 export function AuthLayout({ title, children, cardRef }: { title: string; children: ReactNode; cardRef?: RefObject<HTMLDivElement | null> }) {
   const t = useT()
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center px-4 py-10">
+    <div className="relative flex min-h-dvh flex-col items-center justify-center px-4 py-10">
+      {/* язык и тема — в углу, до входа их тоже можно поменять */}
+      <div className="absolute top-3 right-3 flex items-center gap-1">
+        <LangSwitch />
+        <ThemeToggle />
+      </div>
       <div className="rise mb-6 flex flex-col items-center gap-2 text-center">
         <Logo size="lg" />
         <div className="text-sm text-muted">{t.app.tagline}</div>

@@ -44,8 +44,11 @@ src/
   lib/palette.ts       палитра прибыли / убытка (по умолчанию classic — зелёный / красный; classic, teal_salmon, sky_coral — всем, остальные 5 — Pro / Pro Plus, проверка и триггером 0015; выбор — полоска PaletteStrip в «Настройки → Оформление», features/palette):
                        data-palette на <html>, цвета в theme.css; --color-up / --color-down = profit / loss
   lib/motion.ts        хуки анимаций (раздел «Анимации» ниже): prefersReducedMotion, useCountUp, useShown, useTilt, useSpotlight, useShake, pause
-  i18n/ru.ts           ВСЕ тексты интерфейса. Новый язык = файл с той же структурой (тип Dict)
-  i18n/index.ts        useT(), fmt(), plural() — числа со словом («1 сделка / 2 сделки / 5 сделок»)
+  i18n/ru.ts, en.ts    ВСЕ тексты интерфейса на двух языках (en.ts типизирован Dict из ru.ts — ключи обязаны совпадать). Новый язык = ещё один файл + LANGS в lib/locale.ts
+  lib/locale.ts        язык: английский ПО УМОЛЧАНИЮ, русский — по выбору; localStorage cj-lang (до загрузки — public/theme-init.js ставит <html lang>), getLang / setLang / intlLocale().
+                       Переключатель — components/LangSwitch.tsx (глобус + EN/RU, меню): главная, вход / регистрация, «Данные и безопасность», левая панель, шапка планшета / телефона; плюс «Настройки → Оформление».
+                       Смена языка перерисовывает всё приложение (key у RouterProvider в App.tsx). profiles.locale в базе пока не используется
+  i18n/index.ts        useT(), useLang(), setLang(), getT(), fmt(), plural() — числа со словом («1 сделка / 2 сделки / 5 сделок»; в en формы one / many, few = many)
   lib/supabase.ts      клиент Supabase (только публичный ключ)
   lib/calc/            формулы PnL / R (trade.ts), статистика дашборда (stats.ts), оценка трейдера 0…100 (score.ts — в интерфейсе не показывается с 08.11.2026, из неё винрейт дней) + тесты
   lib/tz.ts            дата / час / день недели в часовом поясе пользователя
@@ -89,7 +92,9 @@ docs/SECURITY.md       вся защита (база, сайт, сборка) + 
 
 ## Правила
 
-1. **Тексты** — только через `useT()` и `src/i18n/ru.ts`. Никаких строк на русском прямо в JSX.
+1. **Тексты** — только через `useT()` и словари `src/i18n/ru.ts` + `src/i18n/en.ts` (новый текст — сразу в ОБА). Никаких строк прямо в JSX.
+   Числа и даты — только через `lib/format.ts` / `intlLocale()` (en: $1,234.56, Nov 3; ru: 1 234,56 $, 03.11); `'ru-RU'` в коде не писать.
+   Тесты логики идут на русском (src/test-setup.ts), e2e — тоже (опция `lang` в e2e/fixtures.ts, по умолчанию 'ru'; `test.use({ lang: null })` — сайт как у нового человека, на английском)
 2. **Цвета/шрифты** — только токены из `theme.css`. Никаких `#hex` и `text-green-500` в компонентах.
 3. **Безопасность:**
    - RLS включён на КАЖДОЙ таблице, политика `user_id = auth.uid()`; Storage — по папке `{user_id}/`.

@@ -15,7 +15,7 @@ import { queryClient } from '@/lib/queryClient'
 import { BASENAME } from '@/lib/url'
 import { FullPageSpinner } from '@/components/ui/Spinner'
 import { PageSkeleton } from '@/components/Skeleton'
-import { useT } from '@/i18n'
+import { useLang, useT } from '@/i18n'
 
 /**
  * Страницы приложения грузятся отдельными файлами, когда на них заходят:
@@ -98,11 +98,13 @@ const router = createBrowserRouter(
 )
 
 export function App() {
+  // смена языка перерисовывает все страницы целиком (key): тексты, числа и даты — в новом формате; кэш данных остаётся
+  const lang = useLang()
   if (!isSupabaseConfigured) return <SetupNeeded />
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <RouterProvider router={router} />
+        <RouterProvider key={lang} router={router} />
       </AuthProvider>
     </QueryClientProvider>
   )

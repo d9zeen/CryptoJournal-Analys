@@ -4,6 +4,7 @@
  * Справа (на телефоне — ниже) — итоги месяца: результат, торговые дни, лучший и худший день, недели, дни недели.
  * Свой месяц (стрелки), не зависит от фильтра периода. Дни соседних месяцев — заштрихованы.
  */
+import { intlLocale } from '@/lib/locale'
 import { useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router'
 import { fmt, plural, useT } from '@/i18n'
@@ -16,10 +17,10 @@ import { useMediaQuery } from '@/lib/useMediaQuery'
 import { AnimatedNumber } from '@/components/AnimatedNumber'
 import { CalendarSkeleton } from '@/components/Skeleton'
 
-const monthTitle = new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' })
+const monthTitle = () => new Intl.DateTimeFormat(intlLocale(), { month: 'long', year: 'numeric' })
 /** «Ноябрь 2026» — без «г.» и без CSS capitalize (он делал «2026 Г.») */
 const monthLabel = (y: number, m: number) => {
-  const s = monthTitle.format(new Date(y, m, 1)).replace(/\s*г\.?$/, '')
+  const s = monthTitle().format(new Date(y, m, 1)).replace(/\s*г\.?$/, '')
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 /** сделка могла открыться задолго до закрытия — грузим с запасом */

@@ -182,7 +182,24 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
 }
 
 /** Тест с фейковой базой и автоматической проверкой: нет ошибок JS и нарушений CSP */
-export const test = base.extend<{ db: FakeDb }>({
+/**
+ * lang — язык сайта в тесте. Сайт по умолчанию на английском, а большинство тестов сверяет русские тексты,
+ * поэтому по умолчанию ставим 'ru' (только если язык ещё не выбран — переключение в самом тесте сохраняется).
+ * null — ничего не ставить: сайт откроется на языке по умолчанию (английском). test.use({ lang: null })
+ */
+export const test = base.extend<{ db: FakeDb; lang: 'ru' | 'en' | null }>({
+  lang: ['ru', { option: true }],
+  context: async ({ context, lang }, use) => {
+    if (lang)
+      await context.addInitScript((l) => {
+        try {
+          if (!localStorage.getItem('cj-lang')) localStorage.setItem('cj-lang', l)
+        } catch {
+          /* нет хранилища */
+        }
+      }, lang)
+    await use(context)
+  },
   db: async ({ page }, use) => {
     const db: FakeDb = { trades: [], imports: [], inserted: [], factors: [], aal: 'aal1', usage: { plan: 'free', trades_created: 3, trade_limit: 50 } }
     const problems: string[] = []

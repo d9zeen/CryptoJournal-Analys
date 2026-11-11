@@ -6,6 +6,7 @@
  */
 import { monthGrid, ymd } from '@/lib/period'
 import { zonedParts } from '@/lib/tz'
+import { getLang, type Lang } from '@/lib/locale'
 
 export type CalCell = { pnl: number; count: number; wins: number }
 export type CalDay = CalCell & { date: string; day: number; inMonth: boolean }
@@ -69,17 +70,18 @@ export function calendarSpan(year: number, month: number): { first: string; last
 }
 
 /**
- * Коротко для узких клеток на телефоне, по-русски: до 1000 — целое («+92», «−95»),
- * от 1000 — «+1,7к», от миллиона — «+1,2м»; минус — типографский «−».
+ * Коротко для узких клеток на телефоне: до 1000 — целое («+92», «−95»),
+ * от 1000 — «+1,7к» (en: «+1.7k»), от миллиона — «+1,2м» (en: «+1.2M»); минус — типографский «−».
  */
-export function compactPnl(n: number): string {
+export function compactPnl(n: number, lang: Lang = getLang()): string {
   const a = Math.abs(n)
   const sign = n > 0 ? '+' : n < 0 ? '−' : ''
-  const short = (v: number, unit: string) => `${String(Math.round(v * 10) / 10).replace('.', ',')}${unit}`
+  const ru = lang === 'ru'
+  const short = (v: number, unit: string) => `${ru ? String(Math.round(v * 10) / 10).replace('.', ',') : String(Math.round(v * 10) / 10)}${unit}`
   let s: string
   if (Math.round(a) < 1000) s = String(Math.round(a))
-  else if (Math.round(a / 100) / 10 < 1000) s = short(a / 1000, 'к')
-  else s = short(a / 1_000_000, 'м')
+  else if (Math.round(a / 100) / 10 < 1000) s = short(a / 1000, ru ? 'к' : 'k')
+  else s = short(a / 1_000_000, ru ? 'м' : 'M')
   return s === '0' ? '0' : sign + s
 }
 

@@ -2,6 +2,7 @@
  * Админка: все пользователи, их тарифы и сделки; выдать / снять Pro, сбросить лимит Free.
  * Доступ проверяет база (is_admin в каждой функции) — интерфейс лишь прячет пункт меню у остальных.
  */
+import { intlLocale } from '@/lib/locale'
 import { useMemo, useState, type ReactNode } from 'react'
 import { fmt, useT } from '@/i18n'
 import { useAuth } from '@/features/auth/AuthProvider'
@@ -17,7 +18,7 @@ import { planInfo } from '@/lib/plans'
 import { SelectField } from '@/components/ui/Field'
 import { useAdminResetUsage, useAdminSetAdmin, useAdminSetPlan, useAdminUsers, useIsAdmin } from './api'
 
-const dateOnly = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+const dateOnly = () => new Intl.DateTimeFormat(intlLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' })
 
 export function AdminPage() {
   const t = useT()
@@ -128,10 +129,10 @@ export function AdminPage() {
     const name = t.plans.names[paid ? u.effective_plan : u.plan]
     const text = paid
       ? u.plan_until
-        ? fmt(a.planUntil, { plan: name, d: dateOnly.format(new Date(u.plan_until)) })
+        ? fmt(a.planUntil, { plan: name, d: dateOnly().format(new Date(u.plan_until)) })
         : fmt(a.planForever, { plan: name })
       : u.plan !== 'free' && u.plan_until
-        ? fmt(a.planExpired, { plan: name, d: dateOnly.format(new Date(u.plan_until)) })
+        ? fmt(a.planExpired, { plan: name, d: dateOnly().format(new Date(u.plan_until)) })
         : a.free
     return (
       <span className="inline-flex flex-wrap items-center gap-1">

@@ -8,6 +8,7 @@ import { Link } from 'react-router'
 import { plural, useT } from '@/i18n'
 import { Logo } from '@/components/Logo'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { LangSwitch } from '@/components/LangSwitch'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { KpiRow } from '@/features/dashboard/Widgets'
 import { formatPnl, pnlClass } from '@/lib/format'
@@ -68,7 +69,8 @@ export function LandingPage() {
               {l.nav.faq}
             </a>
           </nav>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
+            <LangSwitch />
             <ThemeToggle />
             {user ? (
               // уже вошёл (смотрит /welcome) — одна кнопка в дневник
