@@ -332,13 +332,12 @@ function CalendarVisual({ trades, mark }: { trades: ClosedTrade[]; mark?: string
           const tone = !d.inMonth ? 'cal-hatch border-transparent' : !has ? 'border-border bg-surface-2/50' : d.pnl > 0 ? 'border-up/45 bg-up/18' : 'border-down/45 bg-down/18'
           const ring = d.date === markDate ? 'ring-2 ring-primary' : ''
           return (
-            <div key={d.date} className={`relative flex min-h-12 flex-col items-center justify-center rounded-md border px-0.5 pt-3 pb-1 sm:min-h-16 ${tone} ${ring}`}>
+            <div key={d.date} className={`relative flex min-h-12 flex-col items-center justify-center rounded-md border px-0.5 pt-3 pb-1 sm:min-h-14 ${tone} ${ring}`}>
               <span className={`absolute top-0.5 right-1 text-xs ${d.inMonth ? 'text-muted' : 'text-muted/60'}`}>{d.day}</span>
               {has && (
-                <>
-                  <span className={`num text-xs leading-tight font-semibold ${d.pnl > 0 ? 'text-up' : 'text-down'}`}>{compactPnl(d.pnl)}</span>
-                  <span className="hidden text-xs text-muted sm:block">{plural(d.count, t.dashboard.calendar.tradesN)}</span>
-                </>
+                <span className={`num text-xs leading-tight font-semibold ${d.pnl > 0 ? 'text-up' : 'text-down'}`} title={plural(d.count, t.dashboard.calendar.tradesN)}>
+                  {compactPnl(d.pnl)}
+                </span>
               )}
             </div>
           )
