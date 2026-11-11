@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { fmt, useT } from '@/i18n'
 import { SideBadge } from '@/components/SideBadge'
 import { UpgradeLine } from '@/components/UpgradeLine'
@@ -23,9 +23,12 @@ const PAGE = 100
 export function TradesPage() {
   const t = useT()
   const navigate = useNavigate()
-  // по умолчанию — всё время: иначе импортированная история за прошлые месяцы «пропадает»
-  const [preset, setPreset] = useState<PeriodPreset>('all')
-  const [custom, setCustom] = useState<CustomRange>({ from: '', to: '' })
+  // по умолчанию — всё время: иначе импортированная история за прошлые месяцы «пропадает».
+  // ?day=YYYY-MM-DD (клик по дню в календаре) — сразу «свой диапазон» на этот день
+  const [params] = useSearchParams()
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(params.get('day') ?? '') ? params.get('day')! : null
+  const [preset, setPreset] = useState<PeriodPreset>(day ? 'custom' : 'all')
+  const [custom, setCustom] = useState<CustomRange>(day ? { from: day, to: day } : { from: '', to: '' })
   const [filters, setFilters] = useState<TradeFilters>(EMPTY_FILTERS)
   const [showFilters, setShowFilters] = useState(false)
 
@@ -80,7 +83,12 @@ export function TradesPage() {
 
       {showFilters && (
         <Card className="grid grid-cols-2 gap-3 !p-4 md:grid-cols-6">
-          <TextField label={t.trades.filters.symbol} placeholder={t.trades.filters.symbolPlaceholder} value={filters.symbol} onChange={(e) => set('symbol', e.target.value)} />
+          <TextField
+            label={t.trades.filters.symbol}
+            placeholder={t.trades.filters.symbolPlaceholder}
+            value={filters.symbol}
+            onChange={(e) => set('symbol', e.target.value)}
+          />
           <SelectField label={t.trades.filters.exchange} value={filters.exchange} onChange={(e) => set('exchange', e.target.value)}>
             <option value="">{t.common.all}</option>
             {EXCHANGES.map((ex) => (
@@ -157,7 +165,15 @@ export function TradesPage() {
               <table className="w-full text-sm">
                 <thead className="bg-surface text-left text-muted">
                   <tr>
-                    {[t.trades.col.date, t.trades.col.symbol, t.trades.col.exchange, t.trades.col.side, t.trades.col.size, t.trades.col.prices, t.trades.col.setup].map((h) => (
+                    {[
+                      t.trades.col.date,
+                      t.trades.col.symbol,
+                      t.trades.col.exchange,
+                      t.trades.col.side,
+                      t.trades.col.size,
+                      t.trades.col.prices,
+                      t.trades.col.setup,
+                    ].map((h) => (
                       <th key={h} className="px-4 py-3 font-normal">
                         {h}
                       </th>
@@ -168,7 +184,11 @@ export function TradesPage() {
                 </thead>
                 <tbody>
                   {visible.map((tr) => (
-                    <tr key={tr.id} onClick={() => navigate(`/trades/${tr.id}`)} className="cursor-pointer border-t border-border transition-colors hover:bg-surface-2/60">
+                    <tr
+                      key={tr.id}
+                      onClick={() => navigate(`/trades/${tr.id}`)}
+                      className="cursor-pointer border-t border-border transition-colors hover:bg-surface-2/60"
+                    >
                       <td className="num whitespace-nowrap px-4 py-3 text-xs text-muted">{formatDateTime(tr.entry_at)}</td>
                       <td className="num px-4 py-3 font-semibold">
                         <Link to={`/trades/${tr.id}`} onClick={(e) => e.stopPropagation()} className="hover:underline" title={tr.title ?? undefined}>

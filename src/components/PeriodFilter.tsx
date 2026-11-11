@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { useT } from '@/i18n'
 import type { CustomRange, PeriodPreset } from '@/lib/period'
 import { DateRangePicker, formatRange } from './DateRangePicker'
@@ -25,11 +25,36 @@ export function PeriodFilter({ preset, custom, onPreset, onCustom }: Props) {
   const customLabel = hasCustom ? formatRange(custom) : t.period.custom
 
   const item = (active: boolean) =>
-    `flex items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm transition-colors sm:px-3 ${active ? 'bg-surface-2 text-text' : 'text-muted hover:text-text'}`
+    `relative z-10 flex items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm transition-colors sm:px-3 ${active ? 'text-text' : 'text-muted hover:text-text'}`
+
+  // №13: подложка выбранной кнопки переезжает (translateX + ширина, 0.35s), а не перескакивает
+  const group = useRef<HTMLDivElement>(null)
+  const [pill, setPill] = useState<{ x: number; w: number } | null>(null)
+  useLayoutEffect(() => {
+    const el = group.current?.querySelector<HTMLElement>('[aria-checked="true"]')
+    const measure = () => setPill(el ? { x: el.offsetLeft, w: el.offsetWidth } : null)
+    measure()
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [preset, customLabel])
 
   return (
     <div ref={box} className="relative max-w-full">
-      <div className="flex max-w-full overflow-x-auto rounded-lg border border-border bg-surface p-1" role="radiogroup" aria-label={t.period.label}>
+      <div
+        ref={group}
+        className="relative flex max-w-full overflow-x-auto rounded-lg border border-border bg-surface p-1"
+        role="radiogroup"
+        aria-label={t.period.label}
+      >
+        {pill && (
+          <span
+            aria-hidden
+            className="absolute top-1 bottom-1 left-0 rounded-md bg-surface-2 transition-[transform,width] duration-[350ms] ease-[var(--ease-snap)]"
+            style={{ transform: `translateX(${pill.x}px)`, width: pill.w }}
+          />
+        )}
         {presets.map((p) => (
           <button key={p} type="button" role="radio" aria-checked={preset === p} onClick={() => onPreset(p)} className={item(preset === p)}>
             {t.period[p]}
@@ -44,7 +69,7 @@ export function PeriodFilter({ preset, custom, onPreset, onCustom }: Props) {
           onClick={() => setOpen((o) => !o)}
           aria-label={customLabel}
           title={customLabel}
-          className={item(preset === 'custom' || open)}
+          className={`${item(preset === 'custom' || open)} ${open && preset !== 'custom' ? 'bg-surface-2/60' : ''}`}
         >
           <svg
             viewBox="0 0 24 24"

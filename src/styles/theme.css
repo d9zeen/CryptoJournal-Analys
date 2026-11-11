@@ -54,7 +54,7 @@
 
   /* Анимации (образец — docs/animations-showcase.html). Только transform и opacity (+ stroke-dashoffset в SVG) */
   --ease-snap: cubic-bezier(0.2, 0.7, 0.2, 1);
-  --animate-rise: rise 0.5s var(--ease-snap) both;
+  --animate-rise: rise 0.5s var(--ease-snap) backwards;
   --animate-flash: flash 1.6s ease-out;
   --animate-flash-up: flash-up 1.6s ease-out both;
   --animate-flash-down: flash-down 1.6s ease-out both;
@@ -62,7 +62,7 @@
   --animate-pop: pop 0.4s var(--ease-snap) both;
   --animate-fade-in: fade-in 0.35s ease both;
   --animate-shimmer: shimmer 1.1s linear infinite;
-  --animate-cell-in: cell-in 0.4s var(--ease-snap) both;
+  --animate-cell-in: cell-in 0.4s var(--ease-snap) backwards; /* backwards: после волны transform свободен для подъёма при наведении */
   --animate-rows-open: rows-open 0.45s var(--ease-snap) both;
   --animate-roll-in: roll-in 0.45s var(--ease-snap) both;
   --animate-roll-out: roll-out 0.45s var(--ease-snap) both;
@@ -381,6 +381,38 @@
   animation-delay: 1.1s;
 }
 .fade-in-late {
+  animation: var(--animate-fade-in);
+  animation-delay: 1.2s;
+}
+
+/* День календаря со сделками (ссылка на «Сделки» этого дня): при наведении приподнимается, тень, рамка primary */
+.cal-day-link {
+  transition: transform 0.2s var(--ease-snap), box-shadow 0.2s, border-color 0.2s;
+}
+.cal-day-link:hover,
+.cal-day-link:focus-visible {
+  transform: translateY(-3px);
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 10px 24px -14px color-mix(in srgb, var(--color-text) 45%, transparent);
+}
+
+/* Большая кривая капитала (EquityChart): «шторка» цвета карточки уезжает вправо — линия и заливка открываются слева направо;
+   итоговое положение шторки — за правым краем (при «уменьшить движение» график виден сразу) */
+.eq-curtain {
+  transform: translateX(100%);
+  animation: curtain 1.2s var(--ease-snap) both;
+}
+@keyframes curtain {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
+.eq-draw .recharts-reference-dot-dot {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: var(--animate-pop);
+  animation-delay: 1.1s;
+}
+.eq-draw .recharts-reference-dot .recharts-label {
   animation: var(--animate-fade-in);
   animation-delay: 1.2s;
 }

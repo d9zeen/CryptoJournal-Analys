@@ -504,6 +504,7 @@ export const ru = {
     },
     calendar: {
       title: 'Календарь прибыли',
+      openDay: 'Открыть сделки дня — {day}',
       monthTotal: 'Итог месяца',
       maxWin: 'Max win',
       maxLoss: 'Max loss',

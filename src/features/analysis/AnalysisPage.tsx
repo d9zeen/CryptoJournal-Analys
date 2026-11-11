@@ -2,7 +2,8 @@
  * «Разбор» — таблицы, где видно, на чём зарабатываешь и теряешь:
  * Long / Short, сетапы, топ ошибок, эмоции, пары. Тот же период и те же расчёты, что на дашборде.
  */
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
+import { AnalysisSkeleton } from '@/components/Skeleton'
 import { useNavigate } from 'react-router'
 import { useT } from '@/i18n'
 import { useTrades } from '@/features/trades/api'
@@ -22,7 +23,12 @@ export function AnalysisPage() {
   const [custom, setCustom] = useState<CustomRange>({ from: '', to: '' })
   const range = useMemo(() => rangeFor(preset, custom), [preset, custom])
 
-  const { data: trades, isLoading, error } = useTrades(range)
+  const { data: trades, isLoading, error, isPlaceholderData } = useTrades(range)
+  // период, чьи сделки уже на экране: при его смене суммы в таблицах прокручиваются (№13)
+  const periodKey = `${preset}|${custom.from}|${custom.to}`
+  const shownKey = useRef(periodKey)
+  if (!isLoading && !isPlaceholderData) shownKey.current = periodKey
+  const rk = shownKey.current
   const { data: setups = [] } = useList('setups')
   const { data: emotions = [] } = useList('emotions')
   const { data: tags = [] } = useList('mistake_tags')
@@ -60,7 +66,7 @@ export function AnalysisPage() {
       {error && <Alert tone="error">{t.errors.loadFailed}</Alert>}
 
       {isLoading ? (
-        <p className="text-muted">{t.common.loading}</p>
+        <AnalysisSkeleton />
       ) : stats.closed.length === 0 ? (
         <Card className="text-center">
           <p className="text-muted">{t.dashboard.empty}</p>
@@ -73,17 +79,24 @@ export function AnalysisPage() {
         </Card>
       ) : (
         <div className="grid gap-3 md:grid-cols-2 min-[1700px]:grid-cols-3">
-          <GroupTable title={c.setups} rows={toRows(stats.setups, names(setups), c.noSetup)} />
+          <GroupTable i={0} rollKey={rk} title={c.setups} rows={toRows(stats.setups, names(setups), c.noSetup)} />
           <GroupTable
+            i={1}
+            rollKey={rk}
             title={c.mistakes}
             hint={c.mistakesHint}
             mode="mistakes"
             empty={c.mistakesEmpty}
             rows={stats.mistakes.map((g) => ({ id: g.key, label: names(tags).get(g.key) ?? c.deleted, group: g }))}
           />
-          <GroupTable title={c.symbols} rows={stats.symbols.map((g) => ({ id: g.key, label: stats.titles.get(g.key) ?? g.key, group: g }))} />
-          <GroupTable title={c.emotions} rows={toRows(stats.emotions, names(emotions), c.noEmotion)} />
-          <GroupTable title={c.side} rows={stats.side.map((g) => ({ id: g.key, label: t.side[g.key], group: g }))} />
+          <GroupTable
+            i={2}
+            rollKey={rk}
+            title={c.symbols}
+            rows={stats.symbols.map((g) => ({ id: g.key, label: stats.titles.get(g.key) ?? g.key, group: g }))}
+          />
+          <GroupTable i={3} rollKey={rk} title={c.emotions} rows={toRows(stats.emotions, names(emotions), c.noEmotion)} />
+          <GroupTable i={4} rollKey={rk} title={c.side} rows={stats.side.map((g) => ({ id: g.key, label: t.side[g.key], group: g }))} />
         </div>
       )}
     </div>

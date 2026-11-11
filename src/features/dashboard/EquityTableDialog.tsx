@@ -77,12 +77,18 @@ export function EquityTableDialog({ open, onClose, curve, unit, balance }: Props
                 const total = inUnit(r.cum, unit, balance)
                 const dd = inUnit(r.fromPeak, unit, balance)
                 return (
-                  <tr key={r.n} onClick={() => r.id && navigate(`/trades/${r.id}`)} className="num cursor-pointer border-t border-border transition-colors hover:bg-surface-2/60">
+                  <tr
+                    key={r.n}
+                    onClick={() => r.id && navigate(`/trades/${r.id}`)}
+                    className="num cursor-pointer border-t border-border transition-colors hover:bg-surface-2/60"
+                  >
                     <td className="px-3 py-2 whitespace-nowrap text-muted">{formatDateTime(r.at)}</td>
                     <td className="px-3 py-2 font-semibold">{r.symbol}</td>
                     <td className={`px-3 py-2 text-right whitespace-nowrap ${pnlClass(trade)}`}>{formatUnit(trade, unit)}</td>
                     <td className={`px-3 py-2 text-right whitespace-nowrap ${pnlClass(total)}`}>{formatUnit(total, unit)}</td>
-                    <td className={`px-3 py-2 text-right whitespace-nowrap ${dd < -1e-9 ? 'text-loss' : 'text-muted'}`}>{dd < -1e-9 ? formatUnit(dd, unit) : '—'}</td>
+                    <td className={`px-3 py-2 text-right whitespace-nowrap ${dd < -1e-9 ? 'text-loss' : 'text-muted'}`}>
+                      {dd < -1e-9 ? formatUnit(dd, unit) : '—'}
+                    </td>
                   </tr>
                 )
               })}

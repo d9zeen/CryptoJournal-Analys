@@ -314,7 +314,7 @@ function KeysPanels({ summary: s, rwl, ddValue, ddDays, recovered, children }: K
   const loss = Math.abs(rwl.avgLossR ?? 0)
   const panel = 'rounded-md bg-surface-2/50 p-3'
   return (
-    <section data-shot="keys" className="rise card-lift flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 [--i:3]">
+    <section data-shot="keys" className="rise card-lift flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 [--i:5]">
       <h2 className="font-semibold">{k.keyNumbers}</h2>
       {children}
       {/* разброс: от худшей до лучшей сделки, отметка — матожидание */}
