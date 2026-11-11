@@ -2,6 +2,7 @@
  * Блок «Подключённые биржи» на странице импорта: подключить Bybit (ключ «только чтение») или Hyperliquid (адрес кошелька),
  * синхронизировать вручную, отключить. Сами сделки подтягиваются автоматически (useAutoSync в AppLayout).
  */
+import { intlLocale } from '@/lib/locale'
 import { useState, type FormEvent } from 'react'
 import { fmt, useT } from '@/i18n'
 import type { Dict } from '@/i18n/ru'
@@ -147,7 +148,7 @@ function pausedText(t: Dict, exchange: string, plan: Plan | undefined): string {
 }
 
 const DAY_MS = 86_400_000
-const dateOnly = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' })
+const dateOnly = () => new Intl.DateTimeFormat(intlLocale(), { day: 'numeric', month: 'long' })
 
 function ConnectionRow({
   conn,
@@ -179,7 +180,7 @@ function ConnectionRow({
       : expiresMs < Date.now()
         ? { tone: 'text-loss', text: c.keyExpired }
         : expiresMs - Date.now() < 14 * DAY_MS
-          ? { tone: 'text-warning', text: fmt(c.keyExpiresSoon, { date: dateOnly.format(new Date(expiresMs)) }) }
+          ? { tone: 'text-warning', text: fmt(c.keyExpiresSoon, { date: dateOnly().format(new Date(expiresMs)) }) }
           : null
 
   return (

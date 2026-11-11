@@ -275,8 +275,8 @@ function LiveExample() {
               <div className={big}>{formatRatio(gl > 0 ? gw / gl : null)}</div>
               <PfCaption pf={gl > 0 && gw > 0 ? gw / gl : null} />
               <div className="num flex justify-between gap-2 text-xs">
-                <span>{formatUsd(gw)}</span>
-                <span className="text-muted">−{formatUsd(gl)}</span>
+                <span className="whitespace-nowrap">{formatUsd(gw)}</span>
+                <span className="whitespace-nowrap text-muted">−{formatUsd(gl)}</span>
               </div>
             </Widget>
           </div>

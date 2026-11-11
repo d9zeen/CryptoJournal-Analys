@@ -1,4 +1,5 @@
 /** Время точек кривой капитала — для оси дат и подсказок. */
+import { getLang, intlLocale } from '@/lib/locale'
 import type { EquityPoint } from '@/lib/calc/stats'
 import { formatPercent, formatPnl } from '@/lib/format'
 
@@ -36,14 +37,15 @@ export function withPoints(down: EquityPoint[], full: EquityPoint[], ns: number[
   return extra.length ? [...down, ...extra].sort((a, b) => a.n - b.n) : down
 }
 
-/** 03.11 */
+/** 03.11 (ru) · Nov 3 (en) — как подписи «PnL по дням» */
 export function shortDate(ms: number): string {
-  return new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit' }).format(ms)
+  const opts: Intl.DateTimeFormatOptions = getLang() === 'en' ? { month: 'short', day: 'numeric' } : { day: '2-digit', month: '2-digit' }
+  return new Intl.DateTimeFormat(intlLocale(), opts).format(ms)
 }
 
 /** 3 ноября */
 export function longDate(ms: number): string {
-  return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(ms)
+  return new Intl.DateTimeFormat(intlLocale(), { day: 'numeric', month: 'long' }).format(ms)
 }
 
 /** Сколько полных дней между двумя моментами */

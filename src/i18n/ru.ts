@@ -85,6 +85,11 @@ export const ru = {
       signupDisabled: 'Регистрация сейчас отключена.',
     },
   },
+  /** переключатель языка (названия языков — каждое на своём языке) */
+  lang: {
+    label: 'Язык',
+    names: { en: 'English', ru: 'Русский' },
+  },
   common: {
     loading: 'Загрузка…',
     done: 'Готово',
@@ -859,14 +864,14 @@ export const ru = {
       trade: {
         text: 'Записал сделку и отметил, что пошло не так.',
         mistake: 'Ошибка',
-        mistakeValue: 'Вход без стопа',
         emotion: 'Эмоция',
         emotionValue: 'FOMO',
       },
       analysis: {
         text: '«Разбор» сложил такие сделки за месяц.',
         cols: { name: 'Ошибка', trades: 'Сделок', pnl: 'PnL' },
-        rows: { a: 'Поздний вход', b: 'Вход без стопа', c: 'Пересидел убыток' },
+        /** ключи — теги ошибок демо-счёта (DEMO_MISTAKES в features/landing/demo.ts) */
+        rows: { late: 'Поздний вход', nostop: 'Вход без стопа', hold: 'Пересидел убыток' },
       },
       calendar: {
         text: 'Календарь показывает, чем закончился день.',

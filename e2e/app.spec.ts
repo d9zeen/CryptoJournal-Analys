@@ -233,12 +233,19 @@ test.describe('настройки', () => {
 })
 
 test.describe('оформление', () => {
-  test('тема переключается в шапке и запоминается после перезагрузки', async ({ page, db }) => {
+  test('тема переключается (шапка, на узком телефоне — настройки) и запоминается после перезагрузки', async ({ page, db }) => {
     await fakeSupabase(page, db)
     await page.goto('dashboard')
     const html = page.locator('html')
     await expect(html).toHaveAttribute('data-theme', 'light') // светлая по умолчанию
-    await page.getByRole('button', { name: 'Тёмная тема' }).filter({ visible: true }).first().click()
+    if ((page.viewportSize()?.width ?? 0) < 640) {
+      // на узком телефоне в шапке только язык EN | RU, тема — в «Настройки → Оформление»
+      await expect(page.getByRole('button', { name: 'Тёмная тема' }).filter({ visible: true })).toHaveCount(0)
+      await page.goto('settings')
+      await page.getByRole('radio', { name: 'Тёмная' }).click()
+    } else {
+      await page.getByRole('button', { name: 'Тёмная тема' }).filter({ visible: true }).first().click()
+    }
     await expect(html).not.toHaveAttribute('data-theme', 'light')
     await page.reload()
     await expect(html).not.toHaveAttribute('data-theme', 'light')

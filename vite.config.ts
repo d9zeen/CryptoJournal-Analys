@@ -56,6 +56,8 @@ export default defineConfig(({ mode }) => {
     test: {
       // тесты логики — только в src; сквозные (e2e/) запускает Playwright: npm run test:e2e
       include: ['src/**/*.test.ts', 'supabase/functions/**/*.test.ts'],
+      // тесты написаны под русские тексты и форматы; английские проверяются отдельно (setLang('en') в самом тесте)
+      setupFiles: ['src/test-setup.ts'],
     },
   }
 })

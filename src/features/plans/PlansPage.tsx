@@ -3,6 +3,7 @@
  * Переключатель «Месяц / Год». Оплаты на сайте пока нет (будет отдельным шагом). Pro Plus — главный (выделен);
  * колонка текущего тарифа подписана «Твой тариф».
  */
+import { intlLocale } from '@/lib/locale'
 import { Fragment, useState, type ReactNode } from 'react'
 import { fmt, plural, useT } from '@/i18n'
 import { useProfile, useUsage } from '@/features/settings/api'
@@ -32,7 +33,7 @@ export function PlansPage() {
       <PlansTable
         current={usage?.plan}
         currentNote={
-          term ? (term.kind === 'trial' ? `${p.trial} · ${plural(term.daysLeft, p.daysN)}` : fmt(p.until, { date: term.until.toLocaleDateString('ru-RU') })) : null
+          term ? (term.kind === 'trial' ? `${p.trial} · ${plural(term.daysLeft, p.daysN)}` : fmt(p.until, { date: term.until.toLocaleDateString(intlLocale()) })) : null
         }
         billing={billing}
       />

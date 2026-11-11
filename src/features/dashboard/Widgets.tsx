@@ -224,8 +224,8 @@ export function KpiRow({
         <div className={big}>{s.profitFactor !== null && Number.isFinite(s.profitFactor) ? num(s.profitFactor, formatRatio) : formatRatio(s.profitFactor)}</div>
         <PfCaption pf={s.profitFactor} />
         <div className="num flex justify-between gap-2 text-xs">
-          <span className={TONE.aText}>{formatUsd(grossWin)}</span>
-          <span className={TONE.bText}>−{formatUsd(grossLoss)}</span>
+          <span className={`whitespace-nowrap ${TONE.aText}`}>{formatUsd(grossWin)}</span>
+          <span className={`whitespace-nowrap ${TONE.bText}`}>−{formatUsd(grossLoss)}</span>
         </div>
       </Widget>
 

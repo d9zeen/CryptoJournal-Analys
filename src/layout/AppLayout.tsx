@@ -5,6 +5,7 @@ import { planTerm } from '@/lib/plans'
 import { formatDateShort } from '@/lib/format'
 import { Logo, LogoMark } from '@/components/Logo'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { LangSwitch } from '@/components/LangSwitch'
 import { useIsAdmin } from '@/features/admin/api'
 import { useAutoSync } from '@/features/connections/api'
 import { useProfile, useUsage } from '@/features/settings/api'
@@ -95,9 +96,13 @@ export function AppLayout() {
             </NavLink>
           ))}
         </nav>
-        {/* низ панели на широком экране: тариф с лимитом, тема, профиль */}
+        {/* низ панели на широком экране: тариф с лимитом, язык и тема, профиль */}
         <div className="mt-auto hidden flex-col gap-3 lg:flex">
           <PlanCard />
+          <div className="flex items-center justify-between gap-2">
+            <LangSwitch />
+            <ThemeToggle />
+          </div>
           <div className="flex items-center gap-2 border-t border-border pt-3">
             <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-xs font-semibold text-text uppercase" aria-hidden>
               {(user?.email ?? '?').slice(0, 1)}
@@ -105,7 +110,6 @@ export function AppLayout() {
             <span className="min-w-0 flex-1 truncate text-xs text-muted" title={user?.email ?? ''}>
               {user?.email}
             </span>
-            <ThemeToggle />
             <button type="button" onClick={signOut} aria-label={t.nav.logout} title={t.nav.logout} className="rounded-lg p-2 text-muted transition-colors hover:bg-surface-2 hover:text-text">
               <Icon d="M15 4h3a2 2 0 012 2v12a2 2 0 01-2 2h-3M10 16l-4-4 4-4M6 12h10" />
             </button>
@@ -114,9 +118,9 @@ export function AppLayout() {
       </aside>
 
       {/* Верхняя панель — телефон и планшет; на широком экране всё это в левой панели.
-          Телефон: логотип, «+» (новая сделка), тема, настройки (выход — внизу настроек). Планшет: тариф, тема, почта, выход. */}
+          Телефон: логотип, «+» (новая сделка), язык EN | RU, тема (от 640px; уже — в настройках), настройки (выход — внизу настроек). Планшет: тариф, тема, почта, выход. */}
       <header className="sticky top-0 z-10 border-b border-border bg-bg/90 backdrop-blur lg:hidden">
-        <div className="mx-auto flex h-14 max-w-[1800px] items-center gap-6 px-4">
+        <div className="mx-auto flex h-14 max-w-[1800px] items-center gap-3 px-4 sm:gap-6">
           <span className="md:hidden">
             <Logo />
           </span>
@@ -127,7 +131,11 @@ export function AppLayout() {
             <span className="hidden md:contents">
               <PlanBadge />
             </span>
-            <ThemeToggle />
+            <LangSwitch />
+            {/* на узком телефоне тема — в «Настройки → Оформление» (в шапке не хватает места) */}
+            <span className="hidden sm:contents">
+              <ThemeToggle />
+            </span>
             <NavLink to="/settings" aria-label={t.nav.settings} title={t.nav.settings} className={`${headerBtn} md:hidden`}>
               <Icon d={SETTINGS_ICON} />
             </NavLink>

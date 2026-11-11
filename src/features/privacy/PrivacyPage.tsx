@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { useT } from '@/i18n'
 import { Logo } from '@/components/Logo'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { LangSwitch } from '@/components/LangSwitch'
 
 const wrap = 'mx-auto w-full max-w-[1320px] px-4 sm:px-6'
 
@@ -16,7 +17,10 @@ export function PrivacyPage() {
           <Link to="/" aria-label={p.back}>
             <Logo />
           </Link>
-          <ThemeToggle />
+          <div className="flex items-center gap-1">
+            <LangSwitch />
+            <ThemeToggle />
+          </div>
         </div>
       </header>
       <main className={`${wrap} py-10 sm:py-14`}>

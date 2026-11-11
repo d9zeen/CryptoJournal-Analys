@@ -2,7 +2,7 @@
  * Демо-счёт для главной страницы: 60 выдуманных сделок примерно за два месяца, 0–4 в день (детерминированно — одинаково при каждом открытии).
  * Считается теми же функциями, что и настоящий дашборд.
  */
-import { closedTrades, downsampleEquity, drawdownPeriod, equityCurve, pnlBars, pnlByDay, rWinLoss, summarize, type StatTrade } from '@/lib/calc/stats'
+import { closedTrades, downsampleEquity, drawdownPeriod, equityCurve, pnlBars, pnlByDay, rWinLoss, summarize, type ClosedTrade, type StatTrade } from '@/lib/calc/stats'
 import { traderScore } from '@/lib/calc/score'
 
 const SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'TONUSDT', 'XRPUSDT', 'DOGEUSDT', 'BNBUSDT', 'SUIUSDT', 'LINKUSDT', 'AVAXUSDT']
@@ -22,8 +22,36 @@ function seeded(seed: number) {
 }
 const DAY = 86_400_000
 
-/** Сделка из «пути одной сделки» на главной: ETHUSDT Short −61,20 $ (в середине просадки) */
-export const DEMO_FEATURED = { index: 27, symbol: 'ETHUSDT', side: 'short' as const, pnl: -61.2 }
+/** Теги ошибок демо-счёта (подписи — landing.path.analysis.rows в ru.ts) */
+export const DEMO_MISTAKES = ['late', 'nostop', 'hold'] as const
+export type DemoMistake = (typeof DEMO_MISTAKES)[number]
+
+/**
+ * Сделка из «пути одной сделки» на главной: ETHUSDT Short −61,20 $, ошибка «Вход без стопа».
+ * Стоит в середине просадки и одна в своём дне — клетка календаря показывает ту же сумму, что и карточка сделки.
+ */
+export const DEMO_FEATURED = { symbol: 'ETHUSDT', side: 'short' as const, pnl: -61.2, mistake: 'nostop' as DemoMistake }
+
+/** Какой по счёту будет сделка из «пути»: в просадке (24…33), одна в своём дне, ближе всего к 28-й */
+function featuredIndex(dayOf: number[], perDay: number[]): number {
+  const alone = dayOf.map((d, i) => (perDay[d] === 1 ? i : -1)).filter((i) => i >= 0)
+  const inSlump = alone.filter((i) => i >= 24 && i <= 33)
+  const pool = inSlump.length ? inSlump : alone
+  if (!pool.length) return 27
+  return pool.reduce((best, i) => (Math.abs(i - 28) < Math.abs(best - 28) ? i : best))
+}
+
+/** Строки «Разбора» по ошибкам за месяц (UTC): сколько сделок и сколько они стоили — из тех же демо-сделок, что и календарь */
+export function demoMistakeRows(trades: ClosedTrade[], year: number, month: number) {
+  const inMonth = trades.filter((x) => {
+    const d = new Date(x.exit_at)
+    return d.getUTCFullYear() === year && d.getUTCMonth() === month
+  })
+  return DEMO_MISTAKES.map((key) => {
+    const hit = inMonth.filter((x) => x.tagIds.includes(key))
+    return { key, count: hit.length, pnl: Math.round(hit.reduce((s, x) => s + x.pnl, 0) * 100) / 100 }
+  }).filter((r) => r.count > 0)
+}
 
 /** Сколько сделок в день: 0…4, чаще 0–1 (в среднем ≈ 1 в день — 60 сделок примерно за два месяца) */
 function dayCount(r: number): number {
@@ -46,10 +74,18 @@ export function demoAccount(now = Date.now(), seed = 20261106) {
   // последний день со сделками — вчера (по UTC)
   const start = (Math.floor(now / DAY) - perDay.length) * DAY
   const times: number[] = []
+  const dayOf: number[] = []
   perDay.forEach((c, d) => {
     const hours = Array.from({ length: c }, () => 8 + cal() * 14).sort((a, b) => a - b)
-    for (const h of hours) times.push(start + d * DAY + Math.round(h * 60) * 60_000)
+    for (const h of hours) {
+      times.push(start + d * DAY + Math.round(h * 60) * 60_000)
+      dayOf.push(d)
+    }
   })
+  const featured = featuredIndex(dayOf, perDay)
+  // ошибки: у убыточных сделок по кругу — примерно поровну каждой, у части ошибки нет; начало круга — от зерна
+  const ROUND: (DemoMistake | null)[] = ['late', 'hold', 'nostop', null, 'hold', 'late', null, 'nostop']
+  let loser = Math.floor(seeded(seed ^ 0x165667b1)() * ROUND.length)
   const used = new Set<number>([DEMO_FEATURED.pnl])
   const trades: StatTrade[] = Array.from({ length: DEMO_TRADES }, (_, i) => {
     // как у живого трейдера: ~58 % сделок в плюс, прибыль крупнее убытка, в середине — серия неудач (просадка)
@@ -62,7 +98,8 @@ export function demoAccount(now = Date.now(), seed = 20261106) {
     used.add(pnl)
     let side: 'long' | 'short' = pick() < 0.55 ? 'long' : 'short'
     let symbol = SYMBOLS[Math.floor(pick() * SYMBOLS.length)]
-    if (i === DEMO_FEATURED.index) ({ symbol, side, pnl } = DEMO_FEATURED)
+    if (i === featured) ({ symbol, side, pnl } = DEMO_FEATURED)
+    const mistake: DemoMistake | null = i === featured ? DEMO_FEATURED.mistake : pnl >= 0 ? null : ROUND[loser++ % ROUND.length]
     const exit = times[i]
     const hold = (20 + Math.floor(rnd() * 220)) * 60_000 // держал от 20 минут до 4 часов
     return {
@@ -75,7 +112,7 @@ export function demoAccount(now = Date.now(), seed = 20261106) {
       r_multiple: Math.round((pnl / 90) * 100) / 100,
       setup_id: null,
       emotion_id: null,
-      tagIds: [],
+      tagIds: mistake ? [mistake] : [],
     }
   })
   const closed = closedTrades(trades)
@@ -93,5 +130,7 @@ export function demoAccount(now = Date.now(), seed = 20261106) {
     bars: pnlBars(days),
     trades: closed,
     days,
+    /** id сделки из «пути одной сделки» */
+    featuredId: `demo-${featured}`,
   }
 }

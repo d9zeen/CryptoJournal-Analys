@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { fmt, plural, useT } from '@/i18n'
+import { fmt, plural, setLang, useLang, useT, type Lang } from '@/i18n'
 import { planTerm } from '@/lib/plans'
 import { formatDateShort } from '@/lib/format'
 import { useAuth } from '@/features/auth/AuthProvider'
@@ -15,6 +15,7 @@ import { Link, useNavigate } from 'react-router'
 import { deleteMyAccount, downloadTradesCsv } from './dataApi'
 import { SecurityCard } from './SecurityCard'
 import { Segmented } from '@/components/ui/Segmented'
+import { LANGS } from '@/lib/locale'
 import { setTheme, useTheme, type Theme } from '@/lib/theme'
 import { PaletteStrip } from '@/features/palette/PaletteStrip'
 import { SaveButton, type SaveState } from '@/components/SaveButton'
@@ -66,6 +67,7 @@ function AppearanceCard() {
   const t = useT()
   const a = t.settings.appearance
   const theme = useTheme()
+  const lang = useLang()
   return (
     <Card>
       <h2 className="mb-1 font-medium">{a.title}</h2>
@@ -79,6 +81,14 @@ function AppearanceCard() {
           { value: 'light', label: a.light },
         ]}
       />
+      <div className="mt-5">
+        <Segmented<Lang>
+          label={t.lang.label}
+          value={lang}
+          onChange={setLang}
+          options={LANGS.map((l) => ({ value: l, label: t.lang.names[l] }))}
+        />
+      </div>
       <div className="mt-5">
         <PaletteStrip />
       </div>

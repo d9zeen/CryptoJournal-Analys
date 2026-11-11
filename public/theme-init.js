@@ -11,3 +11,12 @@
   var m = document.querySelector('meta[name="theme-color"]')
   if (m) m.setAttribute('content', dark ? '#17181b' : '#efe9dc')
 })()
+// Язык до первой отрисовки: <html lang> (для экранных дикторов и переносов). Ключ и значения — как в src/lib/locale.ts, по умолчанию английский.
+;(function () {
+  try {
+    var l = localStorage.getItem('cj-lang')
+    if (l === 'ru' || l === 'en') document.documentElement.lang = l
+  } catch (e) {
+    // хранилище недоступно — остаётся lang="en" из index.html
+  }
+})()
