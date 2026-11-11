@@ -41,7 +41,7 @@ export function PlanCards({ to, label }: { to: string; label: string }) {
     <div className="flex flex-col items-center">
       <div
         ref={spotRef}
-        className="grid w-full max-w-[1180px] grid-cols-1 gap-4 md:grid-cols-3 md:items-stretch md:pt-5"
+        className="grid w-full max-w-[1180px] grid-cols-1 gap-4 md:grid-cols-3 md:items-stretch md:gap-6 md:pt-5"
         onPointerLeave={() => setHover(null)}
         onBlur={(e) => {
           // фокус ушёл из блока тарифов (Tab дальше) — впереди снова Pro Plus
