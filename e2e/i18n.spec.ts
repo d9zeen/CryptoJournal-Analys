@@ -148,4 +148,33 @@ test.describe('главная на английском (как у нового 
     const list = (await card.locator('ul').boundingBox())!
     expect(desc.y).toBeLessThan(list.y)
   })
+
+  test('тарифы: строки списков стоят друг напротив друга, «Free / forever» в строке цены', async ({ page, db, isMobile }) => {
+    test.skip(isMobile, 'на телефоне карточки друг под другом')
+    await fakeSupabase(page, db, { signedIn: false })
+    for (const [width, height] of [
+      [1440, 900],
+      [1920, 1080],
+    ] as const) {
+      await page.setViewportSize({ width, height })
+      await page.goto('')
+      await page.locator('[data-plan="pro_plus"]').scrollIntoViewIfNeeded()
+      await page.mouse.move(1, 1) // без мышки впереди Pro Plus (поднята на 20px — так задумано)
+      await page.waitForTimeout(800)
+      const free = page.locator('[data-plan="free"]')
+      await expect(free.locator('[data-price]')).toHaveText(/^Free\s*\/ forever$/)
+      await expect(free.getByText('free forever')).toHaveCount(0)
+      // верх каждой строки списка у Basic и Pro — на одной линии (±2px)
+      const tops = async (id: string) => page.locator(`[data-plan="${id}"] li`).evaluateAll((els) => els.map((e) => e.getBoundingClientRect().top))
+      const a = await tops('free')
+      const b = await tops('pro')
+      expect(a).toHaveLength(8)
+      for (let i = 0; i < 8; i++) expect(Math.abs(a[i] - b[i]), `ширина ${width}, строка ${i + 1}`).toBeLessThanOrEqual(2)
+      // внутри карточки (без учёта подъёма и масштаба 94 %) строки стоят одинаково у всех трёх, Pro Plus тоже
+      const inside = async (id: string) => page.locator(`[data-plan="${id}"] li`).evaluateAll((els) => els.map((e) => (e as HTMLElement).offsetTop))
+      const [x, y, z] = [await inside('free'), await inside('pro'), await inside('pro_plus')]
+      for (let i = 0; i < 8; i++) expect(Math.max(x[i], y[i], z[i]) - Math.min(x[i], y[i], z[i]), `ширина ${width}, строка ${i + 1} внутри карточек`).toBeLessThanOrEqual(2)
+    }
+  })
 })
+

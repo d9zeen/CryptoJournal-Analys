@@ -324,7 +324,7 @@ export const en: Dict = {
     yes: 'yes',
     no: 'no',
     cards: {
-      forever: 'free forever',
+      forever: '/ forever',
       notIncluded: 'not included',
       connectionsNone: 'Exchange and wallet connections',
       syncNone: 'Trade sync with exchanges',

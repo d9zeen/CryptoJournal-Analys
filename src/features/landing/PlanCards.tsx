@@ -8,7 +8,7 @@
  * Главная поднята на 20px, рамка 2px цвета кнопок, кнопка залита; остальные 94 % и придвинуты к ней (.plan-card[data-pos] в theme.css).
  * Значок «★ Всё автоматически» — всегда у Pro Plus, как «Popular» в образце. Страница /plans — таблица (PlansTable).
  */
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import { Link } from 'react-router'
 import { useSpotlight } from '@/lib/motion'
 import { fmt, plural, useT } from '@/i18n'
@@ -35,10 +35,45 @@ function useFeatures(plan: PlanInfo): { text: string; on: boolean }[] {
   ]
 }
 
+/**
+ * Строки списков друг напротив друга: строка с одним номером во всех трёх карточках одной высоты
+ * (если в одной карточке текст переносится на 2 строки, у соседей под ним остаётся столько же места).
+ * Только когда карточки стоят рядом (от 768px); пересчёт при изменении размера (ResizeObserver) и смене языка (новый DOM).
+ */
+function useAlignedRows(ref: RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const root = ref.current
+    if (!root || typeof ResizeObserver === 'undefined') return
+    let frame = 0
+    const sync = () => {
+      const lists = [...root.querySelectorAll<HTMLElement>('[data-plan] ul')]
+      const rows = lists.map((ul) => [...ul.children] as HTMLElement[])
+      rows.flat().forEach((li) => (li.style.minHeight = ''))
+      if (!window.matchMedia('(min-width: 768px)').matches) return
+      const n = Math.max(0, ...rows.map((r) => r.length))
+      for (let i = 0; i < n; i++) {
+        const h = Math.max(...rows.map((r) => r[i]?.offsetHeight ?? 0))
+        rows.forEach((r) => r[i] && (r[i].style.minHeight = `${h}px`))
+      }
+    }
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(sync)
+    })
+    ro.observe(root)
+    sync()
+    return () => {
+      ro.disconnect()
+      cancelAnimationFrame(frame)
+    }
+  }, [ref])
+}
+
 export function PlanCards({ to, label }: { to: string; label: string }) {
   const [hover, setHover] = useState<number | null>(null)
   const spotRef = useRef<HTMLDivElement>(null)
   useSpotlight(spotRef)
+  useAlignedRows(spotRef)
   const front = hover ?? MAIN_INDEX
   return (
     <div className="flex flex-col items-center">
@@ -102,7 +137,7 @@ function Card({
         // 2px — инлайном: класс .spot-frame в theme.css задаёт padding 1px и перебивает утилиту
         style={active ? { padding: 2 } : undefined}
       >
-        <div className="spot-card relative flex w-full flex-col overflow-hidden rounded-[calc(1rem-2px)] bg-surface p-6 text-center">
+        <div className="spot-card @container relative flex w-full flex-col overflow-hidden rounded-[calc(1rem-2px)] bg-surface p-6 text-center">
           {main && (
             <span className="absolute top-0 right-0 flex items-center gap-1 rounded-bl-xl bg-primary px-2 py-0.5 text-sm font-semibold text-on-primary">
               <svg viewBox="0 0 20 20" className="size-4" fill="currentColor" aria-hidden>
@@ -112,19 +147,23 @@ function Card({
             </span>
           )}
           <p className="text-base font-semibold text-muted uppercase">{p.names[plan.id]}</p>
-          <div className="mt-6 flex items-center justify-center gap-x-2">
+          {/* строка цены одной высоты у всех: «$10 / mo», у бесплатного — «Free / forever» на месте «/ mo» (не отдельной строкой);
+              длинное слово («Бесплатно») — мельче и по ширине карточки (container query), чтобы строка не переносилась и не вылезала */}
+          <div data-price className="mt-6 flex h-14 flex-wrap content-center items-center justify-center gap-x-2 whitespace-nowrap">
             {paid ? (
-              <>
-                <span className="num text-5xl font-bold tracking-tight">${plan.price}</span>
-                <span className="text-sm leading-6 font-semibold tracking-wide text-muted">{p.month}</span>
-              </>
+              <span className="num text-5xl leading-none font-bold tracking-tight">${plan.price}</span>
             ) : (
-              <span className="text-5xl font-bold tracking-tight">{p.free}</span>
+              <span
+                className={`leading-none font-bold tracking-tight ${p.free.length > 6 ? 'text-2xl @[17rem]:text-3xl @[20rem]:text-4xl' : 'text-4xl @[16rem]:text-5xl'}`}
+              >
+                {p.free}
+              </span>
             )}
+            <span className="text-sm leading-6 font-semibold tracking-wide text-muted">{paid ? p.month : c.forever}</span>
           </div>
-          {!paid && <p className="mt-1 text-xs leading-5 text-muted">{c.forever}</p>}
-          {/* описание — сразу под ценой; список растягивается, кнопка прижата к низу: у всех карточек кнопки на одной линии */}
-          <p className="mt-3 text-sm text-muted">{c.desc[plan.id]}</p>
+          {/* описание — сразу под ценой, когда карточки рядом — не меньше 2 строк (на планшете — 3): список во всех карточках начинается с одной высоты;
+              список растягивается, кнопка прижата к низу — кнопки на одной линии */}
+          <p className="mt-3 text-sm text-muted md:min-h-[3lh] lg:min-h-[2lh]">{c.desc[plan.id]}</p>
           <ul className="mt-5 flex flex-1 flex-col gap-2">
             {features.map((f, k) => (
               <li key={k} data-on={f.on} className={`flex items-start gap-2 ${f.on ? '' : 'text-muted opacity-50'}`}>
