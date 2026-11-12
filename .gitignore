@@ -18,3 +18,6 @@ supabase/.temp/
 # сквозные тесты
 test-results/
 playwright-report/
+
+# рабочие файлы скиллов trader-* (портфель, ключи, SEC user agent) — не коммитим
+trader/
