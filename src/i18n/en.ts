@@ -93,6 +93,7 @@ export const en: Dict = {
     loading: 'Loading…',
     done: 'Done',
     notFound: 'Page not found',
+    notFoundText: 'This page does not exist. The link may be outdated, or there is a typo in the address.',
     toHome: 'Go home',
     save: 'Save',
     saved: 'Saved',
@@ -428,6 +429,9 @@ export const en: Dict = {
   analysis: {
     title: 'Trade review',
     hint: 'Where you make money and where you lose it: setups, mistakes, pairs, emotions, long and short.',
+    insightBest: 'Works best: {name} ({pnl}).',
+    insightWorst: 'Costs you the most: {name} ({pnl}).',
+    sideLine: '{trades} · win rate {winrate}',
   },
   settings: {
     title: 'Settings',
@@ -472,7 +476,7 @@ export const en: Dict = {
     plan: 'Plan',
     plansLink: 'Compare plans',
     /** placeholder in the plan card until payments exist */
-    payment: { title: 'Payment', soon: 'Plan payment will appear here. For now the owner activates plans.' },
+    payment: { title: 'Payment', soon: 'Payments on the site are coming soon.', trial: 'You are on a free Pro Plus trial until {date}.' },
     usageFree: 'Trades this month: {used} of {limit}',
     usagePro: 'Trades this month: {used} · unlimited',
     lists: {
@@ -584,6 +588,7 @@ export const en: Dict = {
         winLetter: 'W',
         lossLetter: 'L',
         evenLetter: '0',
+        order: 'older → newer',
         streakWin: { one: 'On a {n}-win streak', few: 'On a {n}-win streak', many: 'On a {n}-win streak' },
         streakLoss: { one: 'On a {n}-loss streak', few: 'On a {n}-loss streak', many: 'On a {n}-loss streak' },
       },

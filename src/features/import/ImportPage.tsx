@@ -217,21 +217,12 @@ export function ImportPage() {
             )}
           </Card>
 
-          <details open className="group rounded-xl border border-border bg-surface p-4">
-            <summary className="cursor-pointer list-none font-medium marker:hidden">
-              <span className="text-muted group-open:hidden">▸ </span>
-              <span className="hidden text-muted group-open:inline">▾ </span>
-              {t.import.howToTitle}
-            </summary>
-            <dl className="mt-3 flex flex-col gap-2 text-sm">
-              {IMPORT_PARSERS.map((p) => (
-                <div key={p.exchange}>
-                  <dt className="font-medium">{exchangeName(p.exchange, t.exchange.other)}</dt>
-                  <dd className="text-muted">{(t.import.howTo as Record<string, string>)[p.exchange]}</dd>
-                </div>
-              ))}
-            </dl>
-          </details>
+          {/* телефон и планшет: «Где взять файл» сразу под зоной загрузки (пока файл не выбран) */}
+          {!file && (
+            <div className="xl:hidden">
+              <HowToCard />
+            </div>
+          )}
 
           <div className="hidden xl:block">
             <ImportHistory />
@@ -240,10 +231,11 @@ export function ImportPage() {
 
         {/* Справа: результат разбора */}
         <div className="flex min-w-0 flex-col gap-4">
+          {/* пока файл не выбран — справа «Где взять файл» с переключателем бирж; после выбора на этом месте предпросмотр */}
           {!file && (
-            <Card className="hidden !p-6 xl:block">
-              <p className="text-sm text-muted">{t.import.previewEmpty}</p>
-            </Card>
+            <div className="hidden xl:block">
+              <HowToCard />
+            </div>
           )}
 
           {prepared && prepared.table.rows.length === 0 && <Alert tone="error">{t.import.emptyFile}</Alert>}
@@ -402,6 +394,37 @@ const badgeStyles: Record<RowStatus, string> = {
   duplicate: 'bg-surface-2 text-muted',
   error: 'bg-loss/15 text-loss',
   overLimit: 'bg-warning/15 text-warning',
+}
+
+/** «Где взять файл»: пилюли бирж, видна инструкция одной (по умолчанию — Bybit) */
+function HowToCard() {
+  const t = useT()
+  const [ex, setEx] = useState(IMPORT_PARSERS[0].exchange)
+  const howTo = t.import.howTo as Record<string, string>
+  return (
+    <Card data-shot="howto" className="flex flex-col gap-3 !p-4 sm:!p-5">
+      <h2 className="font-semibold">{t.import.howToTitle}</h2>
+      <div role="radiogroup" aria-label={t.import.howToTitle} className="flex flex-wrap gap-1.5">
+        {IMPORT_PARSERS.map((p) => {
+          const on = p.exchange === ex
+          return (
+            <button
+              key={p.exchange}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => setEx(p.exchange)}
+              className={`rounded-full border px-3 py-1 text-sm transition-colors ${on ? 'border-primary bg-primary/10 font-medium text-text' : 'border-border bg-surface text-muted hover:text-text'}`}
+            >
+              {exchangeName(p.exchange, t.exchange.other)}
+            </button>
+          )
+        })}
+      </div>
+      <p className="text-sm leading-relaxed">{howTo[ex]}</p>
+      <p className="text-xs text-muted">{t.import.previewEmpty}</p>
+    </Card>
+  )
 }
 
 function Badge({ status, children }: { status: RowStatus; children: string }) {

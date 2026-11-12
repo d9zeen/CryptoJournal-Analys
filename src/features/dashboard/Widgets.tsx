@@ -415,13 +415,14 @@ function FormPanel({ trades }: { trades: { pnl: number }[] }) {
           <span className="font-semibold text-down">{form.losses}</span> <span className="text-muted">{plural(form.losses, f.losses)}</span>
         </span>
       </div>
-      <ol className="mt-2.5 flex flex-wrap gap-1.5">
+      {/* все 10 — в одну строку на любой ширине от 320px: плашки до 26px и сжимаются; слева старые, справа новые (recentForm — по времени) */}
+      <ol className="mt-2.5 grid grid-cols-[repeat(10,minmax(0,26px))] gap-1">
         {form.items.map((o, i) => (
           <li
             key={i}
             title={label(o)}
             aria-label={label(o)}
-            className={`num flex size-7 items-center justify-center rounded-md text-xs font-bold ${
+            className={`num flex aspect-square items-center justify-center rounded-md text-xs font-bold ${
               o === 'win' ? 'bg-up/15 text-up' : o === 'loss' ? 'bg-down/15 text-down' : 'border border-dashed border-border text-muted'
             }`}
           >
@@ -429,6 +430,7 @@ function FormPanel({ trades }: { trades: { pnl: number }[] }) {
           </li>
         ))}
       </ol>
+      <p className="mt-1 text-xs text-muted">{f.order}</p>
       {streak && <p className={`mt-2 text-xs ${form.streak!.kind === 'win' ? 'text-up' : 'text-down'}`}>{streak}</p>}
     </div>
   )

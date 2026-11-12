@@ -72,6 +72,36 @@ export function demoWeek(trades: ClosedTrade[], featuredId: string) {
   return { days, total, featured: { date, pnl: own.pnl, count: own.count, mistake: (tr.tagIds[0] ?? DEMO_FEATURED.mistake) as DemoMistake } }
 }
 
+/**
+ * Сделки «живого примера» на первом входе (Welcome): тот же демо-счёт, но в порядке, в котором новичку не страшно —
+ * первые сделки в плюс, счёт по пути не уходит в минус, убыточные разбросаны по всей ленте, итог около +2 400 $ при винрейте ~55 %.
+ * Даты и время остаются по порядку (берутся у исходных сделок), меняется только какая сделка за какой идёт.
+ */
+export function welcomeTrades(seed: number, now = Date.now()): ClosedTrade[] {
+  let base: ClosedTrade[] = []
+  for (let s = seed; s < seed + 500; s++) {
+    base = demoAccount(now, s).trades
+    const total = base.reduce((a, x) => a + x.pnl, 0)
+    const wr = base.filter((x) => x.pnl > 0).length / base.length
+    if (total >= 2100 && total <= 2700 && wr >= 0.52 && wr <= 0.6) break
+  }
+  const wins = base.filter((x) => x.pnl > 0)
+  const losses = base.filter((x) => x.pnl <= 0)
+  const out: ClosedTrade[] = []
+  let cum = 0
+  let wi = 0
+  let li = 0
+  while (out.length < base.length) {
+    const left = wi >= wins.length
+    // убыточная — когда их «доля» отстала от пройденного пути и счёт после неё останется в плюсе; первые три (видны сразу) — всегда прибыльные
+    const lossDue = li < losses.length && out.length >= 3 && li / losses.length <= out.length / base.length && cum + losses[li].pnl > 0
+    const next = left || lossDue ? losses[li++] : wins[wi++]
+    cum += next.pnl
+    out.push(next)
+  }
+  return out.map((x, i) => ({ ...x, entry_at: base[i].entry_at, exit_at: base[i].exit_at }))
+}
+
 /** Сколько сделок в день: 0…4, чаще 0–1 (в среднем ≈ 1 в день — 60 сделок примерно за два месяца) */
 function dayCount(r: number): number {
   return r < 0.4 ? 0 : r < 0.68 ? 1 : r < 0.86 ? 2 : r < 0.95 ? 3 : 4

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEMO_FEATURED, DEMO_TRADES, demoAccount, demoMistakeRows, demoWeek } from './demo'
+import { DEMO_FEATURED, DEMO_TRADES, demoAccount, demoMistakeRows, demoWeek, welcomeTrades } from './demo'
 
 describe('demoAccount', () => {
   it('одно и то же зерно — одни и те же сделки (главная выглядит одинаково)', () => {
@@ -90,6 +90,30 @@ describe('demoAccount', () => {
       expect(week.total.pnl).toBeCloseTo(inWeek.reduce((s, x) => s + x.pnl, 0), 2)
       // и совпадает с календарём настоящего дашборда (pnlByDay)
       for (const d of week.days) expect(d.pnl).toBeCloseTo(a.days.find((x) => x.date === d.date)?.pnl ?? 0, 2)
+    }
+  })
+
+  it('живой пример первого входа: сразу в плюс, без ухода в минус, итог ~+2 400 $ и винрейт ~55 %, по пути есть убытки', () => {
+    for (const seed of [1, 7, 42, 20261106, 987654321]) {
+      const tr = welcomeTrades(seed, Date.UTC(2026, 10, 12, 12))
+      expect(tr).toHaveLength(DEMO_TRADES)
+      expect(tr[0].pnl).toBeGreaterThan(0)
+      expect(tr[1].pnl).toBeGreaterThan(0)
+      let cum = 0
+      for (const x of tr) {
+        cum += x.pnl
+        expect(cum).toBeGreaterThan(0)
+      }
+      expect(cum).toBeGreaterThan(2000)
+      expect(cum).toBeLessThan(2800)
+      const wr = tr.filter((x) => x.pnl > 0).length / tr.length
+      expect(wr).toBeGreaterThan(0.5)
+      expect(wr).toBeLessThan(0.62)
+      // убыточные — по всей ленте, не пачкой в конце: в первой трети уже есть хотя бы две
+      expect(tr.slice(0, 20).filter((x) => x.pnl < 0).length).toBeGreaterThanOrEqual(2)
+      // даты по порядку, суммы не повторяются
+      expect(tr.every((x, i) => i === 0 || x.exit_at >= tr[i - 1].exit_at)).toBe(true)
+      expect(new Set(tr.map((x) => x.id)).size).toBe(tr.length)
     }
   })
 })

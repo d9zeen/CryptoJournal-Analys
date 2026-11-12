@@ -483,6 +483,16 @@ test('ключевые цифры: последние 10 сделок буква
   await expect(form.getByText('Последние 10 сделок')).toBeVisible()
   await expect(form.getByLabel('Победа')).toHaveCount(7)
   await expect(form.getByLabel('Поражение')).toHaveCount(3)
+  // последняя сделка (i = 11) — победа, справа; первая из десяти (i = 2) — тоже победа, слева; подпись направления
+  await expect(form.locator('li').last()).toHaveAttribute('aria-label', 'Победа')
+  await expect(form.locator('li').nth(1)).toHaveAttribute('aria-label', 'Поражение') // i = 3
+  await expect(form.getByText('старые → новые')).toBeVisible()
+  // все 10 — в одну строку на любой ширине
+  for (const width of [320, 390, 1280, 1440, 1920]) {
+    await page.setViewportSize({ width, height: 900 })
+    const tops = await form.locator('li').evaluateAll((els) => new Set(els.map((e) => Math.round(e.getBoundingClientRect().top))).size)
+    expect(tops, `ширина ${width}`).toBe(1)
+  }
 })
 
 test('палитра в «Настройки → Оформление» на Basic: три бесплатные, остальные под замком', async ({ page, db }) => {
@@ -661,4 +671,94 @@ test('тарифы на главной: карточки не заезжают �
       }
     }
   }
+})
+
+test('«Биржи»: пока файла нет — «Где взять файл?» с переключателем бирж, видна инструкция одной', async ({ page, db }) => {
+  await fakeSupabase(page, db)
+  await page.goto('import')
+  const howto = page.locator('[data-shot="howto"]').filter({ visible: true })
+  await expect(howto).toHaveCount(1)
+  await expect(howto.getByRole('heading', { name: 'Где взять файл на бирже?' })).toBeVisible()
+  const pills = howto.getByRole('radio')
+  await expect(pills).toHaveCount(8)
+  await expect(howto.getByRole('radio', { name: 'Bybit' })).toHaveAttribute('aria-checked', 'true')
+  await expect(howto).toContainText('Закрытые P&L')
+  await howto.getByRole('radio', { name: 'Binance' }).click()
+  await expect(howto).toContainText('Фьючерсы USDⓈ-M')
+  await expect(howto).not.toContainText('Закрытые P&L')
+  // на широком экране — справа от зоны загрузки
+  if ((page.viewportSize()?.width ?? 0) >= 1280) {
+    const drop = (await page.getByText('Выбрать файл').boundingBox())!
+    const box = (await howto.boundingBox())!
+    expect(box.x).toBeGreaterThan(drop.x + drop.width)
+  }
+})
+
+test('«Разбор»: сводка Long / Short наверху, строка-вывод, полоска PnL от середины', async ({ page, db }) => {
+  db.listNames = ['Пробой уровня', 'Отбой', 'Вход без стопа', 'FOMO']
+  db.trades = Array.from({ length: 12 }, (_, i) =>
+    makeTrade(i, { setup_id: i % 2 ? 's1' : 's2', trade_mistakes: i % 3 === 0 ? [{ tag_id: 's3' }] : [] }),
+  )
+  await fakeSupabase(page, db)
+  await page.goto('analysis')
+  const side = page.locator('[data-shot="side-summary"]')
+  await expect(side).toContainText('сделок: 6')
+  await expect(side).toContainText('Long')
+  await expect(side).toContainText('Short')
+  // сводка — в шапке страницы, выше таблиц
+  const head = (await page.getByRole('heading', { name: 'Разбор сделок' }).boundingBox())!
+  const sideBox = (await side.boundingBox())!
+  const setups = (await page.getByRole('heading', { name: 'Сетапы' }).boundingBox())!
+  expect(sideBox.y).toBeLessThan(setups.y)
+  expect(sideBox.y).toBeLessThan(head.y + 120)
+  // makeTrade: прибыль 60+i, убыток −40−i; s1 «Пробой уровня» — нечётные i (+172), s2 «Отбой» — чётные (+178); ошибка s3 — i = 0,3,6,9 (−178)
+  await expect(page.locator('[data-shot="insight"]')).toHaveText(/^Лучше всего работает: Отбой \(\+178,00\s\$\)\. Дороже всего обходится: Вход без стопа \(−178,00\s\$\)\.$/)
+  // полоска: плюс — вправо от середины, минус — влево
+  const bars = page.locator('[data-bar] i:last-child')
+  const cls = await bars.evaluateAll((els) => els.map((e) => e.className))
+  expect(cls.some((c) => c.includes('left-1/2') && c.includes('bg-up'))).toBe(true)
+  expect(cls.some((c) => c.includes('right-1/2') && c.includes('bg-down'))).toBe(true)
+})
+
+test('«Разбор»: при малом числе сделок строки-вывода нет', async ({ page, db }) => {
+  db.trades = Array.from({ length: 4 }, (_, i) => makeTrade(i))
+  await fakeSupabase(page, db)
+  await page.goto('analysis')
+  await expect(page.locator('[data-shot="side-summary"]')).toBeVisible()
+  await expect(page.locator('[data-shot="insight"]')).toHaveCount(0)
+})
+
+test('настройки: «Светлая» первой, оплата — «скоро» и дата пробного периода, удаление — красный контур', async ({ page, db }) => {
+  db.planTrial = true
+  db.planUntil = new Date(Date.now() + 5 * 86_400_000).toISOString()
+  db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
+  await fakeSupabase(page, db)
+  await page.goto('settings')
+  const theme = page.getByRole('radiogroup', { name: 'Тема' })
+  await expect(theme.getByRole('radio').first()).toHaveText('Светлая')
+  const pay = page.locator('[data-payment-placeholder]')
+  await expect(pay).toContainText('Оплата на сайте скоро появится.')
+  await expect(pay).toContainText(/Сейчас у тебя пробный Pro Plus до \d{2}\.\d{2}\.\d{4}\./)
+  await expect(page.getByText(/владелец/)).toHaveCount(0)
+  const del = page.getByRole('button', { name: 'Удалить аккаунт…' })
+  await expect(del).toHaveClass(/border-down/)
+  await expect(del).toHaveClass(/text-down/)
+})
+
+test('404: логотип, текст и кнопки «Статистика» / «На главную»', async ({ page, db }) => {
+  await fakeSupabase(page, db)
+  await page.goto('no-such-page')
+  await expect(page.getByRole('heading', { name: 'Страница не найдена' })).toBeVisible()
+  await expect(page.getByText('Такой страницы нет')).toBeVisible()
+  await expect(page.getByRole('link', { name: 'На главную' })).toHaveAttribute('href', /\/welcome$/)
+  await page.getByRole('link', { name: 'Статистика' }).click()
+  await expect(page).toHaveURL(/\/dashboard$/)
+})
+
+test('404 для гостя: только «На главную»', async ({ page, db }) => {
+  await fakeSupabase(page, db, { signedIn: false })
+  await page.goto('no-such-page')
+  await expect(page.getByRole('link', { name: 'Статистика' })).toHaveCount(0)
+  await page.getByRole('link', { name: 'На главную' }).click()
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Дневник сделок')
 })

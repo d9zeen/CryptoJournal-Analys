@@ -65,3 +65,26 @@ test('под календарём — выбор палитры: бесплат�
   await expect.poll(() => db.palette).toBe('teal_salmon')
   await expect(strip.getByRole('radio', { name: 'Палитра 2' })).toHaveAttribute('aria-checked', 'true')
 })
+
+test('календарь на широком экране: панели справа по содержимому, полоска палитры под календарём, «Лучшая / Худшая сделка»', async ({ page, db, isMobile }) => {
+  test.skip(isMobile, 'на телефоне панели под календарём')
+  await page.setViewportSize({ width: 1440, height: 900 })
+  const now = new Date()
+  db.trades = Array.from({ length: 12 }, (_, i) => {
+    const at = new Date(now.getFullYear(), now.getMonth(), 1 + (i % 9), 12).toISOString()
+    return makeTrade(i, { entry_at: at, exit_at: at, pnl: i % 3 ? 140 + i * 31.5 : -(90 + i * 11.2) })
+  })
+  await fakeSupabase(page, db)
+  await page.goto('calendar')
+  const cal = page.locator('[data-shot="calendar"]')
+  await expect(cal.locator('[data-shot="palette"]')).toBeVisible()
+  await expect(cal.getByText('Лучшая сделка', { exact: true })).toBeVisible()
+  await expect(cal.getByText('Худшая сделка', { exact: true })).toBeVisible()
+  const panel = (await cal.locator('[data-shot="calendar-panel"]').boundingBox())!
+  const grid = (await cal.locator('section').first().boundingBox())!
+  expect(panel.height).toBeLessThan(grid.height - 40) // не растянута до низа календаря
+  expect(panel.width).toBeLessThanOrEqual(320) // остальное — календарю
+  expect(grid.width).toBeGreaterThan(panel.width * 2.2)
+  const chart = (await cal.locator('[data-shot="weekday-chart"]').boundingBox())!
+  expect(Math.round(chart.height)).toBe(160)
+})
