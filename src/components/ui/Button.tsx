@@ -2,13 +2,15 @@ import type { ButtonHTMLAttributes } from 'react'
 import { useT } from '@/i18n'
 import { CheckMark } from '@/components/CheckMark'
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'dangerOutline'
 
 const styles: Record<Variant, string> = {
   primary: 'bg-primary text-on-primary hover:bg-primary-hover',
   secondary: 'bg-surface-2 text-text border border-border hover:border-muted',
   ghost: 'text-muted hover:text-text hover:bg-surface-2',
   danger: 'bg-loss text-on-primary hover:opacity-90',
+  /** опасное действие, ещё не подтверждённое («Удалить аккаунт…»): красный контур, фон прозрачный */
+  dangerOutline: 'border border-down bg-transparent text-down hover:bg-down/10',
 }
 
 type Props = ButtonHTMLAttributes<HTMLButtonElement> & {

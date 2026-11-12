@@ -150,6 +150,38 @@ test.describe('дашборд и сделки', () => {
     for (const name of ['Сетапы', 'Топ ошибок', 'Пары', 'Эмоции', 'Long / Short']) await expect(page.getByRole('heading', { name })).toBeVisible()
   })
 
+  test('«Разбор»: суммы в таблицах видны целиком на 390 и 1440', async ({ page, db }) => {
+    db.listNames = ['Пробой уровня после долгого боковика', 'Отбой', 'Вход без стопа и без плана', 'FOMO']
+    db.trades = Array.from({ length: 40 }, (_, i) =>
+      makeTrade(i, {
+        pnl: i % 3 === 0 ? -(1200 + i * 37.13) : 2400 + i * 41.27,
+        symbol: ['1000PEPEUSDT', 'BTCUSDT', 'ETHUSDT', 'DOGEUSDT'][i % 4],
+        setup_id: `s${1 + (i % 4)}`,
+        emotion_id: `s${1 + ((i + 1) % 4)}`,
+        trade_mistakes: i % 3 === 0 ? [{ tag_id: `s${1 + (i % 4)}` }] : [],
+      }),
+    )
+    await fakeSupabase(page, db)
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 900 })
+      await page.goto('analysis')
+      await expect(page.getByRole('heading', { name: 'Топ ошибок' })).toBeVisible()
+      const cells = page.locator('[data-money]').filter({ visible: true })
+      await expect(cells.first()).toContainText('$')
+      const clipped = await cells.evaluateAll((els) =>
+        els
+          .filter((td) => {
+            const card = td.closest('table')!.parentElement!.getBoundingClientRect()
+            const r = td.getBoundingClientRect()
+            const inner = [td, ...td.querySelectorAll('*')].some((e) => e.scrollWidth > e.clientWidth + 1)
+            return inner || r.right > card.right + 1
+          })
+          .map((e) => e.textContent),
+      )
+      expect(clipped, `обрезаны на ${width}px`).toEqual([])
+    }
+  })
+
   test('свой диапазон: календарь с быстрыми вариантами, применяется кнопкой', async ({ page, db }) => {
     db.trades = Array.from({ length: 6 }, (_, i) => makeTrade(i))
     await fakeSupabase(page, db)
@@ -180,6 +212,35 @@ test.describe('дашборд и сделки', () => {
     await fakeSupabase(page, db)
     await page.goto('trades')
     await expect(page.getByRole('button', { name: 'Загрузить файл с биржи' })).toBeVisible()
+  })
+
+  test('форма сделки на телефоне 390px: «Сохранить» в заголовке, нижнего меню нет, поля не закрыты', async ({ page, db }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await fakeSupabase(page, db)
+    await page.goto('trades/new')
+    const save = page.getByRole('button', { name: 'Сохранить сделку' })
+    await expect(save).toHaveCount(1) // нижней полосы с кнопками нет — одна кнопка, в заголовке
+    await expect(save).toHaveText('Сохранить')
+    const head = (await page.getByRole('heading', { name: 'Новая сделка' }).boundingBox())!
+    const btn = (await save.boundingBox())!
+    expect(Math.abs(btn.y + btn.height / 2 - (head.y + head.height / 2))).toBeLessThan(12)
+    await expect(page.getByRole('link', { name: 'Календарь' })).toHaveCount(0) // нижнего меню нет
+    // «Размер позиции» доводим до низа экрана: поверх него ничего не лежит
+    const size = page.getByLabel('Размер позиции, $')
+    await size.evaluate((el) => el.scrollIntoView({ block: 'end' }))
+    const b = (await size.boundingBox())!
+    expect(b.y + b.height).toBeLessThanOrEqual(844)
+    const top = await page.evaluate(([x, y]) => (document.elementFromPoint(x, y) as HTMLElement | null)?.closest('input')?.id ?? null, [b.x + 10, b.y + b.height - 4])
+    expect(top).toBe(await size.getAttribute('id'))
+    // сохранение работает
+    await page.getByLabel('Пара').fill('BTCUSDT')
+    await page.getByLabel('Цена входа').fill('60000')
+    await page.getByLabel('Цена выхода').fill('61000')
+    await size.fill('600')
+    await save.click()
+    await expect(page).toHaveURL(/\/trades$/)
+    expect(db.inserted.find((x) => x.table === 'trades')!.body).toMatchObject({ symbol: 'BTCUSDT', size_usd: 600 })
+    await expect(page.getByRole('link', { name: 'Календарь' })).toBeVisible() // в списке сделок меню снова есть
   })
 
   test('форма сделки: проверка полей и расчёт PnL', async ({ page, db }) => {
@@ -255,6 +316,8 @@ test.describe('оформление', () => {
   })
 
   test('главная: тема переключается в шапке, без вспышки после перезагрузки', async ({ page, db }) => {
+    // уже 440px кнопки темы в шапке главной нет (там «Начать»), тема — в настройках
+    if ((page.viewportSize()?.width ?? 0) < 440) await page.setViewportSize({ width: 440, height: 900 })
     await fakeSupabase(page, db, { signedIn: false })
     await page.goto('')
     const html = page.locator('html')
@@ -327,7 +390,7 @@ test.describe('админка', () => {
   })
 })
 
-test('страница тарифов: Basic, Pro, Pro Plus; месяц / год; текущий тариф', async ({ page, db }) => {
+test('страница тарифов: Basic, Pro, Pro Plus; цены только за месяц; текущий тариф', async ({ page, db }) => {
   db.usage = { plan: 'pro', trades_created: 3, trade_limit: null }
   await fakeSupabase(page, db)
   // телефон: ссылка из настроек (тарифа в шапке нет); компьютер: пилюля тарифа у логотипа → окошко → «Сравнить тарифы»
@@ -348,13 +411,9 @@ test('страница тарифов: Basic, Pro, Pro Plus; месяц / год
   await expect(page.getByText('Сделок в месяц', { exact: true }).locator('visible=true')).toBeVisible()
   await expect(page.getByRole('row').filter({ hasText: 'без лимита' })).toContainText(/50.*без лимита.*без лимита/)
   await expect(page.getByText('Биржи и кошельки: Bybit по ключу, Hyperliquid по адресу').locator('visible=true')).toBeVisible()
-  await expect(page.getByText(/Цена основателя: Pro Plus за \$99 в год/)).toBeVisible()
-  // за год: −20 %, цена в пересчёте на месяц
-  await page.getByRole('radio', { name: /Год/ }).click()
-  await expect(page.getByRole('radio', { name: /Год/ })).toContainText('−20 %')
-  await expect(head).toContainText('$8')
-  await expect(head).toContainText('$12')
-  await expect(head).toContainText('$144 в год')
+  // оплаты за год пока нет: ни переключателя «Месяц / Год», ни годовых цен, ни «цены основателя»
+  await expect(page.getByRole('radio', { name: /^(Месяц|Год)/ })).toHaveCount(0)
+  await expect(page.getByText(/в год|основател/)).toHaveCount(0)
   // оплаты на сайте пока нет и про администратора не пишем
   await expect(page.getByText(/администратор/)).toHaveCount(0)
   await expect(page.getByRole('button', { name: /Хочу этот тариф|Оплатить/ })).toHaveCount(0)
@@ -424,6 +483,16 @@ test('ключевые цифры: последние 10 сделок буква
   await expect(form.getByText('Последние 10 сделок')).toBeVisible()
   await expect(form.getByLabel('Победа')).toHaveCount(7)
   await expect(form.getByLabel('Поражение')).toHaveCount(3)
+  // последняя сделка (i = 11) — победа, справа; первая из десяти (i = 2) — тоже победа, слева; подпись направления
+  await expect(form.locator('li').last()).toHaveAttribute('aria-label', 'Победа')
+  await expect(form.locator('li').nth(1)).toHaveAttribute('aria-label', 'Поражение') // i = 3
+  await expect(form.getByText('старые → новые')).toBeVisible()
+  // все 10 — в одну строку на любой ширине
+  for (const width of [320, 390, 1280, 1440, 1920]) {
+    await page.setViewportSize({ width, height: 900 })
+    const tops = await form.locator('li').evaluateAll((els) => new Set(els.map((e) => Math.round(e.getBoundingClientRect().top))).size)
+    expect(tops, `ширина ${width}`).toBe(1)
+  }
 })
 
 test('палитра в «Настройки → Оформление» на Basic: три бесплатные, остальные под замком', async ({ page, db }) => {
@@ -538,7 +607,7 @@ test('кнопка «Сохранить сделку»: крутилка в кр
   await page.getByLabel('Размер позиции, $').fill('600')
   const btn = page.getByRole('button', { name: 'Сохранить сделку' })
   await btn.click()
-  const save = page.locator('button[data-state]')
+  const save = page.locator('button[data-state]').filter({ visible: true }) // на телефоне — в заголовке, на компьютере — в нижней полосе
   await expect(save).toHaveAttribute('data-state', 'busy')
   await expect(save).toHaveAttribute('data-state', 'done')
   await expect(save.getByText('Готово')).toBeAttached()
@@ -558,7 +627,7 @@ test('кнопка «Сохранить сделку»: ошибка — кно�
   await page.getByLabel('Размер позиции, $').fill('600')
   await page.getByRole('button', { name: 'Сохранить сделку' }).click()
   await expect(page.getByRole('alert')).toContainText('Достигнут лимит Basic')
-  await expect(page.locator('button[data-state]')).toHaveAttribute('data-state', 'idle')
+  await expect(page.locator('button[data-state]').filter({ visible: true })).toHaveAttribute('data-state', 'idle')
   await expect(page).toHaveURL(/\/trades\/new$/)
 })
 
@@ -602,4 +671,94 @@ test('тарифы на главной: карточки не заезжают �
       }
     }
   }
+})
+
+test('«Биржи»: пока файла нет — «Где взять файл?» с переключателем бирж, видна инструкция одной', async ({ page, db }) => {
+  await fakeSupabase(page, db)
+  await page.goto('import')
+  const howto = page.locator('[data-shot="howto"]').filter({ visible: true })
+  await expect(howto).toHaveCount(1)
+  await expect(howto.getByRole('heading', { name: 'Где взять файл на бирже?' })).toBeVisible()
+  const pills = howto.getByRole('radio')
+  await expect(pills).toHaveCount(8)
+  await expect(howto.getByRole('radio', { name: 'Bybit' })).toHaveAttribute('aria-checked', 'true')
+  await expect(howto).toContainText('Закрытые P&L')
+  await howto.getByRole('radio', { name: 'Binance' }).click()
+  await expect(howto).toContainText('Фьючерсы USDⓈ-M')
+  await expect(howto).not.toContainText('Закрытые P&L')
+  // на широком экране — справа от зоны загрузки
+  if ((page.viewportSize()?.width ?? 0) >= 1280) {
+    const drop = (await page.getByText('Выбрать файл').boundingBox())!
+    const box = (await howto.boundingBox())!
+    expect(box.x).toBeGreaterThan(drop.x + drop.width)
+  }
+})
+
+test('«Разбор»: сводка Long / Short наверху, строка-вывод, полоска PnL от середины', async ({ page, db }) => {
+  db.listNames = ['Пробой уровня', 'Отбой', 'Вход без стопа', 'FOMO']
+  db.trades = Array.from({ length: 12 }, (_, i) =>
+    makeTrade(i, { setup_id: i % 2 ? 's1' : 's2', trade_mistakes: i % 3 === 0 ? [{ tag_id: 's3' }] : [] }),
+  )
+  await fakeSupabase(page, db)
+  await page.goto('analysis')
+  const side = page.locator('[data-shot="side-summary"]')
+  await expect(side).toContainText('сделок: 6')
+  await expect(side).toContainText('Long')
+  await expect(side).toContainText('Short')
+  // сводка — в шапке страницы, выше таблиц
+  const head = (await page.getByRole('heading', { name: 'Разбор сделок' }).boundingBox())!
+  const sideBox = (await side.boundingBox())!
+  const setups = (await page.getByRole('heading', { name: 'Сетапы' }).boundingBox())!
+  expect(sideBox.y).toBeLessThan(setups.y)
+  expect(sideBox.y).toBeLessThan(head.y + 120)
+  // makeTrade: прибыль 60+i, убыток −40−i; s1 «Пробой уровня» — нечётные i (+172), s2 «Отбой» — чётные (+178); ошибка s3 — i = 0,3,6,9 (−178)
+  await expect(page.locator('[data-shot="insight"]')).toHaveText(/^Лучше всего работает: Отбой \(\+178,00\s\$\)\. Дороже всего обходится: Вход без стопа \(−178,00\s\$\)\.$/)
+  // полоска: плюс — вправо от середины, минус — влево
+  const bars = page.locator('[data-bar] i:last-child')
+  const cls = await bars.evaluateAll((els) => els.map((e) => e.className))
+  expect(cls.some((c) => c.includes('left-1/2') && c.includes('bg-up'))).toBe(true)
+  expect(cls.some((c) => c.includes('right-1/2') && c.includes('bg-down'))).toBe(true)
+})
+
+test('«Разбор»: при малом числе сделок строки-вывода нет', async ({ page, db }) => {
+  db.trades = Array.from({ length: 4 }, (_, i) => makeTrade(i))
+  await fakeSupabase(page, db)
+  await page.goto('analysis')
+  await expect(page.locator('[data-shot="side-summary"]')).toBeVisible()
+  await expect(page.locator('[data-shot="insight"]')).toHaveCount(0)
+})
+
+test('настройки: «Светлая» первой, оплата — «скоро» и дата пробного периода, удаление — красный контур', async ({ page, db }) => {
+  db.planTrial = true
+  db.planUntil = new Date(Date.now() + 5 * 86_400_000).toISOString()
+  db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
+  await fakeSupabase(page, db)
+  await page.goto('settings')
+  const theme = page.getByRole('radiogroup', { name: 'Тема' })
+  await expect(theme.getByRole('radio').first()).toHaveText('Светлая')
+  const pay = page.locator('[data-payment-placeholder]')
+  await expect(pay).toContainText('Оплата на сайте скоро появится.')
+  await expect(pay).toContainText(/Сейчас у тебя пробный Pro Plus до \d{2}\.\d{2}\.\d{4}\./)
+  await expect(page.getByText(/владелец/)).toHaveCount(0)
+  const del = page.getByRole('button', { name: 'Удалить аккаунт…' })
+  await expect(del).toHaveClass(/border-down/)
+  await expect(del).toHaveClass(/text-down/)
+})
+
+test('404: логотип, текст и кнопки «Статистика» / «На главную»', async ({ page, db }) => {
+  await fakeSupabase(page, db)
+  await page.goto('no-such-page')
+  await expect(page.getByRole('heading', { name: 'Страница не найдена' })).toBeVisible()
+  await expect(page.getByText('Такой страницы нет')).toBeVisible()
+  await expect(page.getByRole('link', { name: 'На главную' })).toHaveAttribute('href', /\/welcome$/)
+  await page.getByRole('link', { name: 'Статистика' }).click()
+  await expect(page).toHaveURL(/\/dashboard$/)
+})
+
+test('404 для гостя: только «На главную»', async ({ page, db }) => {
+  await fakeSupabase(page, db, { signedIn: false })
+  await page.goto('no-such-page')
+  await expect(page.getByRole('link', { name: 'Статистика' })).toHaveCount(0)
+  await page.getByRole('link', { name: 'На главную' }).click()
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Дневник сделок')
 })

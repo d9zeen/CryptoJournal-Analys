@@ -93,6 +93,7 @@ export const en: Dict = {
     loading: 'Loading…',
     done: 'Done',
     notFound: 'Page not found',
+    notFoundText: 'This page does not exist. The link may be outdated, or there is a typo in the address.',
     toHome: 'Go home',
     save: 'Save',
     saved: 'Saved',
@@ -322,7 +323,6 @@ export const en: Dict = {
     feature: 'What’s included',
     yes: 'yes',
     no: 'no',
-    billing: { label: 'Billing', month: 'Monthly', year: 'Yearly', discount: '−{n}%' },
     cards: {
       forever: 'free forever',
       desc: {
@@ -331,8 +331,6 @@ export const en: Dict = {
         pro_plus: 'Fully automatic: several exchanges, wallets and Polymarket.',
       },
     },
-    perYear: '${price} per year',
-    perYearHint: 'billed yearly',
     features: {
       trades: 'Trades per month',
       tradesUnlimited: 'unlimited',
@@ -370,7 +368,6 @@ export const en: Dict = {
     screenshotsLine: { one: '{n} screenshot per trade', few: '{n} screenshots per trade', many: '{n} screenshots per trade' },
     palettesFreeLine: '3 free palettes',
     palettesAllLine: 'All palettes',
-    founder: 'Founder price: Pro Plus for $99 a year for the first 100 subscribers.',
     needPlan: 'Available on {plan}.',
     upgrade: {
       trades: 'Basic is limited to 50 trades a month. Pro and Pro Plus have no limit.',
@@ -432,6 +429,9 @@ export const en: Dict = {
   analysis: {
     title: 'Trade review',
     hint: 'Where you make money and where you lose it: setups, mistakes, pairs, emotions, long and short.',
+    insightBest: 'Works best: {name} ({pnl}).',
+    insightWorst: 'Costs you the most: {name} ({pnl}).',
+    sideLine: '{trades} · win rate {winrate}',
   },
   settings: {
     title: 'Settings',
@@ -476,7 +476,7 @@ export const en: Dict = {
     plan: 'Plan',
     plansLink: 'Compare plans',
     /** placeholder in the plan card until payments exist */
-    payment: { title: 'Payment', soon: 'Plan payment will appear here. For now the owner activates plans.' },
+    payment: { title: 'Payment', soon: 'Payments on the site are coming soon.', trial: 'You are on a free Pro Plus trial until {date}.' },
     usageFree: 'Trades this month: {used} of {limit}',
     usagePro: 'Trades this month: {used} · unlimited',
     lists: {
@@ -588,6 +588,7 @@ export const en: Dict = {
         winLetter: 'W',
         lossLetter: 'L',
         evenLetter: '0',
+        order: 'older → newer',
         streakWin: { one: 'On a {n}-win streak', few: 'On a {n}-win streak', many: 'On a {n}-win streak' },
         streakLoss: { one: 'On a {n}-loss streak', few: 'On a {n}-loss streak', many: 'On a {n}-loss streak' },
       },
@@ -596,7 +597,7 @@ export const en: Dict = {
         tradeWinrate: 'Share of winning trades. Breakeven trades are not counted.',
         profitFactor: 'Dollars of profit for every dollar of loss. Above 1 means you are in profit, above 2 is good.',
         dayWinrate: 'Share of trading days that closed green.',
-        avgWinLoss: 'How many times the average winning trade is bigger than the average losing one.',
+        avgWinLoss: 'Average win / average loss: how many times the average winning trade is bigger than the average losing one.',
       },
     },
     charts: {
@@ -853,10 +854,11 @@ export const en: Dict = {
     },
   },
   landing: {
-    nav: { features: 'Features', pricing: 'Pricing', faq: 'FAQ' },
+    nav: { features: 'How it works', pricing: 'Pricing', faq: 'FAQ' },
     login: 'Log in',
     register: 'Sign up',
     start: 'Start for free',
+    startShort: 'Start free',
     pick: 'Start',
     open: 'Open journal',
     title: 'Trading journal for futures, spot and Polymarket',
@@ -865,7 +867,9 @@ export const en: Dict = {
     previewLabel: 'Demo account dashboard: 60 trades over two months',
     exchanges: {
       title: 'Works with',
-      more: '+ any CSV / Excel',
+      api: 'Auto-sync via API',
+      file: 'Upload CSV / Excel',
+      other: 'any other exchange',
     },
     path: {
       title: 'The path of one trade',
@@ -882,6 +886,10 @@ export const en: Dict = {
       },
       calendar: {
         text: 'The calendar shows how the day ended.',
+        week: 'Week total',
+        caption: '{date}: {pnl}, {trades} {mistake}',
+        trades: { one: 'one trade', few: '{n} trades', many: '{n} trades' },
+        mistake: { late: 'with a late entry', nostop: 'without a stop', hold: 'holding a loser' },
       },
     },
     pricingTitle: 'Pricing',
@@ -893,6 +901,10 @@ export const en: Dict = {
         b: { q: 'Which exchanges are supported?', a: 'By connection: Bybit via key, Hyperliquid and Polymarket via wallet address. By file: Bybit, Binance, OKX, BingX, Bitget, MEXC and almost any spreadsheet with trade columns.' },
         c: { q: 'What happens when the Basic limit runs out?', a: 'Basic includes 50 trades a month. Once they are used up, no new trades are added for that month; existing ones stay. The limit resets at the start of the next month, and Pro and Pro Plus have no limit.' },
         d: { q: 'Can I delete my data?', a: 'Yes. Settings has an export of all trades to CSV and full account deletion.' },
+        e: { q: 'What happens after the 7 days of Pro Plus?', a: 'Your plan switches to Basic on its own. Your trades and settings stay. Basic includes 50 new trades a month.' },
+        f: { q: 'Do I need a card for the trial?', a: 'No. There are no payments on the site yet, so the trial starts without a card.' },
+        g: { q: 'Is there a mobile app?', a: 'There is no separate app. The site works fully in your phone’s browser.' },
+        h: { q: 'Which files can I import?', a: 'A CSV or Excel file with closed positions or trade history from any exchange. Columns are recognized automatically.' },
       },
     },
     footer: '© 2026 CryptoJournal',

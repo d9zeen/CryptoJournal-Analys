@@ -27,6 +27,25 @@ export function formatPnl(n: number | null | undefined): string {
   return n > 0 ? `+${s}` : n < 0 ? `−${s}` : s
 }
 
+/**
+ * Короткая сумма для тесных мест (клетка дня в календаре): без копеек — +215 $ / +$215;
+ * от 10 000 — тысячами с одним знаком: +12,4K $ / +$12.4K; от миллиона — +1,2M $. Полная сумма — в подсказке.
+ */
+export function formatPnlShort(n: number | null | undefined): string {
+  if (n === null || n === undefined) return '—'
+  const abs = Math.abs(n)
+  const sign = Math.round(abs) === 0 ? '' : n > 0 ? '+' : '−'
+  let num: string
+  if (abs < 9999.5) num = nf({ maximumFractionDigits: 0 }).format(Math.round(abs))
+  else if (abs < 999_950) num = `${nf({ maximumFractionDigits: 1 }).format(Math.round(abs / 100) / 10)}K`
+  else num = `${nf({ maximumFractionDigits: 1 }).format(Math.round(abs / 100_000) / 10)}M`
+  // где стоит знак доллара — как в формате языка (en: $215, ru: 215 $)
+  const parts = usd().formatToParts(1)
+  const cur = parts.find((p) => p.type === 'currency')?.value ?? '$'
+  const prefix = parts[0]?.type === 'currency'
+  return sign + (prefix ? `${cur}${num}` : `${num}\u00a0${cur}`)
+}
+
 /** Цена: до 8 знаков, без лишних нулей. */
 export function formatPrice(n: number | null | undefined): string {
   if (n === null || n === undefined) return '—'

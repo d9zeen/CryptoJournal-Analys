@@ -77,8 +77,8 @@ function AppearanceCard() {
         value={theme}
         onChange={setTheme}
         options={[
-          { value: 'dark', label: a.dark },
           { value: 'light', label: a.light },
+          { value: 'dark', label: a.dark },
         ]}
       />
       <div className="mt-5">
@@ -202,10 +202,11 @@ function PlanCard() {
           <div className={`h-full ${pct >= 100 ? 'bg-loss' : 'bg-primary'}`} style={{ width: `${pct}%` }} />
         </div>
       )}
-      {/* заглушка: оплата на сайте появится здесь (отдельный PR); пока тариф подключает владелец */}
+      {/* заглушка: оплата на сайте появится здесь (отдельный PR); идёт пробный период — до какого числа */}
       <div data-payment-placeholder className="rounded-lg border border-dashed border-border px-3 py-2.5 text-sm">
         <div className="font-medium">{t.settings.payment.title}</div>
         <p className="mt-0.5 text-muted">{t.settings.payment.soon}</p>
+        {term?.kind === 'trial' && <p className="mt-0.5">{fmt(t.settings.payment.trial, { date: formatDateShort(term.until) })}</p>}
       </div>
     </Card>
   )
@@ -261,7 +262,7 @@ function DataCard() {
         <h3 className="text-sm font-medium text-loss">{d.deleteTitle}</h3>
         <p className="text-sm text-muted">{d.deleteHint}</p>
         {!confirming ? (
-          <Button variant="secondary" className="self-start" onClick={() => setConfirming(true)}>
+          <Button variant="dangerOutline" className="self-start" onClick={() => setConfirming(true)}>
             {d.deleteStart}
           </Button>
         ) : (

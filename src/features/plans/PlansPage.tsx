@@ -1,16 +1,15 @@
 /**
  * Тарифы: Basic (бесплатно), Pro, Pro Plus — одна таблица сравнения (строки — возможности, колонки — тарифы).
- * Переключатель «Месяц / Год». Оплаты на сайте пока нет (будет отдельным шагом). Pro Plus — главный (выделен);
+ * Цены — только за месяц (оплаты за год пока нет; годовые цены лежат в lib/plans.ts и вернутся вместе с оплатой). Оплаты на сайте пока нет (будет отдельным шагом). Pro Plus — главный (выделен);
  * колонка текущего тарифа подписана «Твой тариф».
  */
 import { intlLocale } from '@/lib/locale'
-import { Fragment, useState, type ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import { fmt, plural, useT } from '@/i18n'
 import { useProfile, useUsage } from '@/features/settings/api'
 import { Card } from '@/components/ui/Card'
-import { MAIN_PLAN, PLANS, planTerm, type Billing, type PlanInfo } from '@/lib/plans'
+import { MAIN_PLAN, PLANS, planTerm, type PlanInfo } from '@/lib/plans'
 import type { Plan } from '@/types/db'
-import { BillingToggle } from './BillingToggle'
 import { PlanPrice } from './PlanPrice'
 
 export function PlansPage() {
@@ -18,32 +17,30 @@ export function PlansPage() {
   const p = t.plans
   const { data: usage } = useUsage()
   const { data: profile } = useProfile()
-  const [billing, setBilling] = useState<Billing>('month')
   const term = planTerm(profile, usage?.plan)
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">{p.title}</h1>
-          <p className="mt-1 text-sm text-muted">{p.hint}</p>
-        </div>
-        <BillingToggle value={billing} onChange={setBilling} />
+      <div>
+        <h1 className="text-xl font-semibold">{p.title}</h1>
+        <p className="mt-1 text-sm text-muted">{p.hint}</p>
       </div>
       <PlansTable
         current={usage?.plan}
         currentNote={
-          term ? (term.kind === 'trial' ? `${p.trial} · ${plural(term.daysLeft, p.daysN)}` : fmt(p.until, { date: term.until.toLocaleDateString(intlLocale()) })) : null
+          term
+            ? term.kind === 'trial'
+              ? `${p.trial} · ${plural(term.daysLeft, p.daysN)}`
+              : fmt(p.until, { date: term.until.toLocaleDateString(intlLocale()) })
+            : null
         }
-        billing={billing}
       />
-      <p className="text-sm text-muted">{p.founder}</p>
     </div>
   )
 }
 
 /** Таблица сравнения тарифов */
-export function PlansTable({ current, currentNote = null, billing }: { current?: Plan; currentNote?: string | null; billing: Billing }) {
+export function PlansTable({ current, currentNote = null }: { current?: Plan; currentNote?: string | null }) {
   const t = useT()
   const p = t.plans
   const f = p.features
@@ -78,13 +75,15 @@ export function PlansTable({ current, currentNote = null, billing }: { current?:
               <th key={plan.id} scope="col" className={`px-3 pt-4 pb-3 text-left align-top font-normal md:px-4 ${col(plan, 'top')}`}>
                 {/* плашка над главным тарифом (с md; на телефоне колонка узкая — хватает рамки); у остальных — пустое место той же высоты */}
                 {plan.id === MAIN_PLAN ? (
-                  <span className="mb-2 hidden rounded-full bg-primary px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-on-primary md:inline-block">{p.best}</span>
+                  <span className="mb-2 hidden rounded-full bg-primary px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-on-primary md:inline-block">
+                    {p.best}
+                  </span>
                 ) : (
                   <span className="mb-2 hidden h-[22px] md:block" aria-hidden />
                 )}
                 <h2 className="text-base font-bold">{p.names[plan.id]}</h2>
                 <div className="mt-0.5">
-                  <PlanPrice plan={plan} billing={billing} />
+                  <PlanPrice plan={plan} />
                 </div>
                 {current === plan.id && (
                   <p className="mt-1 text-xs text-primary">

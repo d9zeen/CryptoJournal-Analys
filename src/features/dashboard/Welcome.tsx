@@ -1,6 +1,8 @@
 /**
  * Первый вход: сделок ещё нет. Слева — три шага, как начать; справа — «живой» пример статистики:
  * выдуманные сделки приходят по одной, кривая капитала дорисовывается, показатели пересчитываются.
+ * Порядок сделок — welcomeTrades (demo.ts): сразу в плюс, без ухода в минус, итог ~+2 400 $ и ~55 %.
+ * Оси растут вместе со сделками: линия всегда на всю ширину графика.
  * Анимация — один requestAnimationFrame (плавно на любом компьютере), вне экрана не считается;
  * при «уменьшить движение» сразу показываем готовый пример.
  */
@@ -12,12 +14,12 @@ import { Button } from '@/components/ui/Button'
 import { formatDayShort, formatPercent, formatPnl, formatRatio, formatUsd, formatUsdShort, pnlClass } from '@/lib/format'
 import { prefersReducedMotion } from '@/lib/motion'
 import { SideBadge } from '@/components/SideBadge'
-import { DEMO_TRADES, demoAccount } from '@/features/landing/demo'
+import { DEMO_TRADES, welcomeTrades } from '@/features/landing/demo'
 import { useConnections } from '@/features/connections/api'
 import { useProfile } from '@/features/settings/api'
 import { exchangeName } from '@/lib/exchanges'
 import type { ClosedTrade } from '@/lib/calc/stats'
-import { big, Counts, HalfGauge, PfCaption, Widget } from './Widgets'
+import { big, Counts, gaugeRow, HalfGauge, PfCaption, Widget } from './Widgets'
 
 export function Welcome() {
   return (
@@ -189,14 +191,6 @@ function useDemoPosition(total: number) {
   return { ref, ...state }
 }
 
-/** Сделки примера: на каждый круг — новые (своё зерно), и только счёт, который в итоге в плюсе */
-function demoTrades(seed: number): ClosedTrade[] {
-  for (let s = seed; ; s++) {
-    const trades = demoAccount(Date.now(), s).trades
-    if (trades.reduce((a, tr) => a + tr.pnl, 0) > 800) return trades
-  }
-}
-
 function LiveExample() {
   const t = useT()
   const w = t.dashboard.welcome
@@ -204,7 +198,7 @@ function LiveExample() {
   const { ref, pos, alpha, cycle } = useDemoPosition(DEMO_TRADES)
   // зерно — своё при каждом открытии и новое на каждом круге: пары, направления и суммы не повторяются
   const [seed] = useState(() => Math.floor(Math.random() * 1e9))
-  const trades = useMemo(() => demoTrades(seed + cycle * 7919), [seed, cycle])
+  const trades = useMemo(() => welcomeTrades(seed + cycle * 7919), [seed, cycle])
 
   const cum = useMemo(() => {
     let c = 0
@@ -265,7 +259,7 @@ function LiveExample() {
               <div className={`${big} text-[30px]`}>{formatPnl(pnl)}</div>
             </Widget>
             <Widget label={k.tradeWinrate} hint={k.hints.tradeWinrate}>
-              <div className="flex flex-col-reverse items-start gap-2 min-[420px]:flex-row min-[420px]:items-end min-[420px]:justify-between">
+              <div className={gaugeRow}>
                 <div className={big}>{formatPercent(wins + losses ? wins / (wins + losses) : null, 0)}</div>
                 <HalfGauge a={wins} b={losses} live />
               </div>
@@ -342,33 +336,36 @@ function LiveCurve({ cum, trades, pos }: { cum: number[]; trades: ClosedTrade[];
   const T = 22
   const B = 24 // подписи дат
 
-  const { lo, hi, ticks } = useMemo(() => {
-    const min = Math.min(...cum)
-    const max = Math.max(...cum)
-    const step = niceStep((max - min) / 4)
-    const lo = Math.floor(min / step) * step
-    const hi = Math.ceil(max / step) * step
-    const ticks: number[] = []
-    for (let v = lo; v <= hi + 1e-9; v += step) ticks.push(v)
-    return { lo, hi, ticks }
-  }, [cum])
-
-  if (W === 0) return <div ref={ref} className="mt-3" style={{ height: H }} />
-
-  const x = (i: number) => L + (i / (cum.length - 1)) * (W - L - R)
-  const y = (v: number) => T + (1 - (v - lo) / (hi - lo || 1)) * (H - T - B)
   const n = Math.floor(pos)
   const e = pos - n
   const endV = n + 1 < cum.length ? cum[n] + (cum[n + 1] - cum[n]) * e : cum[n]
+  // оси — только по уже пришедшим сделкам: линия всегда на всю ширину и высоту, растёт вместе с примером
+  const { lo, hi, ticks } = useMemo(() => {
+    const seen = [...cum.slice(0, n + 1), endV]
+    const min = Math.min(0, ...seen)
+    const max = Math.max(...seen)
+    const pad = (max - min) * 0.08 || 50
+    const lo = min < 0 ? min - pad : 0
+    const hi = max + pad
+    const step = niceStep((hi - lo) / 4)
+    const ticks: number[] = []
+    for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) ticks.push(v)
+    return { lo, hi, ticks }
+  }, [cum, n, endV])
+
+  if (W === 0) return <div ref={ref} className="mt-3" style={{ height: H }} />
+
+  const span = Math.max(pos, 1)
+  const x = (i: number) => L + (Math.min(i, span) / span) * (W - L - R)
+  const y = (v: number) => T + (1 - (v - lo) / (hi - lo || 1)) * (H - T - B)
   const pts: [number, number][] = cum.slice(0, n + 1).map((v, i) => [x(i), y(v)])
   if (n + 1 < cum.length && e > 0) pts.push([x(n + e), y(endV)])
   const [ex, ey] = pts[pts.length - 1]
   const line = smoothPath(pts)
   const area = `${line}L${ex.toFixed(1)} ${H - B}L${L} ${H - B}Z`
-  // только что пришедшая сделка: её сумма всплывает над точкой и тает
-  const fresh = trades[n - 1]
-  const fade = n < trades.length ? e : 1
-  const labels = [0, 0.25, 0.5, 0.75, 1].map((k) => Math.round(k * (trades.length - 1)))
+  // подписи дат — по уже пришедшим сделкам (ось X растёт вместе с ними); не чаще, чем через 3 сделки
+  const shown = Math.max(1, Math.min(trades.length, Math.ceil(pos)))
+  const labels = [...new Set([0, 0.25, 0.5, 0.75, 1].map((k) => Math.round(k * (shown - 1))))].filter((i, j, all) => j === 0 || i - all[j - 1] >= 3)
 
   return (
     <div ref={ref} className="mt-3">
@@ -395,7 +392,6 @@ function LiveCurve({ cum, trades, pos }: { cum: number[]; trades: ClosedTrade[];
         ))}
         <path d={area} fill={`url(#${id}f)`} />
         <path d={line} fill="none" stroke="var(--color-primary)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-        {fresh && fade < 1 && <FreshPill x={ex} y={ey - 26 - fade * 16} pnl={fresh.pnl} opacity={1 - fade} />}
         <circle cx={ex} cy={ey} r={4.5} fill="var(--color-primary)" stroke="var(--color-surface)" strokeWidth={2} />
         {R > 16 && (
           <text x={ex + 10} y={ey} dy="0.32em" fontSize={12} fontWeight={600} fill="var(--color-text)">
@@ -404,20 +400,6 @@ function LiveCurve({ cum, trades, pos }: { cum: number[]; trades: ClosedTrade[];
         )}
       </svg>
     </div>
-  )
-}
-
-/** Сумма только что пришедшей сделки — табличка над точкой, всплывает и тает */
-function FreshPill({ x, y, pnl, opacity }: { x: number; y: number; pnl: number; opacity: number }) {
-  const label = formatPnl(pnl)
-  const w = label.length * 7 + 16
-  return (
-    <g opacity={opacity} transform={`translate(${x.toFixed(1)} ${y.toFixed(1)})`}>
-      <rect x={-w / 2} y={-11} width={w} height={22} rx={6} fill="var(--color-surface)" stroke="var(--color-border)" />
-      <text textAnchor="middle" dy="0.35em" fontSize={12} fontWeight={600} fill={pnl >= 0 ? 'var(--color-primary)' : 'var(--color-muted)'}>
-        {label}
-      </text>
-    </g>
   )
 }
 

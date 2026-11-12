@@ -145,18 +145,24 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
 
   return (
     <form ref={formRef} onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Link to="/trades" className="text-muted hover:text-text" aria-label={t.common.back}>
+      {/* на телефоне «Сохранить» — здесь, справа от заголовка (нижней полосы и нижнего меню на этой странице нет — они закрывали поля) */}
+      <div className="flex items-center justify-between gap-2 md:gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <Link to="/trades" className="shrink-0 text-muted hover:text-text" aria-label={t.common.back}>
             ←
           </Link>
-          <h1 className="text-xl font-semibold">{isNew ? t.tradeForm.titleNew : `${t.tradeForm.titleEdit} ${existing!.title ?? existing!.symbol}`}</h1>
+          <h1 className="truncate text-xl font-semibold">{isNew ? t.tradeForm.titleNew : `${t.tradeForm.titleEdit} ${existing!.title ?? existing!.symbol}`}</h1>
         </div>
-        {!isNew && (
-          <Button type="button" variant="ghost" onClick={onDelete} loading={del.isPending} className="text-loss hover:text-loss">
-            {t.common.delete}
-          </Button>
-        )}
+        <div className="flex shrink-0 items-center gap-1 md:gap-3">
+          {!isNew && (
+            <Button type="button" variant="ghost" onClick={onDelete} loading={del.isPending} className="text-loss hover:text-loss">
+              {t.common.delete}
+            </Button>
+          )}
+          <SaveButton state={saveState} disabled={limitReached} aria-label={t.tradeForm.save} className="md:hidden">
+            {t.common.save}
+          </SaveButton>
+        </div>
       </div>
 
       {limitReached && (
@@ -357,8 +363,8 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
 
       <FormError message={submitError} />
 
-      {/* панель действий прилипает к низу экрана, пока форма длиннее экрана */}
-      <div className="sticky bottom-20 z-10 flex items-center justify-end gap-3 rounded-lg border border-border bg-surface/95 px-3 py-3 backdrop-blur md:bottom-4 md:px-4">
+      {/* компьютер и планшет: панель действий прилипает к низу экрана, пока форма длиннее экрана; на телефоне её нет — «Сохранить» в заголовке */}
+      <div className="sticky bottom-4 z-10 hidden items-center justify-end gap-3 rounded-lg border border-border bg-surface/95 px-4 py-3 backdrop-blur md:flex">
         <Button type="button" variant="secondary" onClick={() => navigate('/trades')}>
           {t.common.cancel}
         </Button>

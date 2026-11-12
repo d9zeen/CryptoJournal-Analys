@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from 'react-router'
+import { NavLink, Outlet, useMatch } from 'react-router'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { fmt, useT } from '@/i18n'
 import { Logo, LogoMark } from '@/components/Logo'
@@ -48,9 +48,11 @@ export function AppLayout() {
   const phoneItems = items.filter((i) => PHONE_NAV.includes(i.to))
   useAutoSync() // подключённые биржи подтягивают сделки сами
   usePaletteSync()
+  // форма сделки (/trades/new, /trades/:id): нижнего меню нет — вместе с кнопками формы оно закрывало поля
+  const phoneNav = useMatch('/trades/:id') === null
 
   return (
-    <div className="min-h-dvh pb-20 md:pb-0 md:pl-[72px] lg:pl-[280px]">
+    <div className={`min-h-dvh md:pb-0 md:pl-[72px] lg:pl-[280px] ${phoneNav ? 'pb-20' : ''}`}>
       {/*
         Левая панель (компьютер). Широкий экран (lg): логотип с тарифом, пункты с подписями, внизу — лимит (Basic), язык, тема и профиль.
         Планшет (md): только иконки, подпись — при наведении.
@@ -157,8 +159,9 @@ export function AppLayout() {
         <Outlet />
       </main>
 
-      {/* Нижнее меню на телефоне: там нет наведения, поэтому подписи остаются */}
+      {/* Нижнее меню на телефоне: там нет наведения, поэтому подписи остаются. На форме сделки его нет */}
       <nav
+        hidden={!phoneNav}
         className="fixed inset-x-0 bottom-0 z-10 grid border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden"
         style={{ gridTemplateColumns: `repeat(${phoneItems.length}, minmax(0, 1fr))` }}
       >
