@@ -66,7 +66,7 @@ export function HalfGauge({ a, b, live }: { a: number; b: number; live?: boolean
   const pb = sum > 0 ? (b / sum) * (100 - gap) : 0
   const d = 'M8 46 A38 38 0 0 1 84 46'
   return (
-    <svg viewBox="0 0 92 50" className="h-[36px] w-[66px] shrink-0 sm:h-[46px] sm:w-[84px]" aria-hidden>
+    <svg viewBox="0 0 92 50" className="block h-auto w-full max-w-[66px] min-w-[40px] sm:max-w-[84px]" aria-hidden>
       <path d={d} pathLength={100} fill="none" className="stroke-surface-2" strokeWidth={8} strokeLinecap="round" />
       {pa > 0 && (
         <path
@@ -166,7 +166,12 @@ export function Widget({
   )
 }
 
-export const big = 'num min-w-0 truncate text-xl leading-tight font-semibold sm:text-2xl'
+/** Число и полукруг в одной строке: полукруг сжимается (до 40px), число — никогда */
+export const gaugeRow =
+  'flex flex-col-reverse items-start gap-2 min-[420px]:flex-row min-[420px]:items-end min-[420px]:justify-between [&>svg]:min-[420px]:flex-1'
+
+/** Главное число карточки: всегда целиком (без «…»); если тесно — уменьшается шкала рядом, а не цифра */
+export const big = 'num shrink-0 whitespace-nowrap text-xl leading-tight font-semibold sm:text-2xl'
 
 /**
  * Верхний ряд. rollKey — что выбрано (период): при его смене числа прокручиваются (№13),
@@ -213,7 +218,7 @@ export function KpiRow({
       </Widget>
 
       <Widget label={k.tradeWinrate} hint={k.hints.tradeWinrate} i={1}>
-        <div className="flex flex-col-reverse items-start gap-2 min-[420px]:flex-row min-[420px]:items-end min-[420px]:justify-between">
+        <div className={gaugeRow}>
           <div className={big}>{num(s.winrate, (v) => formatPercent(v))}</div>
           <HalfGauge a={s.wins} b={s.losses} />
         </div>
@@ -230,7 +235,7 @@ export function KpiRow({
       </Widget>
 
       <Widget label={k.dayWinrate} hint={k.hints.dayWinrate} i={3}>
-        <div className="flex flex-col-reverse items-start gap-2 min-[420px]:flex-row min-[420px]:items-end min-[420px]:justify-between">
+        <div className={gaugeRow}>
           <div className={big}>{num(score.dayWinrate, (v) => formatPercent(v))}</div>
           <HalfGauge a={score.dayWins} b={score.dayLosses} />
         </div>

@@ -150,6 +150,38 @@ test.describe('дашборд и сделки', () => {
     for (const name of ['Сетапы', 'Топ ошибок', 'Пары', 'Эмоции', 'Long / Short']) await expect(page.getByRole('heading', { name })).toBeVisible()
   })
 
+  test('«Разбор»: суммы в таблицах видны целиком на 390 и 1440', async ({ page, db }) => {
+    db.listNames = ['Пробой уровня после долгого боковика', 'Отбой', 'Вход без стопа и без плана', 'FOMO']
+    db.trades = Array.from({ length: 40 }, (_, i) =>
+      makeTrade(i, {
+        pnl: i % 3 === 0 ? -(1200 + i * 37.13) : 2400 + i * 41.27,
+        symbol: ['1000PEPEUSDT', 'BTCUSDT', 'ETHUSDT', 'DOGEUSDT'][i % 4],
+        setup_id: `s${1 + (i % 4)}`,
+        emotion_id: `s${1 + ((i + 1) % 4)}`,
+        trade_mistakes: i % 3 === 0 ? [{ tag_id: `s${1 + (i % 4)}` }] : [],
+      }),
+    )
+    await fakeSupabase(page, db)
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 900 })
+      await page.goto('analysis')
+      await expect(page.getByRole('heading', { name: 'Топ ошибок' })).toBeVisible()
+      const cells = page.locator('[data-money]').filter({ visible: true })
+      await expect(cells.first()).toContainText('$')
+      const clipped = await cells.evaluateAll((els) =>
+        els
+          .filter((td) => {
+            const card = td.closest('table')!.parentElement!.getBoundingClientRect()
+            const r = td.getBoundingClientRect()
+            const inner = [td, ...td.querySelectorAll('*')].some((e) => e.scrollWidth > e.clientWidth + 1)
+            return inner || r.right > card.right + 1
+          })
+          .map((e) => e.textContent),
+      )
+      expect(clipped, `обрезаны на ${width}px`).toEqual([])
+    }
+  })
+
   test('свой диапазон: календарь с быстрыми вариантами, применяется кнопкой', async ({ page, db }) => {
     db.trades = Array.from({ length: 6 }, (_, i) => makeTrade(i))
     await fakeSupabase(page, db)
@@ -180,6 +212,35 @@ test.describe('дашборд и сделки', () => {
     await fakeSupabase(page, db)
     await page.goto('trades')
     await expect(page.getByRole('button', { name: 'Загрузить файл с биржи' })).toBeVisible()
+  })
+
+  test('форма сделки на телефоне 390px: «Сохранить» в заголовке, нижнего меню нет, поля не закрыты', async ({ page, db }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await fakeSupabase(page, db)
+    await page.goto('trades/new')
+    const save = page.getByRole('button', { name: 'Сохранить сделку' })
+    await expect(save).toHaveCount(1) // нижней полосы с кнопками нет — одна кнопка, в заголовке
+    await expect(save).toHaveText('Сохранить')
+    const head = (await page.getByRole('heading', { name: 'Новая сделка' }).boundingBox())!
+    const btn = (await save.boundingBox())!
+    expect(Math.abs(btn.y + btn.height / 2 - (head.y + head.height / 2))).toBeLessThan(12)
+    await expect(page.getByRole('link', { name: 'Календарь' })).toHaveCount(0) // нижнего меню нет
+    // «Размер позиции» доводим до низа экрана: поверх него ничего не лежит
+    const size = page.getByLabel('Размер позиции, $')
+    await size.evaluate((el) => el.scrollIntoView({ block: 'end' }))
+    const b = (await size.boundingBox())!
+    expect(b.y + b.height).toBeLessThanOrEqual(844)
+    const top = await page.evaluate(([x, y]) => (document.elementFromPoint(x, y) as HTMLElement | null)?.closest('input')?.id ?? null, [b.x + 10, b.y + b.height - 4])
+    expect(top).toBe(await size.getAttribute('id'))
+    // сохранение работает
+    await page.getByLabel('Пара').fill('BTCUSDT')
+    await page.getByLabel('Цена входа').fill('60000')
+    await page.getByLabel('Цена выхода').fill('61000')
+    await size.fill('600')
+    await save.click()
+    await expect(page).toHaveURL(/\/trades$/)
+    expect(db.inserted.find((x) => x.table === 'trades')!.body).toMatchObject({ symbol: 'BTCUSDT', size_usd: 600 })
+    await expect(page.getByRole('link', { name: 'Календарь' })).toBeVisible() // в списке сделок меню снова есть
   })
 
   test('форма сделки: проверка полей и расчёт PnL', async ({ page, db }) => {
@@ -327,7 +388,7 @@ test.describe('админка', () => {
   })
 })
 
-test('страница тарифов: Basic, Pro, Pro Plus; месяц / год; текущий тариф', async ({ page, db }) => {
+test('страница тарифов: Basic, Pro, Pro Plus; цены только за месяц; текущий тариф', async ({ page, db }) => {
   db.usage = { plan: 'pro', trades_created: 3, trade_limit: null }
   await fakeSupabase(page, db)
   // телефон: ссылка из настроек (тарифа в шапке нет); компьютер: пилюля тарифа у логотипа → окошко → «Сравнить тарифы»
@@ -348,13 +409,9 @@ test('страница тарифов: Basic, Pro, Pro Plus; месяц / год
   await expect(page.getByText('Сделок в месяц', { exact: true }).locator('visible=true')).toBeVisible()
   await expect(page.getByRole('row').filter({ hasText: 'без лимита' })).toContainText(/50.*без лимита.*без лимита/)
   await expect(page.getByText('Биржи и кошельки: Bybit по ключу, Hyperliquid по адресу').locator('visible=true')).toBeVisible()
-  await expect(page.getByText(/Цена основателя: Pro Plus за \$99 в год/)).toBeVisible()
-  // за год: −20 %, цена в пересчёте на месяц
-  await page.getByRole('radio', { name: /Год/ }).click()
-  await expect(page.getByRole('radio', { name: /Год/ })).toContainText('−20 %')
-  await expect(head).toContainText('$8')
-  await expect(head).toContainText('$12')
-  await expect(head).toContainText('$144 в год')
+  // оплаты за год пока нет: ни переключателя «Месяц / Год», ни годовых цен, ни «цены основателя»
+  await expect(page.getByRole('radio', { name: /^(Месяц|Год)/ })).toHaveCount(0)
+  await expect(page.getByText(/в год|основател/)).toHaveCount(0)
   // оплаты на сайте пока нет и про администратора не пишем
   await expect(page.getByText(/администратор/)).toHaveCount(0)
   await expect(page.getByRole('button', { name: /Хочу этот тариф|Оплатить/ })).toHaveCount(0)

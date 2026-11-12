@@ -11,7 +11,7 @@ import { fmt, plural, useT } from '@/i18n'
 import { useTrades } from '@/features/trades/api'
 import { closedTrades } from '@/lib/calc/stats'
 import { calendarSpan, compactPnl, monthSummary, monthWeeks, profitCalendar, type CalCell, type CalDay } from '@/lib/calc/calendar'
-import { formatDay, formatPercent, formatPnl } from '@/lib/format'
+import { formatDay, formatPercent, formatPnl, formatPnlShort } from '@/lib/format'
 import { parseYmd, ymd } from '@/lib/period'
 import { useMediaQuery } from '@/lib/useMediaQuery'
 import { AnimatedNumber } from '@/components/AnimatedNumber'
@@ -117,7 +117,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
           >
             {total.count > 0 ? (
               <>
-                <span className={`num truncate text-sm font-semibold ${total.pnl >= 0 ? 'text-text' : 'text-down'}`}>{formatPnl(total.pnl)}</span>
+                <span className={`num text-xs font-semibold whitespace-nowrap xl:text-sm ${total.pnl >= 0 ? 'text-text' : 'text-down'}`}>{formatPnl(total.pnl)}</span>
                 <span className="mt-0.5 truncate text-xs text-muted">{plural(total.count, c.tradesN)}</span>
               </>
             ) : (
@@ -184,9 +184,10 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
         {d.count > 0 && (
           <>
             <span
-              className={`num font-semibold ${wide ? 'mt-2 truncate text-[15px]' : 'mt-1 text-xs leading-tight tracking-tighter'} ${d.inMonth ? 'text-text' : 'text-muted/70'}`}
+              className={`num font-semibold whitespace-nowrap ${wide ? 'mt-2 text-sm xl:text-[15px]' : 'mt-1 text-xs leading-tight tracking-tighter'} ${d.inMonth ? 'text-text' : 'text-muted/70'}`}
             >
-              {wide ? formatPnl(d.pnl) : compactPnl(d.pnl)}
+              {/* в клетке — короткая сумма без копеек (полная — в подсказке title); итоги недели и месяца — полные */}
+              {wide ? formatPnlShort(d.pnl) : compactPnl(d.pnl)}
             </span>
             {wide && <span className={`mt-0.5 truncate text-xs ${d.inMonth ? 'text-text/70' : 'text-muted/60'}`}>{plural(d.count, c.tradesN)}</span>}
           </>

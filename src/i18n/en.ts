@@ -322,7 +322,6 @@ export const en: Dict = {
     feature: 'What’s included',
     yes: 'yes',
     no: 'no',
-    billing: { label: 'Billing', month: 'Monthly', year: 'Yearly', discount: '−{n}%' },
     cards: {
       forever: 'free forever',
       desc: {
@@ -331,8 +330,6 @@ export const en: Dict = {
         pro_plus: 'Fully automatic: several exchanges, wallets and Polymarket.',
       },
     },
-    perYear: '${price} per year',
-    perYearHint: 'billed yearly',
     features: {
       trades: 'Trades per month',
       tradesUnlimited: 'unlimited',
@@ -370,7 +367,6 @@ export const en: Dict = {
     screenshotsLine: { one: '{n} screenshot per trade', few: '{n} screenshots per trade', many: '{n} screenshots per trade' },
     palettesFreeLine: '3 free palettes',
     palettesAllLine: 'All palettes',
-    founder: 'Founder price: Pro Plus for $99 a year for the first 100 subscribers.',
     needPlan: 'Available on {plan}.',
     upgrade: {
       trades: 'Basic is limited to 50 trades a month. Pro and Pro Plus have no limit.',
@@ -596,7 +592,7 @@ export const en: Dict = {
         tradeWinrate: 'Share of winning trades. Breakeven trades are not counted.',
         profitFactor: 'Dollars of profit for every dollar of loss. Above 1 means you are in profit, above 2 is good.',
         dayWinrate: 'Share of trading days that closed green.',
-        avgWinLoss: 'How many times the average winning trade is bigger than the average losing one.',
+        avgWinLoss: 'Average win / average loss: how many times the average winning trade is bigger than the average losing one.',
       },
     },
     charts: {

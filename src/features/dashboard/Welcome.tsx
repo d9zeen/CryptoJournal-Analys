@@ -17,7 +17,7 @@ import { useConnections } from '@/features/connections/api'
 import { useProfile } from '@/features/settings/api'
 import { exchangeName } from '@/lib/exchanges'
 import type { ClosedTrade } from '@/lib/calc/stats'
-import { big, Counts, HalfGauge, PfCaption, Widget } from './Widgets'
+import { big, Counts, gaugeRow, HalfGauge, PfCaption, Widget } from './Widgets'
 
 export function Welcome() {
   return (
@@ -265,7 +265,7 @@ function LiveExample() {
               <div className={`${big} text-[30px]`}>{formatPnl(pnl)}</div>
             </Widget>
             <Widget label={k.tradeWinrate} hint={k.hints.tradeWinrate}>
-              <div className="flex flex-col-reverse items-start gap-2 min-[420px]:flex-row min-[420px]:items-end min-[420px]:justify-between">
+              <div className={gaugeRow}>
                 <div className={big}>{formatPercent(wins + losses ? wins / (wins + losses) : null, 0)}</div>
                 <HalfGauge a={wins} b={losses} live />
               </div>

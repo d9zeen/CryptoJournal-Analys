@@ -35,7 +35,6 @@ export function PlanCards({ to, label }: { to: string; label: string }) {
   const [hover, setHover] = useState<number | null>(null)
   const spotRef = useRef<HTMLDivElement>(null)
   useSpotlight(spotRef)
-  const t = useT()
   const front = hover ?? MAIN_INDEX
   return (
     <div className="flex flex-col items-center">
@@ -60,7 +59,6 @@ export function PlanCards({ to, label }: { to: string; label: string }) {
           </Reveal>
         ))}
       </div>
-      <p className="mt-8 text-center text-sm text-muted">{t.plans.founder}</p>
     </div>
   )
 }

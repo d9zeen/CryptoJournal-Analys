@@ -153,7 +153,7 @@ docs/SECURITY.md       вся защита (база, сайт, сборка) + 
 Пробный период: новый пользователь — Pro Plus на 7 дней (`handle_new_user`, `profiles.plan_trial`), потом сам Basic (effective_plan по plan_until).
 Проверки тарифа — в базе (`plan_trade_limit`, `connection_plan_ok`, `plan_connection_limit` → `CONNECTION_LIMIT_REACHED`, `plan_screenshot_limit`,
 `connection_active` / `connection_ok`, `dispatch_sync`), в exchange-proxy / sync-worker (`connection_active`) и в интерфейсе (`canConnect`, `activeConnections`, `planTerm`).
-Лишние подключения (Polymarket на Pro, сверх лимита) не удаляются — «на паузе». Апгрейд предлагается одной строкой (`components/UpgradeLine`). Страница `/plans` (месяц / год).
+Лишние подключения (Polymarket на Pro, сверх лимита) не удаляются — «на паузе». Апгрейд предлагается одной строкой (`components/UpgradeLine`). Страница `/plans` — цены только за месяц (оплаты за год пока нет; годовые цены в `lib/plans.ts` вернутся вместе с оплатой).
 Админка: `/admin` (features/admin); админ всегда Pro Plus и без потолков записей (`effective_plan`, 0009); таблица `admins` + функции `is_admin`, `admin_list_users`, `admin_set_plan`, `admin_reset_usage`; админку выдаёт / снимает админ на сайте (`admin_set_admin`; себя и последнего админа снять нельзя) или SQL Editor (docs/ADMIN.md).
 Скриншоты: таблица `trade_screenshots` (до 10 на сделку), файлы `{user_id}/{trade_id}/{uuid}.webp`; старое поле `trades.screenshot_path` не используется.
 Публичные URL и publishable key вписаны в `.env.example` и `.github/workflows/pages.yml` (секреты репозитория НЕ используются — старый секрет однажды перебил адрес).
