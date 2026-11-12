@@ -607,7 +607,7 @@ test('кнопка «Сохранить сделку»: крутилка в кр
   await page.getByLabel('Размер позиции, $').fill('600')
   const btn = page.getByRole('button', { name: 'Сохранить сделку' })
   await btn.click()
-  const save = page.locator('button[data-state]')
+  const save = page.locator('button[data-state]').filter({ visible: true }) // на телефоне — в заголовке, на компьютере — в нижней полосе
   await expect(save).toHaveAttribute('data-state', 'busy')
   await expect(save).toHaveAttribute('data-state', 'done')
   await expect(save.getByText('Готово')).toBeAttached()
@@ -627,7 +627,7 @@ test('кнопка «Сохранить сделку»: ошибка — кно�
   await page.getByLabel('Размер позиции, $').fill('600')
   await page.getByRole('button', { name: 'Сохранить сделку' }).click()
   await expect(page.getByRole('alert')).toContainText('Достигнут лимит Basic')
-  await expect(page.locator('button[data-state]')).toHaveAttribute('data-state', 'idle')
+  await expect(page.locator('button[data-state]').filter({ visible: true })).toHaveAttribute('data-state', 'idle')
   await expect(page).toHaveURL(/\/trades\/new$/)
 })
 
