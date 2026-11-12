@@ -137,7 +137,7 @@ function Card({
         // 2px — инлайном: класс .spot-frame в theme.css задаёт padding 1px и перебивает утилиту
         style={active ? { padding: 2 } : undefined}
       >
-        <div className="spot-card @container relative flex w-full flex-col overflow-hidden rounded-[calc(1rem-2px)] bg-surface p-6 text-center">
+        <div className="spot-card @container relative flex w-full flex-col overflow-hidden rounded-[calc(1rem-2px)] bg-surface px-5 py-6 text-center">
           {main && (
             <span className="absolute top-0 right-0 flex items-center gap-1 rounded-bl-xl bg-primary px-2 py-0.5 text-sm font-semibold text-on-primary">
               <svg viewBox="0 0 20 20" className="size-4" fill="currentColor" aria-hidden>
@@ -166,7 +166,7 @@ function Card({
           <p className="mt-3 text-sm text-muted md:min-h-[3lh] lg:min-h-[2lh]">{c.desc[plan.id]}</p>
           <ul className="mt-5 flex flex-1 flex-col gap-2">
             {features.map((f, k) => (
-              <li key={k} data-on={f.on} className={`flex items-start gap-2 ${f.on ? '' : 'text-muted opacity-50'}`}>
+              <li key={k} data-on={f.on} className={`flex items-start gap-1.5 ${f.on ? '' : 'text-muted opacity-50'}`}>
                 <svg
                   viewBox="0 0 20 20"
                   className={`mt-1 size-4 shrink-0 ${f.on ? 'text-primary' : ''}`}

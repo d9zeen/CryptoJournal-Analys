@@ -178,3 +178,30 @@ test.describe('главная на английском (как у нового 
   })
 })
 
+
+// Тарифы на главной: на широком экране ни один пункт списка не переносится — иначе выравнивание строк (useAlignedRows) даёт пустые строки у соседних карточек
+for (const lang of ['ru', null] as const)
+  test.describe(`тарифы ${lang ?? 'en'}: пункты списка в одну строку`, () => {
+    test.use({ lang })
+    test('на 1440 и 1920 каждый пункт не выше одной строки', async ({ page, db, isMobile }) => {
+      test.skip(isMobile, 'на телефоне карточки друг под другом, переносы допустимы')
+      await fakeSupabase(page, db, { signedIn: false })
+      for (const [width, height] of [
+        [1440, 900],
+        [1920, 1080],
+      ] as const) {
+        await page.setViewportSize({ width, height })
+        await page.goto('')
+        await page.locator('[data-plan="pro_plus"]').scrollIntoViewIfNeeded()
+        await page.mouse.move(1, 1)
+        await page.waitForTimeout(800)
+        await expect(page.locator('[data-plan] li')).toHaveCount(24)
+        const tall = await page.locator('[data-plan] li').evaluateAll((els) =>
+          els
+            .filter((e) => (e as HTMLElement).offsetHeight > parseFloat(getComputedStyle(e).lineHeight) * 1.6)
+            .map((e) => `${e.closest('[data-plan]')!.getAttribute('data-plan')}: ${e.textContent}`),
+        )
+        expect(tall, `ширина ${width}: пункты в две строки`).toEqual([])
+      }
+    })
+  })
