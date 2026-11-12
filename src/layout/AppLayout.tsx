@@ -48,7 +48,7 @@ export function AppLayout() {
   const phoneItems = items.filter((i) => PHONE_NAV.includes(i.to))
   useAutoSync() // подключённые биржи подтягивают сделки сами
   usePaletteSync()
-  // форма сделки (/trades/new, /trades/:id): нижнего меню нет — вместе с кнопками формы оно закрывало поля
+  // форма сделки (/trades/new, /trades/:id): нижнего меню и «+» в шапке нет — меню вместе с кнопками формы закрывало поля, «+» ведёт туда же, где человек уже есть
   const phoneNav = useMatch('/trades/:id') === null
 
   return (
@@ -132,9 +132,12 @@ export function AppLayout() {
             <Logo />
           </span>
           <div className="ml-auto flex items-center gap-1 sm:gap-3 md:gap-2">
-            <NavLink to="/trades/new" aria-label={t.tradeForm.titleNew} title={t.tradeForm.titleNew} className={`${headerBtn} md:hidden`}>
-              <Icon d="M12 5v14M5 12h14" />
-            </NavLink>
+            {/* «+ новая сделка» — кроме самой формы сделки (/trades/new, /trades/:id): человек уже на ней */}
+            {phoneNav && (
+              <NavLink to="/trades/new" aria-label={t.tradeForm.titleNew} title={t.tradeForm.titleNew} className={`${headerBtn} md:hidden`}>
+                <Icon d="M12 5v14M5 12h14" />
+              </NavLink>
+            )}
             <span className="hidden md:contents">
               <PlanMenu align="right" />
             </span>

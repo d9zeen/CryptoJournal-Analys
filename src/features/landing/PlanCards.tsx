@@ -1,6 +1,8 @@
 /**
  * Тарифы на главной — как Prism UI «Pricing» (21st.dev): три карточки. Тумблера «за год» нет: оплаты за год пока нет (решение владельца 11.11.2026).
- * Карточка: название, крупная цена в месяц, описание (text-sm), только то, что входит (галочки, список тянется flex-1), черта, кнопка у самого низа (mt-auto).
+ * Карточка: название, крупная цена в месяц, описание (text-sm), список возможностей, черта, кнопка у самого низа.
+ * Список во всех трёх карточках один и тот же, в одном порядке (как у Pro Plus): включённое — галочкой цвета кнопок,
+ * то, чего в тарифе нет, — бледным, с ✕ и зачёркнутым (для экранных чтецов — «не входит»); строки, где тарифы отличаются числом, — значением.
  * Все три карточки одной высоты при любом положении «активной» (grid items-stretch → Reveal flex → карточка h-full).
  * Правка владельца: «главная» карточка — та, что под мышкой (или в фокусе с клавиатуры), без мышки — Pro Plus.
  * Главная поднята на 20px, рамка 2px цвета кнопок, кнопка залита; остальные 94 % и придвинуты к ней (.plan-card[data-pos] в theme.css).
@@ -14,22 +16,23 @@ import { MAIN_PLAN, PLANS, type PlanInfo } from '@/lib/plans'
 import { Reveal } from './Reveal'
 
 const CHECK = 'M4 10.5l3.5 3.5L16 5.5'
+const CROSS = 'M5.5 5.5l9 9m0-9l-9 9'
 const STAR = 'M10 2.5l2.3 4.7 5.2.8-3.8 3.6.9 5.1L10 14.3l-4.6 2.4.9-5.1L2.5 8l5.2-.8L10 2.5z'
 const MAIN_INDEX = PLANS.findIndex((x) => x.id === MAIN_PLAN)
 
-/** Что входит в тариф — только включённое, как в образце */
-function useFeatures(plan: PlanInfo): string[] {
+/** Одни и те же строки у всех тарифов (порядок — как у Pro Plus): text — что написать, on — входит ли в тариф */
+function useFeatures(plan: PlanInfo): { text: string; on: boolean }[] {
   const p = useT().plans
   return [
-    plan.tradeLimit === null ? p.tradesUnlimitedLine : fmt(p.tradesLine, { n: plan.tradeLimit }),
-    p.features.base,
-    plan.connections ? plural(plan.connections, p.connectionsLine) : null,
-    plan.polymarket ? p.features.polymarket : null,
-    plan.connections ? (plan.serverSync ? p.syncServerLine : p.syncOpenLine) : null,
-    plural(plan.screenshots, p.screenshotsLine),
-    plan.allPalettes ? p.palettesAllLine : p.palettesFreeLine,
-    plan.earlyAccess ? p.features.early : null,
-  ].filter((x): x is string => x !== null)
+    { text: plan.tradeLimit === null ? p.tradesUnlimitedLine : fmt(p.tradesLine, { n: plan.tradeLimit }), on: true },
+    { text: p.features.base, on: true },
+    { text: plan.connections ? plural(plan.connections, p.connectionsLine) : p.cards.connectionsNone, on: plan.connections > 0 },
+    { text: p.features.polymarket, on: plan.polymarket },
+    { text: plan.connections ? (plan.serverSync ? p.syncServerLine : p.syncOpenLine) : p.cards.syncNone, on: plan.connections > 0 },
+    { text: plural(plan.screenshots, p.screenshotsLine), on: true },
+    { text: plan.allPalettes ? p.palettesAllLine : p.palettesFreeLine, on: true },
+    { text: p.features.early, on: plan.earlyAccess },
+  ]
 }
 
 export function PlanCards({ to, label }: { to: string; label: string }) {
@@ -123,12 +126,24 @@ function Card({
           {/* описание — сразу под ценой; список растягивается, кнопка прижата к низу: у всех карточек кнопки на одной линии */}
           <p className="mt-3 text-sm text-muted">{c.desc[plan.id]}</p>
           <ul className="mt-5 flex flex-1 flex-col gap-2">
-            {features.map((f) => (
-              <li key={f} className="flex items-start gap-2">
-                <svg viewBox="0 0 20 20" className="mt-1 size-4 shrink-0 text-primary" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <path d={CHECK} />
+            {features.map((f, k) => (
+              <li key={k} data-on={f.on} className={`flex items-start gap-2 ${f.on ? '' : 'text-muted opacity-50'}`}>
+                <svg
+                  viewBox="0 0 20 20"
+                  className={`mt-1 size-4 shrink-0 ${f.on ? 'text-primary' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={f.on ? 2.4 : 2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d={f.on ? CHECK : CROSS} />
                 </svg>
-                <span className="text-left">{f}</span>
+                <span className={`text-left ${f.on ? '' : 'line-through'}`}>
+                  {f.text}
+                  {!f.on && <span className="sr-only"> — {c.notIncluded}</span>}
+                </span>
               </li>
             ))}
           </ul>

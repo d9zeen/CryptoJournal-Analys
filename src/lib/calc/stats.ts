@@ -273,6 +273,14 @@ export function bySide(closed: ClosedTrade[]): Group<Side>[] {
 export const topMistakes = (closed: ClosedTrade[]) =>
   groupBy(closed, (t) => t.tagIds).sort((a, b) => a.lossSum - b.lossSum || b.count - a.count)
 
+/**
+ * Средний убыток по ошибке («Разбор» → «Топ ошибок»): сумма убытков сделок с этим тегом / число сделок с ним
+ * (прибыльные сделки с тегом входят в число, но не в сумму). Сделок нет — null.
+ */
+export function avgMistakeLoss(g: { lossSum: number; count: number }): number | null {
+  return g.count > 0 ? g.lossSum / g.count : null
+}
+
 /** По дням недели входа: 7 строк, Пн…Вс. */
 export function byWeekday(closed: ClosedTrade[], timeZone: string): Group<number>[] {
   const groups = groupBy(closed, (t) => [zonedParts(t.entry_at, timeZone).weekday])

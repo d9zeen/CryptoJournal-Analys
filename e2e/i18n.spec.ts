@@ -126,6 +126,22 @@ test.describe('главная на английском (как у нового 
         expect(Math.max(...btnBottom) - Math.min(...btnBottom)).toBeLessThan(2)
       }
     }
+    // один и тот же список из 8 строк; чего нет в тарифе — ✕, зачёркнуто, для экранных чтецов «not included»
+    for (const [id, off] of [
+      ['free', 4],
+      ['pro', 2],
+      ['pro_plus', 0],
+    ] as const) {
+      const items = page.locator(`[data-plan="${id}"] li`)
+      await expect(items).toHaveCount(8)
+      await expect(page.locator(`[data-plan="${id}"] li[data-on="false"]`)).toHaveCount(off)
+      await expect(page.locator(`[data-plan="${id}"] li[data-on="false"] .line-through`)).toHaveCount(off)
+      await expect(page.locator(`[data-plan="${id}"] li[data-on="false"]`).filter({ hasText: 'not included' })).toHaveCount(off)
+    }
+    await expect(page.locator('[data-plan="free"] li').nth(0)).toHaveText('50 trades per month')
+    await expect(page.locator('[data-plan="pro_plus"] li').nth(0)).toHaveText('Unlimited trades')
+    await expect(page.locator('[data-plan="free"] li').nth(3)).toContainText('Polymarket via wallet address')
+    await expect(page.locator('[data-plan="pro_plus"] li').nth(3)).toHaveText('Polymarket via wallet address')
     // описание — под ценой, до списка
     const card = page.locator('[data-plan="pro"]')
     const desc = (await card.getByText('For traders on one exchange.').boundingBox())!
