@@ -1,6 +1,7 @@
 /**
  * Тарифы на главной — как Prism UI «Pricing» (21st.dev): три карточки. Тумблера «за год» нет: оплаты за год пока нет (решение владельца 11.11.2026).
- * Карточка: название, крупная цена в месяц, только то, что входит (галочки), черта, кнопка, описание.
+ * Карточка: название, крупная цена в месяц, описание (text-sm), только то, что входит (галочки, список тянется flex-1), черта, кнопка у самого низа (mt-auto).
+ * Все три карточки одной высоты при любом положении «активной» (grid items-stretch → Reveal flex → карточка h-full).
  * Правка владельца: «главная» карточка — та, что под мышкой (или в фокусе с клавиатуры), без мышки — Pro Plus.
  * Главная поднята на 20px, рамка 2px цвета кнопок, кнопка залита; остальные 94 % и придвинуты к ней (.plan-card[data-pos] в theme.css).
  * Значок «★ Всё автоматически» — всегда у Pro Plus, как «Popular» в образце. Страница /plans — таблица (PlansTable).
@@ -119,8 +120,9 @@ function Card({
             )}
           </div>
           {!paid && <p className="mt-1 text-xs leading-5 text-muted">{c.forever}</p>}
-          {/* как в образце: кнопка сразу под списком, свободное место — внизу карточки */}
-          <ul className="mt-5 flex flex-col gap-2">
+          {/* описание — сразу под ценой; список растягивается, кнопка прижата к низу: у всех карточек кнопки на одной линии */}
+          <p className="mt-3 text-sm text-muted">{c.desc[plan.id]}</p>
+          <ul className="mt-5 flex flex-1 flex-col gap-2">
             {features.map((f) => (
               <li key={f} className="flex items-start gap-2">
                 <svg viewBox="0 0 20 20" className="mt-1 size-4 shrink-0 text-primary" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -140,7 +142,6 @@ function Card({
           >
             {label}
           </Link>
-          <p className="mt-6 text-xs leading-5 text-muted">{c.desc[plan.id]}</p>
         </div>
       </div>
     </div>

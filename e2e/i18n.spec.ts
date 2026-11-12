@@ -62,3 +62,74 @@ test.describe('в дневнике', () => {
     await expect(page.locator('html')).toHaveAttribute('lang', 'ru')
   })
 })
+
+test.describe('главная на английском (как у нового человека)', () => {
+  test.use({ lang: null })
+
+  test('биржи двумя честными строками, «How it works», 8 вопросов, неделя сделки с подписью', async ({ page, db }) => {
+    await fakeSupabase(page, db, { signedIn: false })
+    await page.goto('')
+    const ex = page.getByRole('region', { name: 'Works with' })
+    await expect(ex.getByText('Auto-sync via API')).toBeVisible()
+    await expect(ex.getByText('Upload CSV / Excel')).toBeVisible()
+    for (const name of ['Bybit', 'Hyperliquid', 'Polymarket', 'Binance', 'OKX', 'BingX', 'Bitget', 'MEXC', 'any other exchange']) await expect(ex.getByText(name, { exact: true })).toBeVisible()
+    await expect(page.getByText(/Coming via API/)).toHaveCount(0)
+    // шаг 3 — неделя: 7 дней, день сделки выделен, итог недели и подпись из данных демо
+    const path = page.locator('#features')
+    await path.scrollIntoViewIfNeeded()
+    await expect(path.locator('[data-day]')).toHaveCount(7)
+    await expect(path.locator('[data-day].ring-2')).toHaveCount(1)
+    await expect(path.getByText('Week total')).toBeVisible()
+    await expect(path.locator('[data-caption]')).toHaveText(/^[A-Z][a-z]{2} \d{1,2}: −\$61\.20, one trade without a stop$/)
+    await expect(page.locator('#faq details')).toHaveCount(8)
+    await expect(page.getByText('Do I need a card for the trial?')).toBeVisible()
+    if ((page.viewportSize()?.width ?? 0) >= 768) {
+      await page.getByRole('link', { name: 'How it works' }).click()
+      await expect(page).toHaveURL(/#features$/)
+    }
+  })
+
+  test('шапка телефона: «Start free» вместо «Log in», всё помещается на 360px', async ({ page, db }) => {
+    await page.setViewportSize({ width: 360, height: 760 })
+    await fakeSupabase(page, db, { signedIn: false })
+    await page.goto('')
+    const header = page.locator('header')
+    await expect(header.getByRole('link', { name: 'Start free' })).toBeVisible()
+    await expect(header.getByRole('link', { name: 'Log in' })).toHaveCount(0)
+    await expect(page.getByRole('link', { name: 'Log in' }).first()).toBeVisible() // на первом экране
+    const box = (await header.getByRole('link', { name: 'Start free' }).boundingBox())!
+    expect(box.x + box.width).toBeLessThanOrEqual(360)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360)
+  })
+
+  test('тарифы: карточки одной высоты, кнопки на одной линии, описание под ценой', async ({ page, db, isMobile }) => {
+    test.skip(isMobile, 'на телефоне карточки друг под другом')
+    await fakeSupabase(page, db, { signedIn: false })
+    for (const width of [1024, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 1000 })
+      await page.goto('')
+      await page.locator('[data-plan="pro_plus"]').scrollIntoViewIfNeeded()
+      for (const hover of [null, 'free', 'pro']) {
+        if (hover) await page.locator(`[data-plan="${hover}"]`).hover()
+        else await page.mouse.move(1, 1)
+        await page.waitForTimeout(700)
+        // высота без учёта scale / translate (offsetHeight) и место кнопки внутри карточки
+        const m = await page.locator('[data-plan]').evaluateAll((els) =>
+          els.map((el) => {
+            const card = el as HTMLElement
+            const btn = card.querySelector('a') as HTMLElement
+            return { h: card.offsetHeight, btn: btn.getBoundingClientRect().bottom - card.getBoundingClientRect().top, scale: card.getBoundingClientRect().height / card.offsetHeight }
+          }),
+        )
+        expect(new Set(m.map((x) => x.h)).size, `ширина ${width}, мышка на ${hover ?? 'ничём'}`).toBe(1)
+        const btnBottom = m.map((x) => x.btn / x.scale)
+        expect(Math.max(...btnBottom) - Math.min(...btnBottom)).toBeLessThan(2)
+      }
+    }
+    // описание — под ценой, до списка
+    const card = page.locator('[data-plan="pro"]')
+    const desc = (await card.getByText('For traders on one exchange.').boundingBox())!
+    const list = (await card.locator('ul').boundingBox())!
+    expect(desc.y).toBeLessThan(list.y)
+  })
+})

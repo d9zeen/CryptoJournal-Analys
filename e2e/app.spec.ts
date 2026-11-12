@@ -316,6 +316,8 @@ test.describe('оформление', () => {
   })
 
   test('главная: тема переключается в шапке, без вспышки после перезагрузки', async ({ page, db }) => {
+    // уже 440px кнопки темы в шапке главной нет (там «Начать»), тема — в настройках
+    if ((page.viewportSize()?.width ?? 0) < 440) await page.setViewportSize({ width: 440, height: 900 })
     await fakeSupabase(page, db, { signedIn: false })
     await page.goto('')
     const html = page.locator('html')

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEMO_FEATURED, DEMO_TRADES, demoAccount, demoMistakeRows } from './demo'
+import { DEMO_FEATURED, DEMO_TRADES, demoAccount, demoMistakeRows, demoWeek } from './demo'
 
 describe('demoAccount', () => {
   it('одно и то же зерно — одни и те же сделки (главная выглядит одинаково)', () => {
@@ -77,6 +77,19 @@ describe('demoAccount', () => {
       expect(own.count).toBe(same.length)
       expect(own.pnl).toBeCloseTo(same.reduce((s, x) => s + x.pnl, 0), 2)
       for (const r of rows) expect(r.pnl).toBeLessThan(0)
+      // шаг 3 — неделя с этой сделкой: день сделки = сумма из карточки и входит в строку «Разбора»
+      const week = demoWeek(a.trades, a.featuredId)
+      expect(week.days).toHaveLength(7)
+      expect(new Date(`${week.days[0].date}T00:00:00Z`).getUTCDay()).toBe(1) // с понедельника
+      expect(week.featured).toEqual({ date: tr.exit_at.slice(0, 10), pnl: DEMO_FEATURED.pnl, count: 1, mistake: DEMO_FEATURED.mistake })
+      expect(week.days.find((d) => d.date === week.featured.date)!.pnl).toBeCloseTo(DEMO_FEATURED.pnl, 2)
+      expect(same.some((x) => x.id === a.featuredId)).toBe(true)
+      // итог недели = сумма всех демо-сделок этих 7 дней
+      const inWeek = a.trades.filter((x) => week.days.some((d) => d.date === x.exit_at.slice(0, 10)))
+      expect(week.total.count).toBe(inWeek.length)
+      expect(week.total.pnl).toBeCloseTo(inWeek.reduce((s, x) => s + x.pnl, 0), 2)
+      // и совпадает с календарём настоящего дашборда (pnlByDay)
+      for (const d of week.days) expect(d.pnl).toBeCloseTo(a.days.find((x) => x.date === d.date)?.pnl ?? 0, 2)
     }
   })
 })

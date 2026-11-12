@@ -53,6 +53,25 @@ export function demoMistakeRows(trades: ClosedTrade[], year: number, month: numb
   }).filter((r) => r.count > 0)
 }
 
+/**
+ * Неделя (пн–вс, UTC) со сделкой из «пути» — шаг 3 на главной: суммы и число сделок по дням, итог недели
+ * и сама сделка (день, сумма, ошибка) для подписи под неделей. Всё из тех же демо-сделок, что «Разбор» рядом.
+ */
+export function demoWeek(trades: ClosedTrade[], featuredId: string) {
+  const tr = trades.find((x) => x.id === featuredId) ?? trades[trades.length - 1]
+  const day0 = Date.parse(`${tr.exit_at.slice(0, 10)}T00:00:00Z`)
+  const monday = day0 - ((new Date(day0).getUTCDay() + 6) % 7) * DAY
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const date = new Date(monday + i * DAY).toISOString().slice(0, 10)
+    const hit = trades.filter((x) => x.exit_at.slice(0, 10) === date)
+    return { date, day: Number(date.slice(8)), count: hit.length, pnl: Math.round(hit.reduce((s, x) => s + x.pnl, 0) * 100) / 100 }
+  })
+  const total = { count: days.reduce((s, d) => s + d.count, 0), pnl: Math.round(days.reduce((s, d) => s + d.pnl, 0) * 100) / 100 }
+  const date = tr.exit_at.slice(0, 10)
+  const own = days.find((d) => d.date === date)!
+  return { days, total, featured: { date, pnl: own.pnl, count: own.count, mistake: (tr.tagIds[0] ?? DEMO_FEATURED.mistake) as DemoMistake } }
+}
+
 /** Сколько сделок в день: 0…4, чаще 0–1 (в среднем ≈ 1 в день — 60 сделок примерно за два месяца) */
 function dayCount(r: number): number {
   return r < 0.4 ? 0 : r < 0.68 ? 1 : r < 0.86 ? 2 : r < 0.95 ? 3 : 4
