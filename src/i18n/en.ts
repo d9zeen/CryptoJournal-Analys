@@ -324,7 +324,10 @@ export const en: Dict = {
     yes: 'yes',
     no: 'no',
     cards: {
-      forever: 'free forever',
+      forever: '/ forever',
+      notIncluded: 'not included',
+      connectionsNone: 'Exchange and wallet connections',
+      syncNone: 'Trade sync with exchanges',
       desc: {
         free: 'Try the journal: exchange files and manual trades.',
         pro: 'For traders on one exchange.',
@@ -523,6 +526,7 @@ export const en: Dict = {
       title: 'Profit calendar',
       openDay: 'Open trades of {day}',
       monthTotal: 'Month total',
+      monthLine: '{trades} · win rate {winrate}',
       maxWin: 'Max win',
       maxLoss: 'Max loss',
       prev: 'Previous month',
@@ -640,6 +644,7 @@ export const en: Dict = {
       avgR: 'Avg R',
       pnl: 'PnL',
       losses: 'Losses',
+      avgLoss: 'Avg loss',
       showAll: 'Show all ({n})',
       showLess: 'Collapse',
     },

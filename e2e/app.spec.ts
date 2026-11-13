@@ -214,6 +214,22 @@ test.describe('дашборд и сделки', () => {
     await expect(page.getByRole('button', { name: 'Загрузить файл с биржи' })).toBeVisible()
   })
 
+  test('шапка телефона 390px: «+ Новая сделка» есть на /trades, но не на /trades/new и /trades/:id', async ({ page, db }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    db.trades = [makeTrade(0)]
+    await fakeSupabase(page, db)
+    const plus = page.locator('header').getByRole('link', { name: 'Новая сделка' })
+    await page.goto('trades')
+    await expect(plus).toBeVisible()
+    await plus.click()
+    await expect(page).toHaveURL(/\/trades\/new$/)
+    await expect(page.getByRole('heading', { name: 'Новая сделка' })).toBeVisible()
+    await expect(plus).toHaveCount(0)
+    await page.goto(`trades/${db.trades[0].id}`)
+    await expect(page.getByRole('button', { name: 'Сохранить сделку' })).toBeVisible()
+    await expect(plus).toHaveCount(0)
+  })
+
   test('форма сделки на телефоне 390px: «Сохранить» в заголовке, нижнего меню нет, поля не закрыты', async ({ page, db }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     await fakeSupabase(page, db)
@@ -761,4 +777,38 @@ test('404 для гостя: только «На главную»', async ({ pag
   await expect(page.getByRole('link', { name: 'Статистика' })).toHaveCount(0)
   await page.getByRole('link', { name: 'На главную' }).click()
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Дневник сделок')
+})
+
+test('«Топ ошибок»: «Ср. убыток» и «Убытки» без колонки PnL, полоска справа налево', async ({ page, db }) => {
+  db.listNames = ['Пробой', 'Отбой', 'Вход без стопа', 'FOMO']
+  // s3: три убыточные сделки −100, −200, −300 и одна прибыльная → убытки −600, ср. убыток −600 / 4 = −150; s4: одна −50
+  db.trades = [
+    makeTrade(0, { pnl: -100, trade_mistakes: [{ tag_id: 's3' }] }),
+    makeTrade(1, { pnl: -200, trade_mistakes: [{ tag_id: 's3' }] }),
+    makeTrade(2, { pnl: -300, trade_mistakes: [{ tag_id: 's3' }] }),
+    makeTrade(3, { pnl: 80, trade_mistakes: [{ tag_id: 's3' }] }),
+    makeTrade(4, { pnl: -50, trade_mistakes: [{ tag_id: 's4' }] }),
+  ]
+  await fakeSupabase(page, db)
+  await page.goto('analysis')
+  const card = page.getByRole('heading', { name: 'Топ ошибок' }).locator('..')
+  await expect(card.locator('tbody tr')).toHaveCount(2)
+  const heads = await card.locator('thead th').filter({ visible: true }).allTextContents()
+  expect(heads).toEqual(['Название', 'Ср. убыток', 'Убытки'])
+  const first = card.locator('tbody tr').first()
+  await expect(first).toContainText('Вход без стопа')
+  await expect(first.locator('[data-money]').nth(0)).toHaveText(/−150,00\s\$/)
+  await expect(first.locator('[data-money]').nth(1)).toHaveText(/−600,00\s\$/)
+  // полоска: красная, от правого края; у самой дорогой ошибки — на всю ширину трека, у второй — 50 / 600
+  const widths = await card.locator('[data-bar="loss"] i').evaluateAll((els) =>
+    els.map((e) => {
+      const r = e.getBoundingClientRect()
+      const t = e.parentElement!.getBoundingClientRect()
+      return { cls: e.className, share: Math.round((r.width / t.width) * 100), right: Math.round(t.right - r.right) }
+    }),
+  )
+  expect(widths.map((w) => w.share)).toEqual([100, 8])
+  expect(widths.every((w) => w.cls.includes('bg-down') && w.right === 0)).toBe(true)
+  // в остальных таблицах — по-прежнему от середины
+  await expect(page.locator('[data-bar="true"] i.bg-down.right-1\\/2').first()).toBeAttached()
 })

@@ -1,7 +1,9 @@
 /**
  * «Календарь прибыли» (вкладка /calendar), в тон «Статистике»: прибыльный день — фиолетовый, убыточный — серый,
  * яркость клетки — по сумме дня относительно самого большого дня месяца (тепловая карта).
- * Справа (на телефоне — ниже) — итоги месяца: результат, торговые дни, лучший и худший день, недели, дни недели.
+ * Справа (на телефоне — ниже) — итоги месяца: на широком экране (xl) первой карточкой «Итог месяца» (результат, сделки, винрейт,
+ * лучшая / худшая сделка; рамка цвета кнопок), затем торговые дни, лучший и худший день, недели, дни недели.
+ * Уже xl «Итог месяца» — строкой сразу под сеткой. Полоска палитры (PaletteStrip) — всегда под календарём.
  * Свой месяц (стрелки), не зависит от фильтра периода. Дни соседних месяцев — заштрихованы.
  */
 import { intlLocale } from '@/lib/locale'
@@ -38,6 +40,8 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
   const t = useT()
   const c = t.dashboard.calendar
   const wide = useMediaQuery('(min-width: 768px)')
+  // широкий экран (xl): «Итог месяца» — в правой колонке, над «Торговые дни»; уже — строкой под сеткой
+  const side = useMediaQuery('(min-width: 1280px)')
   const now = new Date()
   const [view, setView] = useState({ y: now.getFullYear(), m: now.getMonth() })
 
@@ -81,7 +85,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
         <div
           key={shownMonth.current}
           className={`mt-4 grid flex-1 gap-1.5 ${wide ? 'grid-cols-[repeat(7,minmax(0,1fr))_minmax(0,1fr)]' : 'grid-cols-7'} ${isLoading || isPlaceholderData ? 'opacity-60' : ''}`}
-          style={wide ? { gridTemplateRows: `auto repeat(${cal.weeks.length}, minmax(0, 1fr)) auto` } : undefined}
+          style={wide ? { gridTemplateRows: `auto repeat(${cal.weeks.length}, minmax(0, 1fr))${side ? '' : ' auto'}` } : undefined}
         >
           {t.period.weekdaysShort.map((w) => (
             <div key={w} className="pb-1 text-center text-xs text-muted">
@@ -92,7 +96,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
           {cal.weeks.map((week, row) => (
             <Week key={week.days[0].date} days={week.days} total={week.total} row={row} />
           ))}
-          <MonthTotal />
+          {!side && <MonthTotal />}
         </div>
         {/* цвета плюса и минуса — прямо под календарём (и в «Настройки → Оформление»): выбор сразу перекрашивает клетки */}
         <div className="mt-3">
@@ -207,6 +211,25 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
     )
   }
 
+  /** «Итог месяца» в правой колонке (xl): результат крупно, «16 сделок · винрейт 50 %», лучшая / худшая сделка; рамка — цвет кнопок */
+  function MonthTotalCard() {
+    return (
+      <section data-shot="month-total" style={{ '--i': 0 } as CSSProperties} className="rise rounded-lg border border-primary bg-surface p-5">
+        <h2 className="text-sm text-muted">{c.monthTotal}</h2>
+        <div className={`num mt-1 text-4xl font-semibold ${m.count === 0 ? 'text-muted' : m.pnl >= 0 ? 'text-up' : 'text-down'}`}>
+          {m.count ? <AnimatedNumber value={m.pnl} format={formatPnl} rollKey={shownMonth.current} /> : '—'}
+        </div>
+        <p className="mt-1 text-sm text-muted">
+          {fmt(c.monthLine, { trades: plural(m.count, c.tradesN), winrate: m.count ? formatPercent(m.wins / m.count, 0) : '—' })}
+        </p>
+        <dl className="mt-3 grid gap-2 border-t border-border pt-3 text-sm">
+          <Row label={c.maxWin} value={m.best === null ? '—' : formatPnl(m.best)} up={m.best !== null} />
+          <Row label={c.maxLoss} value={m.worst === null ? '—' : formatPnl(m.worst)} down={m.worst !== null} />
+        </dl>
+      </section>
+    )
+  }
+
   /** Итоги месяца: результат, торговые дни (плюс / минус), лучший и худший день, недели и дни недели полосками */
   function MonthPanel() {
     // недели по рядам календаря, огрызки короче 4 дней приклеены к соседней (выбор владельца 07.11.2026)
@@ -217,7 +240,8 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
     const wdMax = Math.max(1e-9, ...sum.weekdays.map((w) => Math.abs(w.pnl)))
     const dayShare = sum.upDays + sum.downDays ? sum.upDays / (sum.upDays + sum.downDays) : 0
     return (
-      <aside data-shot="calendar-panel" className="flex flex-col gap-3 xl:self-start">
+      <aside data-shot="calendar-panel" className="flex flex-col gap-3 xl:gap-4 xl:self-start">
+        {side && <MonthTotalCard />}
         {m.count === 0 && (
           <section style={{ '--i': 1 } as CSSProperties} className="rise rounded-lg border border-border bg-surface p-4">
             <p className="text-sm text-muted">{c.empty}</p>
@@ -245,7 +269,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
 
             <section style={{ '--i': 3 } as CSSProperties} className="rise rounded-lg border border-border bg-surface p-4">
               <h2 className="text-xs text-muted">{c.byWeek}</h2>
-              <div className="mt-2 grid gap-2">
+              <div className="mt-2 grid gap-2.5">
                 {weeks.map((w) => (
                   <div key={w.from} className="grid grid-cols-[72px_minmax(0,1fr)_auto] items-center gap-2 text-xs">
                     <span className="num text-muted">{weekLabel(w.from, w.to)}</span>
@@ -258,11 +282,11 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
               </div>
             </section>
 
-            {/* высота по содержимому: график дней недели фиксированной высоты (160px), без пустоты сверху */}
+            {/* высота по содержимому: график дней недели фиксированной высоты (176px), без пустоты сверху */}
             <section style={{ '--i': 4 } as CSSProperties} className="rise rounded-lg border border-border bg-surface p-4">
               <h2 className="text-xs text-muted">{c.byWeekday}</h2>
               {/* линия нуля посередине: прибыль вверх, убыток вниз, сумма над / под столбиком; дни без сделок — «—» */}
-              <div data-shot="weekday-chart" className="relative mt-3 grid h-40 grid-cols-7 gap-1.5">
+              <div data-shot="weekday-chart" className="relative mt-3 grid h-44 grid-cols-7 gap-1.5">
                 <i aria-hidden className="pointer-events-none absolute inset-x-0 top-[calc(50%-0.625rem)] border-t border-border" />
                 {sum.weekdays.map((w, i) => {
                   const h = w.count ? `${Math.max(4, (Math.abs(w.pnl) / wdMax) * 70)}%` : 0
@@ -304,14 +328,14 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
   }
 }
 
-function Row({ label, sub, value, down = false }: { label: string; sub?: string; value: string; down?: boolean }) {
+function Row({ label, sub, value, down = false, up = false }: { label: string; sub?: string; value: string; down?: boolean; up?: boolean }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
       <dt className="text-muted">
         {label}
         {sub && <span className="ml-1.5 text-xs text-muted/70">{sub}</span>}
       </dt>
-      <dd className={`num font-semibold ${down ? 'text-down' : ''}`}>{value}</dd>
+      <dd className={`num font-semibold ${down ? 'text-down' : up ? 'text-up' : ''}`}>{value}</dd>
     </div>
   )
 }

@@ -13,6 +13,7 @@ import {
   pnlByDay,
   summarize,
   topMistakes,
+  avgMistakeLoss,
   type StatTrade,
 } from './stats'
 import { zonedParts } from '@/lib/tz'
@@ -205,6 +206,12 @@ describe('группировки', () => {
       ['fomo', -80, 2],
       ['nostop', -50, 2],
     ])
+  })
+  it('avgMistakeLoss: убытки / число сделок с ошибкой (прибыльная с тегом — в числе, не в сумме)', () => {
+    const g = topMistakes(closed)
+    expect(g.map((x) => avgMistakeLoss(x))).toEqual([-40, -25])
+    expect(avgMistakeLoss({ lossSum: -333.77, count: 3 })).toBeCloseTo(-111.2567, 4)
+    expect(avgMistakeLoss({ lossSum: 0, count: 0 })).toBeNull()
   })
 })
 
