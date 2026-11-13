@@ -15,14 +15,13 @@ const { chromium } = require('playwright')
 const { writeFileSync } = require('node:fs')
 
 async function search(page, q, shot) {
-  await page.goto('https://21st.dev/community/components', { waitUntil: 'domcontentloaded', timeout: 60000 })
-  await page.waitForTimeout(4000)
-  await page.keyboard.press('Control+K')
-  await page.waitForTimeout(800)
-  await page.keyboard.type(q, { delay: 50 })
-  await page.waitForTimeout(5000)
+  // поиск по библиотеке ссылкой: qt — запрос, qs=downloads — сначала самые скачиваемые (проверенные людьми)
+  const url = `https://21st.dev/community/components?qt=${encodeURIComponent(q)}&qs=downloads`
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 })
+  await page.waitForTimeout(7000)
+  console.log(`Выдача: ${url}`)
   const links = await page.$$eval('a[href]', (as) => [
-    ...new Set(as.map((a) => a.getAttribute('href') || '').filter((h) => /^\/@[^/]+\/components\/[^/?#]+/.test(h))),
+    ...new Set(as.map((a) => a.getAttribute('href') || '').filter((h) => /^\/@[^/]+\/components\/[^?#]+$/.test(h))),
   ])
   for (const h of links.slice(0, 24)) console.log(`https://21st.dev${h}`)
   if (!links.length) console.log('Ничего не найдено (или сайт поменял вёрстку) — посмотри снимок выдачи.')
