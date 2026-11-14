@@ -1,10 +1,14 @@
+/**
+ * Одна широкая таблица «Разбора» (сетапы, ошибки, пары, эмоции, время суток, плечо) — образец 21st.dev inline-analytics-table:
+ * сортировка по клику на заголовок (PnL, винрейт, число сделок; для ошибок — убытки), внизу строка «Итого».
+ * Деньги не обрезаются (data-money, e2e); полоска — PnL от середины, в «Ошибках» — красная справа налево.
+ */
 import { useState, type CSSProperties } from 'react'
 import { RollNumber } from '@/components/RollNumber'
 import { fmt, useT } from '@/i18n'
 import { Card } from '@/components/ui/Card'
 import { formatPercent, formatPnl, formatR, pnlClass } from '@/lib/format'
-import { avgMistakeLoss } from '@/lib/calc/stats'
-import type { Group } from '@/lib/calc/stats'
+import { avgMistakeLoss, sortGroups, type Group, type GroupSortKey } from '@/lib/calc/stats'
 
 export type Row = { id: string; label: string; group: Group<unknown> }
 
@@ -12,7 +16,9 @@ type Props = {
   title: string
   hint?: string
   rows: Row[]
-  /** mistakes — вместо винрейта и R показываем сумму убытков */
+  /** «Итого» по всем сделкам периода (сделка с двумя тегами — один раз) */
+  total?: Group<unknown>
+  /** mistakes — вместо винрейта и R: средний убыток и сумма убытков */
   mode?: 'default' | 'mistakes'
   empty?: string
   limit?: number
@@ -22,40 +28,66 @@ type Props = {
   rollKey?: unknown
 }
 
-/** Таблица статистики по группам (сетапы, эмоции, ошибки, пары…) */
-export function GroupTable({ title, hint, rows, mode = 'default', empty, limit = 5, i = 0, rollKey }: Props) {
+export function GroupTable({ title, hint, rows, total, mode = 'default', empty, limit = 12, i = 0, rollKey }: Props) {
   const t = useT()
-  const [expanded, setExpanded] = useState(false)
-  const visible = expanded ? rows : rows.slice(0, limit)
   const c = t.dashboard.tables
-  const num = 'px-2 py-2.5 text-right whitespace-nowrap'
-  // полоска под названием — PnL от середины: плюс вправо (--color-up), минус влево (--color-down), длина — доля от самого большого |PnL| в таблице.
-  // «Топ ошибок» (mistakes): убытки всегда в минусе — полоска красная справа налево на всю ширину трека, длина — доля от самых больших убытков
-  const val = (g: Group<unknown>) => (mode === 'mistakes' ? g.lossSum : g.pnl)
+  const mistakes = mode === 'mistakes'
+  // по умолчанию — по PnL (в «Ошибках» — по убыткам: самые дорогие сверху)
+  const [sort, setSort] = useState<{ key: GroupSortKey; dir: 'asc' | 'desc' }>({ key: mistakes ? 'loss' : 'pnl', dir: 'desc' })
+  const [expanded, setExpanded] = useState(false)
+  const sorted = sortGroups(
+    rows.map((r) => r.group),
+    sort.key,
+    sort.dir,
+  ).map((g) => rows.find((r) => r.group === g)!)
+  const visible = expanded ? sorted : sorted.slice(0, limit)
+  const num = 'px-2 py-2.5 text-right whitespace-nowrap sm:px-3'
+  const val = (g: Group<unknown>) => (mistakes ? g.lossSum : g.pnl)
   const maxAbs = Math.max(1e-9, ...rows.map((r) => Math.abs(val(r.group))))
 
+  const th = (key: GroupSortKey | null, label: string, extra = '') => {
+    if (!key) return <th className={`${num} border-b-2 border-transparent font-normal ${extra}`}>{label}</th>
+    const active = sort.key === key
+    return (
+      // как в образце: под активным заголовком — линия цвета кнопок
+      <th aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'} className={`${num} border-b-2 font-normal ${active ? 'border-primary' : 'border-transparent'} ${extra}`}>
+        <button
+          type="button"
+          aria-label={fmt(t.analysis.sortBy, { col: label })}
+          onClick={() => setSort((s) => (s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' }))}
+          className={`group inline-flex items-center gap-1 transition-colors hover:text-text ${active ? 'font-medium text-text' : ''}`}
+        >
+          <span aria-hidden className={`text-[10px] ${active ? '' : 'opacity-0 group-hover:opacity-40'}`}>
+            {active && sort.dir === 'asc' ? '▲' : '▼'}
+          </span>
+          {label}
+        </button>
+      </th>
+    )
+  }
+
   return (
-    <Card className="rise !p-4" style={{ '--i': i } as CSSProperties}>
-      <h2 className="font-semibold">{title}</h2>
-      {hint && <p className="mt-0.5 text-xs text-muted">{hint}</p>}
+    <Card className="rise !p-4 sm:!p-5" style={{ '--i': i } as CSSProperties}>
+      <h2 className="sr-only">{title}</h2>
+      {hint && <p className="mb-2 text-xs text-muted">{hint}</p>}
       {rows.length === 0 ? (
-        <p className="mt-3 text-sm text-muted">{empty}</p>
+        <p className="text-sm text-muted">{empty}</p>
       ) : (
-        <table className="mt-3 w-full text-sm">
-          <thead className="text-xs text-muted">
+        <table data-shot="analysis-table" className="w-full text-sm">
+          <thead className="align-bottom text-xs text-muted">
             <tr>
-              <th className="w-full py-1 pr-2 text-left font-normal">{c.name}</th>
-              {mode === 'mistakes' ? (
-                // PnL здесь почти всегда равен «Убыткам» (ошибку ставят на убыточную сделку) — вместо него средний убыток
+              <th className="w-full border-b-2 border-transparent py-2.5 pr-3 text-left font-normal">{c.name}</th>
+              {th('count', c.count, 'hidden sm:table-cell')}
+              {mistakes ? (
                 <>
-                  <th className={`${num} font-normal`}>{c.avgLoss}</th>
-                  <th className={`${num} pr-0 font-normal`}>{c.losses}</th>
+                  {th(null, c.avgLoss)}
+                  {th('loss', c.losses, 'pr-0')}
                 </>
               ) : (
                 <>
-                  <th className={`${num} font-normal`}>{c.winrate}</th>
-                  <th className={`${num} hidden font-normal sm:table-cell`}>{c.avgR}</th>
-                  <th className={`${num} pr-0 font-normal`}>{c.pnl}</th>
+                  {th('winrate', c.winrate)}
+                  {th(null, c.avgR, 'hidden sm:table-cell')}
+                  {th('pnl', c.pnl, 'pr-0')}
                 </>
               )}
             </tr>
@@ -66,12 +98,14 @@ export function GroupTable({ title, hint, rows, mode = 'default', empty, limit =
                 {/* название ужимается и переносится, деньги — никогда: у колонок с суммами whitespace-nowrap и ширина по содержимому */}
                 <td className="max-w-0 py-2.5 pr-3" title={label}>
                   <div className="[overflow-wrap:anywhere]">{label}</div>
-                  {mode === 'mistakes' ? (
-                    <div data-bar="loss" className="relative mt-1.5 h-1 rounded-full bg-surface-2" aria-hidden>
+                  {/* на телефоне колонки «Сделок» нет (тесно для сумм) — число под названием */}
+                  <div className="mt-1 text-xs text-muted sm:hidden">{fmt(t.dashboard.tooltipTrades, { n: g.count })}</div>
+                  {mistakes ? (
+                    <div data-bar="loss" className="relative mt-1.5 h-1 max-w-md rounded-full bg-surface-2" aria-hidden>
                       <i className="absolute inset-y-0 right-0 rounded-full bg-down" style={{ width: `${(Math.abs(val(g)) / maxAbs) * 100}%` }} />
                     </div>
                   ) : (
-                    <div data-bar className="relative mt-1.5 h-1 rounded-full bg-surface-2" aria-hidden>
+                    <div data-bar className="relative mt-1.5 h-1 max-w-md rounded-full bg-surface-2" aria-hidden>
                       <i className="absolute inset-y-[-2px] left-1/2 w-px bg-border" />
                       <i
                         className={`absolute inset-y-0 ${val(g) >= 0 ? 'left-1/2 rounded-r-full bg-up' : 'right-1/2 rounded-l-full bg-down'}`}
@@ -79,10 +113,9 @@ export function GroupTable({ title, hint, rows, mode = 'default', empty, limit =
                       />
                     </div>
                   )}
-                  {/* число сделок — под названием на всех ширинах (отдельной колонки нет — суммам хватает места) */}
-                  <div className="mt-1 text-xs text-muted">{fmt(t.dashboard.tooltipTrades, { n: g.count })}</div>
                 </td>
-                {mode === 'mistakes' ? (
+                <td className={`num ${num} hidden text-muted sm:table-cell`}>{g.count}</td>
+                {mistakes ? (
                   <>
                     <td data-money className={`num ${num} ${pnlClass(avgMistakeLoss(g))}`}>
                       <RollNumber text={formatPnl(avgMistakeLoss(g))} token={rollKey} />
@@ -103,6 +136,36 @@ export function GroupTable({ title, hint, rows, mode = 'default', empty, limit =
               </tr>
             ))}
           </tbody>
+          {total && (
+            <tfoot>
+              {/* «Итого» — как Total в образце: отдельная строка с фоном */}
+              <tr data-total className="border-t-2 border-border bg-surface-2/60 font-semibold">
+                <td className="rounded-l-md py-2.5 pr-3 pl-2">
+                  {t.analysis.total}
+                  <div className="text-xs font-normal text-muted sm:hidden">{fmt(t.dashboard.tooltipTrades, { n: total.count })}</div>
+                </td>
+                <td className={`num ${num} hidden sm:table-cell`}>{total.count}</td>
+                {mistakes ? (
+                  <>
+                    <td data-money className={`num ${num} ${pnlClass(avgMistakeLoss(total))}`}>
+                      {formatPnl(avgMistakeLoss(total))}
+                    </td>
+                    <td data-money className={`num ${num} rounded-r-md pr-2 ${pnlClass(total.lossSum)}`}>
+                      {formatPnl(total.lossSum)}
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td className={num}>{formatPercent(total.winrate, 0)}</td>
+                    <td className={`num ${num} hidden sm:table-cell ${pnlClass(total.avgR)}`}>{formatR(total.avgR)}</td>
+                    <td data-money className={`num ${num} rounded-r-md pr-2 ${pnlClass(total.pnl)}`}>
+                      {formatPnl(total.pnl)}
+                    </td>
+                  </>
+                )}
+              </tr>
+            </tfoot>
+          )}
         </table>
       )}
       {rows.length > limit && (

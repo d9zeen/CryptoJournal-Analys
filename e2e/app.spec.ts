@@ -147,7 +147,9 @@ test.describe('дашборд и сделки', () => {
     await link.click()
     await expect(page).toHaveURL(/\/analysis$/)
     await expect(page.getByRole('heading', { name: 'Разбор сделок' })).toBeVisible()
-    for (const name of ['Сетапы', 'Топ ошибок', 'Пары', 'Эмоции', 'Long / Short']) await expect(page.getByRole('heading', { name })).toBeVisible()
+    // одна таблица и вкладки над ней; Long / Short — сводка сверху
+    for (const name of ['Сетапы', 'Ошибки', 'Пары', 'Эмоции', 'Время суток', 'Плечо']) await expect(page.getByRole('tab', { name: new RegExp(`^${name}`) })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Long / Short' })).toBeAttached()
   })
 
   test('«Разбор»: суммы в таблицах видны целиком на 390 и 1440', async ({ page, db }) => {
@@ -164,8 +166,8 @@ test.describe('дашборд и сделки', () => {
     await fakeSupabase(page, db)
     for (const width of [390, 1440]) {
       await page.setViewportSize({ width, height: 900 })
-      await page.goto('analysis')
-      await expect(page.getByRole('heading', { name: 'Топ ошибок' })).toBeVisible()
+      for (const tab of ['setups', 'mistakes', 'pairs', 'emotions']) {
+      await page.goto(`analysis?tab=${tab}`)
       const cells = page.locator('[data-money]').filter({ visible: true })
       await expect(cells.first()).toContainText('$')
       const clipped = await cells.evaluateAll((els) =>
@@ -179,6 +181,7 @@ test.describe('дашборд и сделки', () => {
           .map((e) => e.textContent),
       )
       expect(clipped, `обрезаны на ${width}px`).toEqual([])
+      }
     }
   })
 
@@ -724,12 +727,14 @@ test('«Разбор»: сводка Long / Short наверху, строка-�
   // сводка — в шапке страницы, выше таблиц
   const head = (await page.getByRole('heading', { name: 'Разбор сделок' }).boundingBox())!
   const sideBox = (await side.boundingBox())!
-  const setups = (await page.getByRole('heading', { name: 'Сетапы' }).boundingBox())!
+  const setups = (await page.getByRole('tablist', { name: 'Разрез' }).boundingBox())!
   expect(sideBox.y).toBeLessThan(setups.y)
   expect(sideBox.y).toBeLessThan(head.y + 120)
   // makeTrade: прибыль 60+i, убыток −40−i; s1 «Пробой уровня» — нечётные i (+172), s2 «Отбой» — чётные (+178); ошибка s3 — i = 0,3,6,9 (−178)
   await expect(page.locator('[data-shot="insight"]')).toHaveText(/^Лучше всего работает: Отбой \(\+178,00\s\$\)\. Дороже всего обходится: Вход без стопа \(−178,00\s\$\)\.$/)
-  // полоска: плюс — вправо от середины, минус — влево
+  // полоска: плюс — вправо от середины, минус — влево (на вкладке «Пары» есть и плюс, и минус)
+  await page.getByRole('tab', { name: 'Пары' }).click()
+  await expect(page.locator('[data-shot="analysis-table"] tbody')).toContainText('BTCUSDT')
   const bars = page.locator('[data-bar] i:last-child')
   const cls = await bars.evaluateAll((els) => els.map((e) => e.className))
   expect(cls.some((c) => c.includes('left-1/2') && c.includes('bg-up'))).toBe(true)
@@ -779,7 +784,7 @@ test('404 для гостя: только «На главную»', async ({ pag
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Дневник сделок')
 })
 
-test('«Топ ошибок»: «Ср. убыток» и «Убытки» без колонки PnL, полоска справа налево', async ({ page, db }) => {
+test('«Топ ошибок»: «Ср. убыток» и «Убытки» без колонки PnL, полоска справа налево', async ({ page, db, isMobile }) => {
   db.listNames = ['Пробой', 'Отбой', 'Вход без стопа', 'FOMO']
   // s3: три убыточные сделки −100, −200, −300 и одна прибыльная → убытки −600, ср. убыток −600 / 4 = −150; s4: одна −50
   db.trades = [
@@ -791,10 +796,12 @@ test('«Топ ошибок»: «Ср. убыток» и «Убытки» без
   ]
   await fakeSupabase(page, db)
   await page.goto('analysis')
-  const card = page.getByRole('heading', { name: 'Топ ошибок' }).locator('..')
+  await page.getByRole('tab', { name: 'Ошибки' }).click()
+  await expect(page).toHaveURL(/\?tab=mistakes$/)
+  const card = page.getByRole('heading', { name: 'Ошибки' }).locator('..')
   await expect(card.locator('tbody tr')).toHaveCount(2)
-  const heads = await card.locator('thead th').filter({ visible: true }).allTextContents()
-  expect(heads).toEqual(['Название', 'Ср. убыток', 'Убытки'])
+  const heads = (await card.locator('thead th').filter({ visible: true }).allTextContents()).map((h) => h.replace(/[▲▼]/g, '').trim())
+  expect(heads).toEqual(isMobile ? ['Название', 'Ср. убыток', 'Убытки'] : ['Название', 'Сделок', 'Ср. убыток', 'Убытки'])
   const first = card.locator('tbody tr').first()
   await expect(first).toContainText('Вход без стопа')
   await expect(first.locator('[data-money]').nth(0)).toHaveText(/−150,00\s\$/)
@@ -809,7 +816,8 @@ test('«Топ ошибок»: «Ср. убыток» и «Убытки» без
   )
   expect(widths.map((w) => w.share)).toEqual([100, 8])
   expect(widths.every((w) => w.cls.includes('bg-down') && w.right === 0)).toBe(true)
-  // в остальных таблицах — по-прежнему от середины
+  // в остальных вкладках — по-прежнему от середины
+  await page.getByRole('tab', { name: 'Пары' }).click()
   await expect(page.locator('[data-bar="true"] i.bg-down.right-1\\/2').first()).toBeAttached()
 })
 
@@ -862,5 +870,161 @@ test.describe('«Статистика»: сравнение с прошлым п
     await expect(recent.locator('li a').first()).toHaveAttribute('href', /\/trades\/00000000-0000-0000-0000-000000000007$/)
     await expect(recent.getByRole('link', { name: 'Все сделки →' })).toHaveAttribute('href', /\/trades$/)
     await expect(page.locator('[data-shot="day-form"] li')).toHaveCount(7)
+  })
+})
+
+test.describe('«Сделки»: быстрые фильтры, сортировка, «В сделке», массовые действия', () => {
+  const at = (d: string, h: number) => new Date(`${d}T${String(h).padStart(2, '0')}:00:00Z`).toISOString()
+  const seed = (db: { trades: Record<string, unknown>[]; listNames?: string[] }) => {
+    db.listNames = ['Пробой', 'Отбой', 'FOMO']
+    db.trades = [
+      makeTrade(0, { pnl: 120, side: 'long', symbol: 'BTCUSDT', entry_at: at('2026-11-01', 10), exit_at: at('2026-11-01', 10).replace('10:00', '10:45') }),
+      makeTrade(1, { pnl: -60, side: 'short', symbol: 'ETHUSDT', entry_at: at('2026-11-02', 9), exit_at: at('2026-11-02', 13).replace('13:00', '13:12') }),
+      makeTrade(2, { pnl: 300, side: 'long', symbol: 'SOLUSDT', entry_at: at('2026-11-03', 8), exit_at: at('2026-11-06', 10) }),
+      makeTrade(3, { pnl: -10, side: 'short', symbol: 'DOGEUSDT', entry_at: at('2026-11-04', 8), exit_at: at('2026-11-04', 9) }),
+    ]
+  }
+
+  test('сортировка по PnL: клик по заголовку, повторный — обратный порядок, aria-sort', async ({ page, db, isMobile }) => {
+    test.skip(isMobile, 'на телефоне — выбор «Сортировка» вместо заголовков')
+    seed(db)
+    await fakeSupabase(page, db)
+    await page.goto('trades')
+    const pnls = () => page.locator('tbody td[data-pnl]').allTextContents()
+    // по умолчанию — дата, новые сверху
+    await expect(page.locator('th[aria-sort="descending"]')).toContainText('Дата входа')
+    await page.getByRole('button', { name: 'Сортировать: PnL' }).click()
+    await expect(page.locator('th[aria-sort="descending"]')).toContainText('PnL')
+    expect((await pnls()).map((x) => x.replace(/\s/g, ''))).toEqual(['+300,00$', '+120,00$', '−10,00$', '−60,00$'])
+    await expect(page).toHaveURL(/sort=pnl&dir=desc/)
+    await page.getByRole('button', { name: 'Сортировать: PnL' }).click()
+    await expect(page.locator('th[aria-sort="ascending"]')).toContainText('PnL')
+    expect((await pnls())[0].replace(/\s/g, '')).toBe('−60,00$')
+    // «В сделке»: 45 мин, 4 ч 12 мин, 3 д 2 ч; колонки «Биржа» нет — биржа одна
+    await expect(page.locator('td[data-duration]')).toHaveText(['4 ч 12 мин', '1 ч', '45 мин', '3 д 2 ч'])
+    await expect(page.getByRole('columnheader', { name: 'Биржа' })).toHaveCount(0)
+  })
+
+  test('быстрые фильтры: Long и «Плюс» — в адресе, ссылка открывает тот же вид; «Фильтры» с числом', async ({ page, db }) => {
+    seed(db)
+    await fakeSupabase(page, db)
+    await page.goto('trades')
+    await page.getByRole('button', { name: 'Long', exact: true }).click()
+    await expect(page).toHaveURL(/side=long/)
+    await expect(page.getByText('Сделок: 2')).toBeVisible()
+    await page.getByRole('button', { name: 'Плюс', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Плюс', exact: true })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page).toHaveURL(/side=long&result=win/)
+    await expect(page.getByText('Сделок: 2')).toBeVisible()
+    await page.getByRole('button', { name: 'Плюс', exact: true }).click()
+    await page.getByRole('button', { name: 'Минус', exact: true }).click()
+    await expect(page.getByText('Под фильтры ничего не подходит.')).toBeVisible()
+    // ссылка с фильтрами открывает тот же вид, скрытые фильтры — с числом на кнопке
+    await page.goto('trades?side=short&mistake=s3&q=eth')
+    await expect(page.getByRole('button', { name: 'Short', exact: true })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByRole('searchbox', { name: 'Поиск по паре' })).toHaveValue('eth')
+    await expect(page.getByRole('button', { name: /^Фильтры/ }).locator('[data-count]')).toHaveText('1')
+  })
+
+  test('массовые действия: назначить сетап выбранным и удалить с подтверждением', async ({ page, db }) => {
+    seed(db)
+    await fakeSupabase(page, db)
+    await page.goto('trades')
+    await page.getByRole('checkbox', { name: /Выбрать сделку BTCUSDT/ }).check()
+    await page.getByRole('checkbox', { name: /Выбрать сделку SOLUSDT/ }).check()
+    const bar = page.getByRole('region', { name: 'Выбрано: 2' })
+    await expect(bar).toBeVisible()
+    await bar.getByRole('combobox', { name: 'Назначить сетап' }).selectOption({ label: 'FOMO' })
+    await bar.getByRole('button', { name: 'Назначить' }).click()
+    await expect(page.getByText('Сетап назначен: 2')).toBeVisible()
+    const patch = db.tradeWrites!.find((w) => w.method === 'PATCH')!
+    expect(patch.body).toEqual({ setup_id: 's3' })
+    expect(patch.ids.sort()).toEqual(['00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000002'])
+    // удалить: окно подтверждения (не confirm()), «Отмена» ничего не трогает
+    await page.getByRole('checkbox', { name: /Выбрать сделку ETHUSDT/ }).check()
+    await page.getByRole('region', { name: 'Выбрано: 1' }).getByRole('button', { name: 'Удалить' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Удалить сделки?' })
+    await expect(dialog).toContainText('Будет удалено сделок: 1')
+    await dialog.getByRole('button', { name: 'Отмена' }).click()
+    expect(db.tradeWrites!.some((w) => w.method === 'DELETE')).toBe(false)
+    await page.getByRole('region', { name: 'Выбрано: 1' }).getByRole('button', { name: 'Удалить' }).click()
+    await dialog.getByRole('button', { name: 'Удалить 1' }).click()
+    await expect(page.getByText('Удалено сделок: 1')).toBeVisible()
+    expect(db.tradeWrites!.find((w) => w.method === 'DELETE')!.ids).toEqual(['00000000-0000-0000-0000-000000000001'])
+    await expect(page.getByText('Сделок: 3')).toBeVisible()
+  })
+
+  test('две биржи — колонка «Биржа» есть', async ({ page, db, isMobile }) => {
+    test.skip(isMobile, 'на телефоне биржа — в подписи карточки')
+    seed(db)
+    db.trades[1].exchange = 'okx'
+    await fakeSupabase(page, db)
+    await page.goto('trades')
+    await expect(page.getByRole('columnheader', { name: 'Биржа' })).toBeVisible()
+  })
+})
+
+test.describe('«Разбор»: вкладки, «Итого», сортировка, время суток и плечо', () => {
+  const at = (iso: string) => new Date(iso).toISOString()
+  const seed = (db: { trades: Record<string, unknown>[]; listNames?: string[] }) => {
+    db.listNames = ['Пробой', 'Отбой']
+    db.trades = [
+      // Москва (часовой пояс профиля): 03:30 → 03–06, 05:10 → 03–06, 23:00 → 21–24
+      makeTrade(0, { pnl: 100, symbol: 'BTCUSDT', setup_id: 's1', leverage: 2, entry_at: at('2026-11-01T00:30:00Z'), exit_at: at('2026-11-01T01:30:00Z') }),
+      makeTrade(1, { pnl: -40, symbol: 'ETHUSDT', setup_id: 's1', leverage: 8, entry_at: at('2026-11-01T02:10:00Z'), exit_at: at('2026-11-01T03:10:00Z') }),
+      makeTrade(2, { pnl: 60, symbol: 'ETHUSDT', setup_id: 's2', leverage: 50, entry_at: at('2026-11-01T20:00:00Z'), exit_at: at('2026-11-01T21:00:00Z') }),
+    ]
+  }
+
+  test('вкладка в адресе, строка «Итого», сортировка по винрейту', async ({ page, db, isMobile }) => {
+    seed(db)
+    await fakeSupabase(page, db)
+    await page.goto('analysis')
+    await page.getByRole('tab', { name: 'Пары' }).click()
+    await expect(page).toHaveURL(/\?tab=pairs$/)
+    await expect(page.getByRole('tab', { name: 'Пары' })).toHaveAttribute('aria-selected', 'true')
+    const table = page.locator('[data-shot="analysis-table"]')
+    // по умолчанию — по PnL: BTC (+100) выше ETH (+20)
+    await expect(table.locator('tbody tr').first()).toContainText('BTCUSDT')
+    await expect(table.locator('tfoot tr[data-total]')).toContainText('Итого')
+    await expect(table.locator('tfoot [data-money]')).toHaveText(/\+120,00\s\$/)
+    await table.getByRole('button', { name: 'Сортировать: Винрейт' }).click()
+    await expect(table.locator('th[aria-sort="descending"]')).toContainText('Винрейт')
+    await expect(table.locator('tbody tr').first()).toContainText('BTCUSDT')
+    await table.getByRole('button', { name: 'Сортировать: Винрейт' }).click()
+    await expect(table.locator('tbody tr').first()).toContainText('ETHUSDT')
+    if (!isMobile) {
+      await table.getByRole('button', { name: 'Сортировать: Сделок' }).click()
+      await expect(table.locator('tbody tr').first()).toContainText('ETHUSDT')
+    }
+    // ссылка с вкладкой открывает её же
+    await page.goto('analysis?tab=emotions')
+    await expect(page.getByRole('tab', { name: 'Эмоции' })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  test('«Время суток» и «Плечо» — Pro Plus: на Basic вкладка видна, внутри предложение тарифа', async ({ page, db }) => {
+    seed(db)
+    await fakeSupabase(page, db)
+    await page.goto('analysis?tab=time')
+    await expect(page.getByRole('tab', { name: /Время суток/ })).toHaveAttribute('aria-selected', 'true')
+    await expect(page.getByText('Время суток и плечо — на Pro Plus.')).toBeVisible()
+    await expect(page.locator('[data-shot="analysis-table"]')).toHaveCount(0)
+  })
+
+  test('на Pro Plus: время суток — по 3 часа в поясе пользователя, плечо — группами', async ({ page, db }) => {
+    seed(db)
+    db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
+    await fakeSupabase(page, db)
+    await page.goto('analysis?tab=time')
+    const table = page.locator('[data-shot="analysis-table"]')
+    await expect(table.locator('tbody tr')).toHaveCount(2)
+    await expect(table.locator('tbody tr').first()).toContainText('03–06')
+    await expect(table.locator('tbody tr').nth(1)).toContainText('21–24')
+    await page.getByRole('tab', { name: 'Плечо' }).click()
+    await expect(page).toHaveURL(/\?tab=leverage$/)
+    await expect(table.locator('tbody tr')).toHaveCount(3)
+    await expect(table).toContainText('1–3×')
+    await expect(table).toContainText('4–10×')
+    await expect(table).toContainText('26×+')
   })
 })
