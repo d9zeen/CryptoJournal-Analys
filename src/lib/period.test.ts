@@ -58,3 +58,29 @@ describe('календарь своего диапазона', () => {
     expect(daysInRange({ from: '', to: '' })).toBe(0)
   })
 })
+
+import { previousRange } from './period'
+describe('previousRange — прошлый период той же длины', () => {
+  const now = new Date(2026, 10, 12, 15) // чт, 12 ноября 2026
+  const local = (iso: string | null) => (iso ? ymd(new Date(iso)) : null)
+  it('месяц → прошлый календарный месяц (октябрь)', () => {
+    const p = previousRange('month', { from: '', to: '' }, now)!
+    expect([local(p.range.from), local(p.range.to), p.vs, p.month]).toEqual(['2026-10-01', '2026-11-01', 'month', 9])
+  })
+  it('январь → декабрь прошлого года', () => {
+    const p = previousRange('month', { from: '', to: '' }, new Date(2026, 0, 10))!
+    expect([local(p.range.from), local(p.range.to), p.month]).toEqual(['2025-12-01', '2026-01-01', 11])
+  })
+  it('неделя → прошлая неделя с понедельника', () => {
+    const p = previousRange('week', { from: '', to: '' }, now)!
+    expect([local(p.range.from), local(p.range.to), p.vs]).toEqual(['2026-11-02', '2026-11-09', 'week'])
+  })
+  it('свой диапазон → такой же отрезок прямо перед ним', () => {
+    const p = previousRange('custom', { from: '2026-11-05', to: '2026-11-11' }, now)!
+    expect([local(p.range.from), local(p.range.to), p.vs]).toEqual(['2026-10-29', '2026-11-05', 'custom'])
+  })
+  it('всё время и незаполненный диапазон — без сравнения', () => {
+    expect(previousRange('all', { from: '', to: '' }, now)).toBeNull()
+    expect(previousRange('custom', { from: '2026-11-05', to: '' }, now)).toBeNull()
+  })
+})

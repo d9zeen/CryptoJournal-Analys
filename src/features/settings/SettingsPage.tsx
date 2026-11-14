@@ -12,7 +12,7 @@ import { NumberField, SelectField, TextField } from '@/components/ui/Field'
 import { parseDecimal, toInput } from '@/lib/parse'
 import { dbErrorMessage } from '@/lib/errors'
 import { Link, useNavigate } from 'react-router'
-import { deleteMyAccount, downloadTradesCsv } from './dataApi'
+import { deleteMyAccount, downloadNotesCsv, downloadTradesCsv } from './dataApi'
 import { SecurityCard } from './SecurityCard'
 import { Segmented } from '@/components/ui/Segmented'
 import { LANGS } from '@/lib/locale'
@@ -218,11 +218,21 @@ function DataCard() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const [exportState, setExportState] = useState<{ busy: boolean; done?: number; error?: string }>({ busy: false })
+  const [notesState, setNotesState] = useState<{ busy: boolean; done?: number; error?: string }>({ busy: false })
   const [confirming, setConfirming] = useState(false)
   const [typed, setTyped] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const email = user?.email ?? ''
+
+  async function onExportNotes() {
+    setNotesState({ busy: true })
+    try {
+      setNotesState({ busy: false, done: await downloadNotesCsv() })
+    } catch (e) {
+      setNotesState({ busy: false, error: dbErrorMessage(e, t) })
+    }
+  }
 
   async function onExport() {
     setExportState({ busy: true })
@@ -256,6 +266,12 @@ function DataCard() {
         </Button>
         {exportState.done !== undefined && <Alert tone="success">{fmt(d.exported, { n: exportState.done })}</Alert>}
         {exportState.error && <Alert tone="error">{exportState.error}</Alert>}
+        {/* заметки дня из календаря — отдельным файлом (у них свои колонки: день, текст) */}
+        <Button variant="secondary" className="self-start" loading={notesState.busy} onClick={() => void onExportNotes()}>
+          {d.exportNotes}
+        </Button>
+        {notesState.done !== undefined && <Alert tone="success">{fmt(d.exportedNotes, { n: notesState.done })}</Alert>}
+        {notesState.error && <Alert tone="error">{notesState.error}</Alert>}
       </div>
 
       <div className="flex flex-col gap-2 border-t border-border pt-4">

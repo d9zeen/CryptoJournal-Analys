@@ -4,11 +4,13 @@
  * Справа (на телефоне — ниже) — итоги месяца: на широком экране (xl) первой карточкой «Итог месяца» (результат, сделки, винрейт,
  * лучшая / худшая сделка; рамка цвета кнопок), затем торговые дни, лучший и худший день, недели, дни недели.
  * Уже xl «Итог месяца» — строкой сразу под сеткой. Полоска палитры (PaletteStrip) — всегда под календарём.
- * Свой месяц (стрелки), не зависит от фильтра периода. Дни соседних месяцев — заштрихованы.
+ * Свой месяц (стрелки + «Сегодня», образец шапки — 21st.dev fullscreen-calendar), не зависит от фильтра периода.
+ * Будущие дни — бледные и не нажимаются. Клик по дню — панель дня (DayPanel): итог, сделки, заметка дня (Pro Plus).
+ * ?day=YYYY-MM-DD в адресе (мини-календарь на «Статистике») — сразу этот месяц и панель дня.
  */
 import { intlLocale } from '@/lib/locale'
 import { useMemo, useRef, useState, type CSSProperties } from 'react'
-import { Link } from 'react-router'
+import { useSearchParams } from 'react-router'
 import { fmt, plural, useT } from '@/i18n'
 import { useTrades } from '@/features/trades/api'
 import { closedTrades } from '@/lib/calc/stats'
@@ -19,6 +21,8 @@ import { useMediaQuery } from '@/lib/useMediaQuery'
 import { AnimatedNumber } from '@/components/AnimatedNumber'
 import { CalendarSkeleton } from '@/components/Skeleton'
 import { PaletteStrip } from '@/features/palette/PaletteStrip'
+import { zonedParts } from '@/lib/tz'
+import { DayPanel, type DayTrade } from './DayPanel'
 
 const monthTitle = () => new Intl.DateTimeFormat(intlLocale(), { month: 'long', year: 'numeric' })
 /** «Ноябрь 2026» — без «г.» и без CSS capitalize (он делал «2026 Г.») */
@@ -43,7 +47,16 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
   // широкий экран (xl): «Итог месяца» — в правой колонке, над «Торговые дни»; уже — строкой под сеткой
   const side = useMediaQuery('(min-width: 1280px)')
   const now = new Date()
-  const [view, setView] = useState({ y: now.getFullYear(), m: now.getMonth() })
+  // ?day=2026-11-04 — открыть этот месяц и панель дня (клик в мини-календаре на «Статистике»)
+  const [params, setParams] = useSearchParams()
+  const dayParam = /^\d{4}-\d{2}-\d{2}$/.test(params.get('day') ?? '') ? params.get('day')! : null
+  const [view, setView] = useState(() => (dayParam ? { y: Number(dayParam.slice(0, 4)), m: Number(dayParam.slice(5, 7)) - 1 } : { y: now.getFullYear(), m: now.getMonth() }))
+  const [openDay, setOpenDay] = useState<string | null>(dayParam)
+  const closeDay = () => {
+    setOpenDay(null)
+    if (params.has('day')) setParams({}, { replace: true })
+  }
+  const isCurrentMonth = view.y === now.getFullYear() && view.m === now.getMonth()
 
   const span = calendarSpan(view.y, view.m)
   const range = useMemo(() => {
@@ -64,6 +77,13 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
   const shift = (n: number) => setView((v) => ({ y: new Date(v.y, v.m + n, 1).getFullYear(), m: new Date(v.y, v.m + n, 1).getMonth() }))
   const today = ymd(now)
   const m = cal.month
+  // сделки открытого дня — для панели (день — дата закрытия в часовом поясе пользователя, как в клетках)
+  const dayTrades: DayTrade[] = openDay
+    ? trades
+        .filter((tr) => tr.exit_at && tr.pnl !== null && zonedParts(tr.exit_at, timeZone).date === openDay)
+        .map((tr) => ({ id: tr.id, symbol: tr.symbol, title: tr.title, side: tr.side, exit_at: tr.exit_at!, pnl: tr.pnl! }))
+        .sort((a, b) => a.exit_at.localeCompare(b.exit_at))
+    : []
   // №14: первая загрузка — заготовка сетки вместо пустоты
   if (isLoading) return <CalendarSkeleton />
 
@@ -74,10 +94,22 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
       <section className="rise flex flex-col rounded-lg border border-border bg-surface p-4 sm:p-5 xl:h-full">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-lg font-semibold">{c.title}</h1>
-          <div className="flex items-center gap-1 rounded-lg border border-border bg-surface-2/60 p-1">
-            <NavBtn dir={-1} label={c.prev} onClick={() => shift(-1)} />
-            <span className="min-w-36 text-center text-sm font-semibold">{monthLabel(view.y, view.m)}</span>
-            <NavBtn dir={1} label={c.next} onClick={() => shift(1)} />
+          <div className="flex items-center gap-2">
+            {/* «Сегодня» — вернуться на текущий месяц; на нём самом кнопки нет */}
+            {!isCurrentMonth && (
+              <button
+                type="button"
+                onClick={() => setView({ y: now.getFullYear(), m: now.getMonth() })}
+                className="rounded-lg border border-border bg-surface-2/60 px-3 py-1.5 text-sm font-medium transition-colors hover:border-primary hover:text-primary"
+              >
+                {c.today}
+              </button>
+            )}
+            <div className="flex items-center gap-1 rounded-lg border border-border bg-surface-2/60 p-1">
+              <NavBtn dir={-1} label={c.prev} onClick={() => shift(-1)} />
+              <span className="min-w-36 text-center text-sm font-semibold">{monthLabel(view.y, view.m)}</span>
+              <NavBtn dir={1} label={c.next} onClick={() => shift(1)} />
+            </div>
           </div>
         </div>
 
@@ -105,6 +137,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
       </section>
 
       <MonthPanel />
+      {openDay && <DayPanel key={openDay} day={openDay} trades={dayTrades} timeZone={timeZone} onClose={closeDay} />}
     </div>
   )
 
@@ -198,16 +231,26 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
         )}
       </>
     )
-    if (!d.count)
+    // будущие дни — бледные, без наведения и не нажимаются
+    if (d.date > today)
       return (
-        <div title={title} style={style} className={cls}>
+        <div data-future title={title} style={style} className={`${cls} opacity-50`}>
           {inner}
         </div>
       )
+    // прошедший день (со сделками или без — заметку можно оставить и в пустой день) — открывает панель дня
     return (
-      <Link to={`/trades?day=${d.date}`} title={title} aria-label={fmt(c.openDay, { day: title })} style={style} className={`${cls} cal-day-link`}>
+      <button
+        type="button"
+        data-day={d.date}
+        title={title}
+        aria-label={fmt(c.openDay, { day: title })}
+        onClick={() => setOpenDay(d.date)}
+        style={style}
+        className={`${cls} cal-day-link cursor-pointer`}
+      >
         {inner}
-      </Link>
+      </button>
     )
   }
 

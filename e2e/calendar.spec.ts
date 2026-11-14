@@ -114,3 +114,93 @@ test('календарь на телефоне: «Итог месяца» — с
   await expect(grid.locator('[data-shot="month-total"]')).toBeVisible()
   await expect(page.locator('[data-shot="calendar-panel"] [data-shot="month-total"]')).toHaveCount(0)
 })
+
+test.describe('календарь: «Сегодня», будущие дни, панель дня и заметка', () => {
+  const at = (d: string, h = 12) => new Date(`${d}T${String(h).padStart(2, '0')}:00:00Z`).toISOString()
+  test.beforeEach(async ({ page, db }) => {
+    await page.clock.setFixedTime(new Date('2026-11-12T12:00:00Z'))
+    db.trades = [
+      makeTrade(0, { entry_at: at('2026-11-04', 9), exit_at: at('2026-11-04', 10), pnl: 120, symbol: 'BTCUSDT' }),
+      makeTrade(1, { entry_at: at('2026-11-04', 11), exit_at: at('2026-11-04', 13), pnl: -20, symbol: 'ETHUSDT' }),
+      makeTrade(2, { entry_at: at('2026-11-06'), exit_at: at('2026-11-06'), pnl: 55 }),
+    ]
+  })
+
+  test('«Сегодня» видна только на другом месяце и возвращает на текущий', async ({ page, db }) => {
+    await fakeSupabase(page, db)
+    await page.goto('calendar')
+    const cal = page.locator('[data-shot="calendar"]')
+    await expect(cal.getByText('Ноябрь 2026', { exact: true })).toBeVisible()
+    await expect(cal.getByRole('button', { name: 'Сегодня' })).toHaveCount(0)
+    await cal.getByRole('button', { name: 'Предыдущий месяц' }).click()
+    await cal.getByRole('button', { name: 'Предыдущий месяц' }).click()
+    await expect(cal.getByText('Сентябрь 2026', { exact: true })).toBeVisible()
+    await cal.getByRole('button', { name: 'Сегодня' }).click()
+    await expect(cal.getByText('Ноябрь 2026', { exact: true })).toBeVisible()
+    await expect(cal.getByRole('button', { name: 'Сегодня' })).toHaveCount(0)
+    // будущие дни — бледные и не нажимаются
+    await expect(cal.locator('[data-future]').first()).toHaveClass(/opacity-50/)
+    await expect(cal.locator('button[data-day="2026-11-20"]')).toHaveCount(0)
+  })
+
+  test('клик по дню — панель: итог, сделки, ссылка в список; Esc и клик вне закрывают', async ({ page, db }) => {
+    db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
+    await fakeSupabase(page, db)
+    await page.goto('calendar')
+    await page.locator('button[data-day="2026-11-04"]').click()
+    const panel = page.getByRole('dialog', { name: /04\.11\.2026/ })
+    await expect(panel).toBeVisible()
+    await expect(panel.locator('[data-day-total]')).toHaveText(/\+100,00\s\$/)
+    await expect(panel.getByRole('link', { name: /BTCUSDT/ })).toHaveAttribute('href', /\/trades\/00000000-0000-0000-0000-000000000000$/)
+    await expect(panel.getByRole('link', { name: /ETHUSDT/ })).toBeVisible()
+    await expect(panel.getByRole('link', { name: 'Открыть в списке сделок →' })).toHaveAttribute('href', /\/trades\?day=2026-11-04$/)
+    await page.keyboard.press('Escape')
+    await expect(panel).toBeHidden()
+    // пустой прошедший день тоже открывается (заметку можно оставить и без сделок); клик вне панели закрывает
+    await page.locator('button[data-day="2026-11-03"]').click()
+    const empty = page.getByRole('dialog', { name: /03\.11\.2026/ })
+    await expect(empty.getByText('В этот день сделок нет.')).toBeVisible()
+    // клик в верхний левый угол экрана — вне панели (на компьютере она справа, на телефоне — лист снизу)
+    await page.mouse.click(8, 8)
+    await expect(empty).toBeHidden()
+  })
+
+  test('заметка дня на Pro Plus сохраняется', async ({ page, db }) => {
+    db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
+    await fakeSupabase(page, db)
+    await page.goto('calendar')
+    await page.locator('button[data-day="2026-11-04"]').click()
+    const panel = page.getByRole('dialog', { name: /04\.11\.2026/ })
+    const note = panel.getByLabel('Заметка дня')
+    await note.fill('План: только пробои. Итог: два стопа, без FOMO.')
+    await expect(panel.getByText(/^\d+ \/ 2000$/)).toBeVisible()
+    await panel.getByRole('button', { name: 'Сохранить заметку' }).click()
+    await expect.poll(() => db.dayNotes?.['2026-11-04']).toBe('План: только пробои. Итог: два стопа, без FOMO.')
+    // открыть заново — текст на месте
+    await page.keyboard.press('Escape')
+    await page.locator('button[data-day="2026-11-04"]').click()
+    await expect(page.getByRole('dialog').getByLabel('Заметка дня')).toHaveValue('План: только пробои. Итог: два стопа, без FOMO.')
+  })
+
+  test('на Basic заметка заблокирована, под ней — предложение Pro Plus', async ({ page, db }) => {
+    await fakeSupabase(page, db)
+    await page.goto('calendar')
+    await page.locator('button[data-day="2026-11-04"]').click()
+    const panel = page.getByRole('dialog', { name: /04\.11\.2026/ })
+    await expect(panel.getByLabel('Заметка дня')).toBeDisabled()
+    await expect(panel.getByText('Заметки дня — на Pro Plus.')).toBeVisible()
+    await expect(panel.getByRole('button', { name: 'Сохранить заметку' })).toHaveCount(0)
+  })
+
+  test('мини-календарь на «Статистике» открывает календарь на этот день', async ({ page, db }) => {
+    await fakeSupabase(page, db)
+    await page.goto('dashboard')
+    const mini = page.locator('[data-shot="mini-calendar"]')
+    await expect(mini.getByRole('heading', { name: /ноябрь 2026/i })).toBeVisible()
+    // только цвет и число, без сумм
+    await expect(mini).not.toContainText('$')
+    await mini.locator('a[data-day="2026-11-04"]').click()
+    await expect(page).toHaveURL(/\/calendar\?day=2026-11-04$/)
+    await expect(page.getByRole('dialog', { name: /04\.11\.2026/ })).toBeVisible()
+  })
+})

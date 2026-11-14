@@ -812,3 +812,55 @@ test('«Топ ошибок»: «Ср. убыток» и «Убытки» без
   // в остальных таблицах — по-прежнему от середины
   await expect(page.locator('[data-bar="true"] i.bg-down.right-1\\/2').first()).toBeAttached()
 })
+
+test.describe('«Статистика»: сравнение с прошлым периодом, последние сделки, итог PnL по дням', () => {
+  const at = (d: string) => new Date(`${d}T12:00:00Z`).toISOString()
+  test.beforeEach(async ({ page }) => {
+    await page.clock.setFixedTime(new Date('2026-11-12T12:00:00Z'))
+  })
+
+  test('«Месяц» с данными за октябрь — плашки «к октябрю» по смыслу', async ({ page, db }) => {
+    // ноябрь: +300, −100 (PnL +200, винрейт 50 %, PF 3); октябрь: +100, −200, +50 (PnL −50, винрейт 67 %, PF 0,75)
+    db.trades = [
+      makeTrade(0, { entry_at: at('2026-11-03'), exit_at: at('2026-11-03'), pnl: 300 }),
+      makeTrade(1, { entry_at: at('2026-11-05'), exit_at: at('2026-11-05'), pnl: -100 }),
+      makeTrade(2, { entry_at: at('2026-10-06'), exit_at: at('2026-10-06'), pnl: 100 }),
+      makeTrade(3, { entry_at: at('2026-10-08'), exit_at: at('2026-10-08'), pnl: -200 }),
+      makeTrade(4, { entry_at: at('2026-10-10'), exit_at: at('2026-10-10'), pnl: 50 }),
+    ]
+    await fakeSupabase(page, db)
+    await page.goto('dashboard')
+    // «Всё время» — без сравнения
+    await expect(page.getByText('Реализованный PnL')).toBeVisible()
+    await expect(page.locator('[data-delta]')).toHaveCount(0)
+    await page.getByRole('radio', { name: 'Месяц' }).click()
+    const kpi = page.locator('[data-shot="kpi"]')
+    await expect(kpi.locator('[data-delta]').first()).toHaveText(/▲\s*\+250\s\$ к октябрю/)
+    await expect(kpi.locator('[data-delta]').nth(1)).toHaveText(/▼\s*−16,7 п\.п\. к октябрю/)
+    await expect(kpi.locator('[data-delta]').nth(2)).toHaveText(/▲\s*было 0,75/)
+    await expect(kpi.locator('[data-delta="up"]').first()).toHaveClass(/text-up/)
+    await expect(kpi.locator('[data-delta="down"]').first()).toHaveClass(/text-down/)
+    // итог периода в шапке «PnL по дням»
+    await expect(page.locator('[data-shot="period-total"]')).toHaveText(/\+200,00\s\$/)
+  })
+
+  test('нет сделок за прошлый период — сравнения нет', async ({ page, db }) => {
+    db.trades = [makeTrade(0, { entry_at: at('2026-11-03'), exit_at: at('2026-11-03'), pnl: 300 })]
+    await fakeSupabase(page, db)
+    await page.goto('dashboard')
+    await page.getByRole('radio', { name: 'Месяц' }).click()
+    await expect(page.getByText('+300,00 $').first()).toBeVisible()
+    await expect(page.locator('[data-delta]')).toHaveCount(0)
+  })
+
+  test('«Последние сделки» — 5 строк-ссылок, новые сверху, «Все сделки →»; винрейт дней — квадратики', async ({ page, db }) => {
+    db.trades = Array.from({ length: 8 }, (_, i) => makeTrade(i))
+    await fakeSupabase(page, db)
+    await page.goto('dashboard')
+    const recent = page.locator('[data-shot="recent"]')
+    await expect(recent.locator('li')).toHaveCount(5)
+    await expect(recent.locator('li a').first()).toHaveAttribute('href', /\/trades\/00000000-0000-0000-0000-000000000007$/)
+    await expect(recent.getByRole('link', { name: 'Все сделки →' })).toHaveAttribute('href', /\/trades$/)
+    await expect(page.locator('[data-shot="day-form"] li')).toHaveCount(7)
+  })
+})
