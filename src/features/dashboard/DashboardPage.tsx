@@ -9,9 +9,11 @@ import { PeriodFilter } from '@/components/PeriodFilter'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
-import { rangeFor, type CustomRange, type PeriodPreset } from '@/lib/period'
+import { previousRange, rangeFor, type CustomRange, type PeriodPreset } from '@/lib/period'
 import { browserTimeZone } from '@/lib/tz'
-import { formatUsd } from '@/lib/format'
+import { formatPnl, formatUsd, pnlClass } from '@/lib/format'
+import { compareKpis, kpiSnapshot } from '@/lib/calc/compare'
+import { MiniCalendar, RecentTrades } from './Blocks'
 import { barFor, closedTrades, downsampleEquity, drawdownPeriod, equityCurve, pnlBars, pnlByDay, rWinLoss, summarize, type StatTrade } from '@/lib/calc/stats'
 import { KeyNumbers, KpiRow } from './Widgets'
 import { traderScore } from '@/lib/calc/score'
@@ -34,6 +36,9 @@ export function DashboardPage() {
   const range = useMemo(() => rangeFor(preset, custom), [preset, custom])
 
   const { data: trades, isLoading, error, isPlaceholderData } = useTrades(range)
+  // прошлый период той же длины — для сравнения в верхнем ряду («Всё время» — без сравнения)
+  const prev = useMemo(() => previousRange(preset, custom), [preset, custom])
+  const { data: prevTrades, isPlaceholderData: prevPlaceholder } = useTrades(prev?.range ?? { from: null, to: null }, prev !== null)
   // ключ показанных данных: меняется, когда на экране сделки нового периода (а не прежние, пока грузятся) —
   // тогда числа прокручиваются (№13) и кривая рисуется заново (№9); новые сделки с биржи ключ не меняют (№12 — плавный пересчёт)
   const periodKey = `${preset}|${custom.from}|${custom.to}`
@@ -73,6 +78,14 @@ export function DashboardPage() {
   const [params] = useSearchParams()
   const isNew = params.get('welcome') === '1' || (preset === 'all' && !isLoading && !error && (trades ?? []).length === 0)
   const score = useMemo(() => traderScore(stats.summary, stats.days), [stats])
+  const deltas = useMemo(() => {
+    if (!prev || !prevTrades || prevPlaceholder) return null
+    const pc = closedTrades(prevTrades.map((tr) => ({ ...tr, tagIds: [] })))
+    const ps = summarize(pc, profile?.starting_balance)
+    return compareKpis(kpiSnapshot(stats.summary, score.dayWinrate), kpiSnapshot(ps, traderScore(ps, pnlByDay(pc, tz)).dayWinrate))
+  }, [prev, prevTrades, prevPlaceholder, stats.summary, score.dayWinrate, profile?.starting_balance, tz])
+  const kv = t.dashboard.kpi.vs
+  const vs = !prev ? '' : prev.vs === 'month' ? kv.month[prev.month] : prev.vs === 'week' ? kv.week : kv.custom
   const bars = useMemo(() => pnlBars(stats.days), [stats.days])
   // №10: наведение на кривую капитала подсвечивает столбик того дня / недели / месяца, где эта сделка
   const [hoverAt, setHoverAt] = useState<string | null>(null)
@@ -109,7 +122,16 @@ export function DashboardPage() {
       ) : (
         <>
           {/* верхний ряд: PnL, винрейт сделок, profit factor, винрейт дней, выигрыш / проигрыш */}
-          <KpiRow summary={s} score={score} startingBalance={balance} equity={stats.equity} rollKey={shownKey.current} />
+          <KpiRow
+            summary={s}
+            score={score}
+            startingBalance={balance}
+            equity={stats.equity}
+            rollKey={shownKey.current}
+            days={stats.days}
+            deltas={deltas}
+            vs={vs}
+          />
 
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] xl:grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)]">
             {/* «Оценку трейдера» убрали (решение владельца 08.11.2026): слева — ключевые цифры */}
@@ -153,9 +175,20 @@ export function DashboardPage() {
             </Card>
           </div>
 
+          {/* новые блоки — после кривой капитала: последние сделки и мини-календарь текущего месяца (на широком экране — рядом) */}
+          <div className="grid gap-3 lg:grid-cols-2">
+            <RecentTrades trades={trades ?? []} timeZone={tz} i={7} />
+            <MiniCalendar timeZone={tz} i={8} />
+          </div>
+
           <ChartCard
-            i={7}
+            i={9}
             title={bars.unit === 'month' ? t.dashboard.charts.monthly : bars.unit === 'week' ? t.dashboard.charts.weekly : t.dashboard.charts.daily}
+            aside={
+              <span data-shot="period-total" className={`num text-sm font-semibold whitespace-nowrap ${pnlClass(s.totalPnl)}`}>
+                {formatPnl(s.totalPnl)}
+              </span>
+            }
           >
             <DailyPnlChart days={bars.bars} unit={bars.unit} height={wide ? 300 : 220} highlight={highlight} />
           </ChartCard>
@@ -167,10 +200,13 @@ export function DashboardPage() {
   )
 }
 
-function ChartCard({ title, hint, i = 0, children }: { title: string; hint?: string; i?: number; children: ReactNode }) {
+function ChartCard({ title, hint, aside, i = 0, children }: { title: string; hint?: string; aside?: ReactNode; i?: number; children: ReactNode }) {
   return (
     <Card className="rise !p-4" style={{ '--i': i } as CSSProperties}>
-      <h2 className="font-semibold">{title}</h2>
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="font-semibold">{title}</h2>
+        {aside}
+      </div>
       {hint && <p className="mt-0.5 text-xs text-muted">{hint}</p>}
       <div className="mt-3 -ml-2">
         <Suspense fallback={<Skeleton className="ml-2 h-[180px]" />}>{children}</Suspense>

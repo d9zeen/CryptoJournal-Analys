@@ -5,8 +5,9 @@
  */
 import { useId, useMemo, useRef, type CSSProperties, type ReactNode } from 'react'
 import { fmt, plural, useT } from '@/i18n'
-import { formatNumber, formatPercent, formatPnl, formatR, formatRatio, formatUsd } from '@/lib/format'
-import { recentForm, type DrawdownPeriod, type EquityPoint, type Outcome, type Summary } from '@/lib/calc/stats'
+import { formatNumber, formatPercent, formatPnl, formatPnlShort, formatR, formatRatio, formatUsd } from '@/lib/format'
+import { recentForm, type DayPnl, type DrawdownPeriod, type EquityPoint, type Outcome, type Summary } from '@/lib/calc/stats'
+import type { Delta, KpiDeltas } from '@/lib/calc/compare'
 import type { TraderScore } from '@/lib/calc/score'
 import { useShown, useSpotlight } from '@/lib/motion'
 import { AnimatedNumber } from '@/components/AnimatedNumber'
@@ -183,12 +184,21 @@ export function KpiRow({
   startingBalance,
   equity = [],
   rollKey,
+  days,
+  deltas = null,
+  vs = '',
 }: {
   summary: Summary
   score: TraderScore
   startingBalance: number | null
   equity?: EquityPoint[]
   rollKey?: unknown
+  /** PnL по дням — для квадратиков последних торговых дней у «Винрейта дней» (нет — полукруг, как раньше) */
+  days?: DayPnl[]
+  /** сравнение с прошлым периодом (lib/calc/compare.ts); null — не показывать */
+  deltas?: KpiDeltas | null
+  /** подпись сравнения: «к октябрю», «к прошлой неделе», «к прошлому периоду» */
+  vs?: string
 }) {
   const t = useT()
   const k = t.dashboard.kpi
@@ -215,6 +225,7 @@ export function KpiRow({
           {toDeposit && <p className="mt-0.5 text-xs text-muted">{toDeposit}</p>}
         </div>
         <Sparkline points={equity} drawKey={rollKey} />
+        <DeltaPill d={deltas?.pnl} vs={vs} />
       </Widget>
 
       <Widget label={k.tradeWinrate} hint={k.hints.tradeWinrate} i={1}>
@@ -223,6 +234,7 @@ export function KpiRow({
           <HalfGauge a={s.wins} b={s.losses} />
         </div>
         <Counts a={s.wins} b={s.losses} />
+        <DeltaPill d={deltas?.winrate} vs={vs} />
       </Widget>
 
       <Widget label={k.profitFactor} hint={k.hints.profitFactor} i={2}>
@@ -232,14 +244,24 @@ export function KpiRow({
           <span className={`whitespace-nowrap ${TONE.aText}`}>{formatUsd(grossWin)}</span>
           <span className={`whitespace-nowrap ${TONE.bText}`}>−{formatUsd(grossLoss)}</span>
         </div>
+        <DeltaPill d={deltas?.profitFactor} vs={vs} />
       </Widget>
 
       <Widget label={k.dayWinrate} hint={k.hints.dayWinrate} i={3}>
-        <div className={gaugeRow}>
-          <div className={big}>{num(score.dayWinrate, (v) => formatPercent(v))}</div>
-          <HalfGauge a={score.dayWins} b={score.dayLosses} />
-        </div>
+        {/* не второй одинаковый полукруг, а последние торговые дни квадратиками W / L (как «Последние 10 сделок») */}
+        {days ? (
+          <>
+            <div className={big}>{num(score.dayWinrate, (v) => formatPercent(v))}</div>
+            <DaySquares days={days} />
+          </>
+        ) : (
+          <div className={gaugeRow}>
+            <div className={big}>{num(score.dayWinrate, (v) => formatPercent(v))}</div>
+            <HalfGauge a={score.dayWins} b={score.dayLosses} />
+          </div>
+        )}
         <Counts a={score.dayWins} b={score.dayLosses} />
+        <DeltaPill d={deltas?.dayWinrate} vs={vs} />
       </Widget>
 
       <Widget label={k.avgWinLoss} hint={k.hints.avgWinLoss} i={4}>
@@ -249,7 +271,61 @@ export function KpiRow({
           <span className={TONE.aText}>{formatPnl(s.avgWin)}</span>
           <span className={TONE.bText}>{formatPnl(s.avgLoss)}</span>
         </div>
+        <DeltaPill d={deltas?.winLoss} vs={vs} />
       </Widget>
+    </div>
+  )
+}
+
+/**
+ * Сравнение с прошлым периодом — плашка внизу карточки (образец — 21st.dev advanced-stats: маленькая цветная плашка изменения).
+ * Лучше — --color-up, хуже — --color-down, так же — серым. Нет сравнения — ничего.
+ */
+export function DeltaPill({ d, vs }: { d: Delta | null | undefined; vs: string }) {
+  const k = useT().dashboard.kpi
+  if (!d) return null
+  const arrow = d.dir === 'up' ? '▲' : d.dir === 'down' ? '▼' : '•'
+  const signed = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${formatNumber(Math.abs(n), 1)}`
+  const text =
+    d.kind === 'usd' ? `${formatPnlShort(d.delta)} ${vs}` : d.kind === 'pp' ? `${fmt(k.vs.pp, { n: signed(d.delta) })} ${vs}` : fmt(k.vs.was, { v: formatRatio(d.prev) })
+  const tone = d.dir === 'up' ? 'bg-up/12 text-up' : d.dir === 'down' ? 'bg-down/12 text-down' : 'bg-surface-2 text-muted'
+  return (
+    <p data-delta={d.dir} title={d.kind === 'was' ? vs : undefined} className={`num mt-auto inline-flex items-center gap-1 self-start rounded-md px-1.5 py-0.5 text-xs font-medium ${tone}`}>
+      <span aria-hidden className="text-[10px]">
+        {arrow}
+      </span>
+      {text}
+    </p>
+  )
+}
+
+const DAYS_N = 7
+
+/** Последние 7 торговых дней квадратиками W / L (цвета up / down), слева старые, справа новые */
+function DaySquares({ days }: { days: DayPnl[] }) {
+  const t = useT()
+  const f = t.dashboard.kpi.form
+  const last = days.filter((d) => d.count > 0).slice(-DAYS_N)
+  if (!last.length) return null
+  return (
+    <div title={plural(last.length, t.dashboard.kpi.lastDays)}>
+      <ol data-shot="day-form" className="grid grid-cols-[repeat(7,minmax(0,22px))] gap-1">
+        {last.map((d) => {
+          const o: Outcome = d.pnl > 0 ? 'win' : d.pnl < 0 ? 'loss' : 'even'
+          return (
+            <li
+              key={d.date}
+              aria-label={`${d.date}: ${o === 'win' ? f.win : o === 'loss' ? f.loss : f.even}`}
+              className={`num flex aspect-square items-center justify-center rounded-md text-xs font-bold ${
+                o === 'win' ? 'bg-up/15 text-up' : o === 'loss' ? 'bg-down/15 text-down' : 'border border-dashed border-border text-muted'
+              }`}
+            >
+              {o === 'win' ? f.winLetter : o === 'loss' ? f.lossLetter : f.evenLetter}
+            </li>
+          )
+        })}
+      </ol>
+      <p className="mt-1 text-xs text-muted">{plural(last.length, t.dashboard.kpi.lastDays)}</p>
     </div>
   )
 }

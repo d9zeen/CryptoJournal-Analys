@@ -152,7 +152,7 @@ export function LandingPage() {
                 <span className="ml-2 truncate text-xs text-muted">{l.previewLabel}</span>
               </div>
               <div className="flex flex-col gap-3 rounded-lg bg-bg p-3 sm:p-4">
-                <KpiRow summary={demo.summary} score={demo.score} startingBalance={demo.balance} equity={demo.equity} />
+                <KpiRow summary={demo.summary} score={demo.score} startingBalance={demo.balance} equity={demo.equity} days={demo.days} />
                 <div className="rounded-lg border border-border bg-surface p-4">
                   <Suspense fallback={<div className="h-[300px]" />}>
                     <EquityChart points={demo.equity} unit="usd" balance={demo.balance} height={380} />

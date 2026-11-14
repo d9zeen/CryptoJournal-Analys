@@ -2,6 +2,8 @@
 import { supabase } from '@/lib/supabase'
 import { queryClient } from '@/lib/queryClient'
 import { exportFilename, tradesToCsv } from '@/lib/export/tradesCsv'
+import { notesFilename, notesToCsv } from '@/lib/export/notesCsv'
+import { fetchAllNotes } from '@/features/calendar/notesApi'
 import type { ListItem, TradeWithTags } from '@/types/db'
 import { fetchTradesPaged } from '@/features/trades/api'
 
@@ -31,6 +33,20 @@ export async function downloadTradesCsv(): Promise<number> {
   a.remove()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
   return trades.length
+}
+
+/** Скачать заметки дня (календарь) отдельным CSV-файлом. Возвращает число заметок. */
+export async function downloadNotesCsv(): Promise<number> {
+  const notes = await fetchAllNotes()
+  const url = URL.createObjectURL(new Blob([notesToCsv(notes)], { type: 'text/csv;charset=utf-8' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = notesFilename()
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  return notes.length
 }
 
 const BUCKET = 'screenshots'

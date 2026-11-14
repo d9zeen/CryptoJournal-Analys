@@ -32,6 +32,41 @@ export function rangeFor(preset: PeriodPreset, custom: CustomRange, now = new Da
   }
 }
 
+/**
+ * Прошлый период той же длины — для сравнения на «Статистике»:
+ * неделя → прошлая неделя, месяц → прошлый календарный месяц, свой диапазон → такой же отрезок прямо перед ним;
+ * «всё время» и незаполненный свой диапазон — без сравнения (null).
+ * vs — какую подпись показать («к прошлой неделе» / «к октябрю» / «к прошлому периоду»), month — номер прошлого месяца (0…11).
+ */
+export function previousRange(
+  preset: PeriodPreset,
+  custom: CustomRange,
+  now = new Date(),
+): { range: DateRange; vs: 'week' | 'month' | 'custom'; month: number } | null {
+  switch (preset) {
+    case 'week': {
+      const cur = rangeFor('week', custom, now)
+      const from = new Date(cur.from!)
+      const prev = new Date(from.getFullYear(), from.getMonth(), from.getDate() - 7)
+      return { range: { from: prev.toISOString(), to: from.toISOString() }, vs: 'week', month: prev.getMonth() }
+    }
+    case 'month': {
+      const from = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      const to = new Date(now.getFullYear(), now.getMonth(), 1)
+      return { range: { from: from.toISOString(), to: to.toISOString() }, vs: 'month', month: from.getMonth() }
+    }
+    case 'custom': {
+      if (!custom.from || !custom.to) return null
+      const days = daysInRange(custom)
+      const start = parseYmd(custom.from)
+      const from = new Date(start.getFullYear(), start.getMonth(), start.getDate() - days)
+      return { range: { from: from.toISOString(), to: start.toISOString() }, vs: 'custom', month: from.getMonth() }
+    }
+    default:
+      return null
+  }
+}
+
 /* ---------- Выбор своего диапазона в календаре ---------- */
 
 const pad = (n: number) => String(n).padStart(2, '0')

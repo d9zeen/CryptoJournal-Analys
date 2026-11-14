@@ -80,6 +80,16 @@ export type TradeWithTags = Trade & { trade_mistakes: { tag_id: string }[]; trad
 /** Поля, которые отправляем при создании/изменении */
 export type TradeInput = Omit<Trade, 'user_id' | 'created_at' | 'updated_at' | 'source' | 'import_id' | 'external_id'>
 
+/** Заметка дня в календаре (0017): одна на день, до 2000 символов; записать — только Pro Plus */
+export type DayNote = {
+  id: string
+  user_id: string
+  day: string // YYYY-MM-DD
+  text: string
+  created_at: string
+  updated_at: string
+}
+
 export type Usage = {
   plan: Plan
   month: string

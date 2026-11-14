@@ -69,6 +69,9 @@ select pg_temp.expect_error($$update profiles set palette = 'cyan_wine'$$, 'PALE
 select pg_temp.check(true, 'на Basic платную палитру выбрать нельзя');
 update profiles set palette = 'sky_coral';
 select pg_temp.check((select palette from profiles) = 'sky_coral', 'на Basic бесплатная палитра сохраняется');
+-- Заметки дня (0017) — функция Pro Plus
+select pg_temp.expect_error($$insert into day_notes (day, text) values (current_date, 'план на день')$$, 'PLAN_FEATURE');
+select pg_temp.check(true, 'на Basic заметку дня записать нельзя');
 update profiles set palette = 'classic';
 
 update trades set note = 'взлом' where id = 'bbbbbbbb-1111-0000-0000-000000000000';
@@ -146,6 +149,8 @@ insert into trades (exchange, symbol, side, entry_at, entry_price, size_usd) val
 select pg_temp.check((select trade_limit is null and plan = 'pro' from get_my_usage()), 'на Pro сделки без лимита (51-я прошла)');
 update profiles set palette = 'cyan_wine';
 select pg_temp.check((select palette from profiles) = 'cyan_wine', 'на Pro палитру выбрать можно');
+select pg_temp.expect_error($$insert into day_notes (day, text) values (current_date, 'план на день')$$, 'PLAN_FEATURE');
+select pg_temp.check(true, 'на Pro заметку дня записать нельзя (только Pro Plus)');
 select pg_temp.expect_error($$update profiles set palette = 'rainbow'$$, 'check constraint');
 select pg_temp.check(true, 'неизвестная палитра отклоняется и на Pro');
 insert into trades (exchange, symbol, side, entry_at, entry_price, size_usd)
@@ -158,6 +163,33 @@ update profiles set plan = 'pro_plus', plan_until = now() + interval '30 days' w
 set role authenticated;
 insert into trades (exchange, symbol, side, entry_at, entry_price, size_usd) values ('okx', 'SOLUSDT', 'long', now(), 150, 100);
 select pg_temp.check((select trade_limit is null and plan = 'pro_plus' from get_my_usage()), 'на Pro Plus лимита нет');
+
+-- Заметки дня на Pro Plus
+insert into day_notes (day, text) values ('2026-11-10', 'план: только пробои');
+select pg_temp.check((select count(*) from day_notes where user_id = 'aaaaaaaa-0000-0000-0000-000000000001') = 1, 'на Pro Plus заметка дня записывается (user_id — свой сам)');
+insert into day_notes (day, text) values ('2026-11-10', 'итог: два стопа') on conflict (user_id, day) do update set text = excluded.text;
+select pg_temp.check((select text from day_notes where day = '2026-11-10') = 'итог: два стопа', 'одна заметка на день: повторная запись обновляет её');
+select pg_temp.expect_error($$insert into day_notes (day, text) values ('2026-11-11', repeat('x', 2001))$$, 'check constraint');
+select pg_temp.check(true, 'заметка длиннее 2000 символов отклоняется');
+reset role;
+update profiles set plan = 'pro_plus', plan_until = now() + interval '30 days' where id = 'bbbbbbbb-0000-0000-0000-000000000002';
+set role authenticated;
+select pg_temp.expect_error($$insert into day_notes (user_id, day, text) values ('bbbbbbbb-0000-0000-0000-000000000002', '2026-11-12', 'чужая')$$, 'row-level security');
+select pg_temp.check(true, 'нельзя записать заметку от имени другого');
+-- B не видит и не меняет заметку A
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
+select pg_temp.check((select count(*) from day_notes) = 0, 'B не видит заметки A');
+update day_notes set text = 'взлом';
+delete from day_notes;
+set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
+select pg_temp.check((select text from day_notes where day = '2026-11-10') = 'итог: два стопа', 'B не может изменить или удалить заметку A');
+reset role;
+update profiles set plan = 'free', plan_until = null where id = 'bbbbbbbb-0000-0000-0000-000000000002';
+set role authenticated;
+set role anon;
+select pg_temp.expect_error($$select * from public.day_notes$$, 'permission denied');
+set role authenticated;
+select pg_temp.check(true, 'anon не читает заметки');
 
 -- Импорт CSV (этап 4). Делаем на Pro Plus, чтобы не упираться в лимит.
 insert into imports (id, exchange, filename, rows_total) values ('aaaaaaaa-2222-0000-0000-000000000000', 'bybit', 'closed_pnl.csv', 2);
@@ -604,5 +636,6 @@ delete from auth.users where id = 'aaaaaaaa-0000-0000-0000-000000000001';
 select pg_temp.check((select count(*) from vault.secrets where id = :'a_secret') = 0, 'удаление аккаунта удаляет и секреты API из Vault');
 select pg_temp.check((select count(*) from trades where user_id = 'aaaaaaaa-0000-0000-0000-000000000001') = 0
   and (select count(*) from profiles where id = 'aaaaaaaa-0000-0000-0000-000000000001') = 0, 'удаление аккаунта удаляет его данные');
+select pg_temp.check((select count(*) from day_notes where user_id = 'aaaaaaaa-0000-0000-0000-000000000001') = 0, 'удаление аккаунта удаляет и заметки дня');
 
 \echo 'ВСЕ ТЕСТЫ БАЗЫ ПРОЙДЕНЫ'

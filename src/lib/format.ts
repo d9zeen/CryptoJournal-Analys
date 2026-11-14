@@ -73,6 +73,11 @@ export function formatDateTime(iso: string | null | undefined): string {
   return new Intl.DateTimeFormat(intlLocale(), { dateStyle: 'short', timeStyle: 'short' }).format(new Date(iso))
 }
 
+/** Только время 14:05 (ru) / 2:05 PM (en) — в часовом поясе пользователя (профиль) */
+export function formatTimeIn(iso: string, timeZone: string): string {
+  return new Intl.DateTimeFormat(intlLocale(), { timeZone, timeStyle: 'short' }).format(new Date(iso))
+}
+
 /** Дата без времени: 12.12.2026 (в часовом поясе браузера) */
 export function formatDateShort(d: Date | string): string {
   return new Intl.DateTimeFormat(intlLocale(), { dateStyle: 'short' }).format(typeof d === 'string' ? new Date(d) : d)

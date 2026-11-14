@@ -459,6 +459,23 @@
   box-shadow: 0 10px 24px -14px color-mix(in srgb, var(--color-text) 45%, transparent);
 }
 
+/* Панель дня в календаре (<dialog class="day-sheet">): на телефоне — лист снизу, от 768px — панель справа.
+   Появление — только transform / opacity (раздел «Анимации» в CLAUDE.md) */
+.day-sheet[open] {
+  animation: sheet-up 0.28s var(--ease-snap);
+}
+@media (min-width: 768px) {
+  .day-sheet[open] {
+    animation-name: sheet-left;
+  }
+}
+@keyframes sheet-up {
+  from { transform: translateY(32px); opacity: 0; }
+}
+@keyframes sheet-left {
+  from { transform: translateX(32px); opacity: 0; }
+}
+
 /* Большая кривая капитала (EquityChart): «шторка» цвета карточки уезжает вправо — линия и заливка открываются слева направо;
    итоговое положение шторки — за правым краем (при «уменьшить движение» график виден сразу) */
 .eq-curtain {

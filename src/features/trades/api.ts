@@ -38,11 +38,11 @@ export async function fetchTradesPaged(range: DateRange, ascending = false): Pro
 }
 
 /** Сделки за период (по дате входа). Остальные фильтры — на клиенте. */
-export function useTrades(range: DateRange) {
+export function useTrades(range: DateRange, enabled = true) {
   const { user } = useAuth()
   return useQuery({
     queryKey: ['trades', user?.id, range.from, range.to],
-    enabled: Boolean(user),
+    enabled: Boolean(user) && enabled,
     queryFn: () => fetchTradesPaged(range),
     // при смене периода показываем прежние сделки, пока грузятся новые: страница не мигает заготовками,
     // а числа прокручиваются к новым значениям (№13)

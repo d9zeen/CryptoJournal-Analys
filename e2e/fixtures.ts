@@ -37,6 +37,9 @@ export type FakeDb = {
   confirmEmail?: boolean
   /** вызовы входа / регистрации / писем: путь и тело */
   authCalls?: { path: string; body: unknown }[]
+  /** заметки дня в календаре (0017): день → текст; noteWrites — что сохраняли (upsert / delete) */
+  dayNotes?: Record<string, string>
+  noteWrites?: { method: string; body: unknown }[]
 }
 
 export function makeTrade(i: number, over: Row = {}): Row {
@@ -139,8 +142,17 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
         // как настоящий Supabase: не больше 1000 строк за раз (offset/limit) и общее число в Content-Range
         const offset = Number(url.searchParams.get('offset') ?? 0)
         const limit = Math.min(Number(url.searchParams.get('limit') ?? 1000), 1000)
-        const page = db.trades.slice(offset, offset + limit)
-        const total = db.trades.length
+        // фильтр по дате входа, как у настоящего Supabase: entry_at=gte.… и entry_at=lt.…
+        const conds = url.searchParams.getAll('entry_at')
+        const rows = db.trades.filter((t) =>
+          conds.every((c) => {
+            const [op, v] = [c.slice(0, c.indexOf('.')), c.slice(c.indexOf('.') + 1)]
+            const at = Date.parse(String(t.entry_at))
+            return op === 'gte' ? at >= Date.parse(v) : op === 'lt' ? at < Date.parse(v) : true
+          }),
+        )
+        const page = rows.slice(offset, offset + limit)
+        const total = rows.length
         return route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -159,6 +171,28 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
         return route.fulfill({ status: 201, body: '' })
       }
       return route.fulfill({ status: 204, body: '' })
+    }
+    if (path === '/rest/v1/day_notes') {
+      const notes = (db.dayNotes ??= {})
+      const row = (day: string) => ({ id: `note-${day}`, user_id: UID, day, text: notes[day], created_at: '', updated_at: '' })
+      if (method === 'GET') {
+        const day = url.searchParams.get('day')?.replace(/^eq\./, '')
+        if (day) return json(notes[day] !== undefined ? row(day) : null)
+        return json(Object.keys(notes).map(row))
+      }
+      ;(db.noteWrites ??= []).push({ method, body: body() })
+      if (method === 'POST') {
+        const b = body() as { day: string; text: string }
+        // как триггер в базе: записать заметку — только Pro Plus
+        if (db.usage.plan !== 'pro_plus') return json({ message: 'PLAN_FEATURE', code: 'P0001' }, 400)
+        notes[b.day] = b.text
+        return json(row(b.day), 201)
+      }
+      if (method === 'DELETE') {
+        const day = url.searchParams.get('day')?.replace(/^eq\./, '')
+        if (day) delete notes[day]
+        return route.fulfill({ status: 204, body: '' })
+      }
     }
     if (path === '/rest/v1/imports') {
       if (method === 'POST') {
