@@ -254,3 +254,47 @@ describe('barFor', () => {
     expect(barFor(months, '2026-08-31')).toBeNull()
   })
 })
+
+import { byHourBucket, byLeverage, groupTotal, leverageBucket, sortGroups } from './stats'
+describe('«Разбор»: время суток, плечо, итого, сортировка', () => {
+  const mk = (id: string, entry: string, pnl: number, leverage: number | null, tagIds: string[] = []) => ({
+    id, side: 'long' as const, symbol: 'BTCUSDT', entry_at: entry, exit_at: entry, pnl, r_multiple: null, setup_id: null, emotion_id: null, tagIds, leverage,
+  })
+  const list = closedTrades([
+    mk('a', '2026-11-01T00:30:00Z', 100, 1, ['fomo']), // Москва 03:30 → группа 03–06
+    mk('b', '2026-11-01T02:10:00Z', -40, 5, ['fomo', 'late']), // 05:10 → 03–06
+    mk('c', '2026-11-01T20:00:00Z', 60, 20), // 23:00 → 21–24
+    mk('d', '2026-11-02T09:00:00Z', -30, 50), // 12:00 → 12–15
+    mk('e', '2026-11-02T10:00:00Z', 10, null), // 13:00 → 12–15, без плеча = 1×
+  ])
+  it('время суток: по 3 часа в часовом поясе пользователя, только непустые', () => {
+    expect(byHourBucket(list, 'Europe/Moscow').map((g) => [g.key, g.count, g.pnl])).toEqual([
+      [3, 2, 60],
+      [12, 2, -20],
+      [21, 1, 60],
+    ])
+    expect(byHourBucket(list, 'UTC').map((g) => g.key)).toEqual([0, 9, 18])
+  })
+  it('плечо: 1–3×, 4–10×, 11–25×, 26×+', () => {
+    expect([1, 3, 4, 10, 11, 25, 26, 125, null, '7'].map((x) => leverageBucket(x as number | null))).toEqual(['1-3', '1-3', '4-10', '4-10', '11-25', '11-25', '26+', '26+', '1-3', '4-10'])
+    expect(byLeverage(list).map((g) => [g.key, g.count])).toEqual([
+      ['1-3', 2],
+      ['4-10', 1],
+      ['11-25', 1],
+      ['26+', 1],
+    ])
+  })
+  it('итого: сделка с двумя тегами — один раз; для ошибок — только сделки с ошибкой', () => {
+    expect(groupTotal(list)).toMatchObject({ count: 5, wins: 3, pnl: 100, lossSum: -70 })
+    expect(groupTotal(list, true)).toMatchObject({ count: 2, pnl: 60, lossSum: -40 })
+    expect(groupTotal([])).toMatchObject({ count: 0, pnl: 0 })
+  })
+  it('сортировка групп по PnL, винрейту, числу сделок и убыткам', () => {
+    const g = byHourBucket(list, 'Europe/Moscow')
+    expect(sortGroups(g, 'pnl').map((x) => x.key)).toEqual([3, 21, 12])
+    expect(sortGroups(g, 'pnl', 'asc').map((x) => x.key)).toEqual([12, 3, 21])
+    expect(sortGroups(g, 'winrate').map((x) => x.key)).toEqual([21, 3, 12])
+    expect(sortGroups(g, 'count').map((x) => x.key)).toEqual([3, 12, 21])
+    expect(sortGroups(g, 'loss').map((x) => x.key)).toEqual([3, 12, 21])
+  })
+})

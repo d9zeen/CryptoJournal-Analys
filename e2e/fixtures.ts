@@ -39,6 +39,8 @@ export type FakeDb = {
   authCalls?: { path: string; body: unknown }[]
   /** заметки дня в календаре (0017): день → текст; noteWrites — что сохраняли (upsert / delete) */
   dayNotes?: Record<string, string>
+  /** изменения и удаления сделок (массовые действия): метод, тело, ?id=in.(…) */
+  tradeWrites?: { method: string; body: unknown; ids: string[] }[]
   noteWrites?: { method: string; body: unknown }[]
 }
 
@@ -170,6 +172,15 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
         for (const row of Array.isArray(b) ? b : [b]) db.trades.push(makeTrade(db.trades.length + 100, row))
         return route.fulfill({ status: 201, body: '' })
       }
+      // массовые действия: PATCH / DELETE с ?id=in.(a,b,…) — применяем к db.trades, как база
+      const m = /^in\.\((.*)\)$/.exec(url.searchParams.get('id') ?? '')
+      const ids = m ? m[1].split(',').map((x) => x.replace(/"/g, '')) : []
+      ;(db.tradeWrites ??= []).push({ method, body: body(), ids })
+      if (method === 'PATCH' && ids.length) {
+        const b = body() as Record<string, unknown>
+        db.trades = db.trades.map((t) => (ids.includes(String(t.id)) ? { ...t, ...b } : t))
+      }
+      if (method === 'DELETE' && ids.length) db.trades = db.trades.filter((t) => !ids.includes(String(t.id)))
       return route.fulfill({ status: 204, body: '' })
     }
     if (path === '/rest/v1/day_notes') {

@@ -20,6 +20,8 @@ export type StatTrade = {
   setup_id: string | null
   emotion_id: string | null
   tagIds: string[]
+  /** плечо (для «Разбор → Плечо»); нет — считаем 1× */
+  leverage?: number | string | null
 }
 
 /** Закрытая сделка с числовыми pnl / r */
@@ -291,6 +293,40 @@ export function byWeekday(closed: ClosedTrade[], timeZone: string): Group<number
 export function byHour(closed: ClosedTrade[], timeZone: string): Group<number>[] {
   const groups = groupBy(closed, (t) => [zonedParts(t.entry_at, timeZone).hour])
   return Array.from({ length: 24 }, (_, h) => groups.find((g) => g.key === h) ?? finish([makeGroup(h)])[0])
+}
+
+/** «Разбор → Время суток»: группы по 3 часа входа в часовом поясе пользователя — ключ = начало (0, 3, … 21); только непустые */
+export function byHourBucket(closed: ClosedTrade[], timeZone: string): Group<number>[] {
+  return groupBy(closed, (t) => [Math.floor(zonedParts(t.entry_at, timeZone).hour / 3) * 3]).sort((a, b) => a.key - b.key)
+}
+
+/** Группы плеча: 1–3×, 4–10×, 11–25×, 26×+ (без плеча / спот — 1×) */
+export const LEVERAGE_BUCKETS = ['1-3', '4-10', '11-25', '26+'] as const
+export type LeverageBucket = (typeof LEVERAGE_BUCKETS)[number]
+export function leverageBucket(leverage: number | string | null | undefined): LeverageBucket {
+  const n = num(leverage ?? null) ?? 1
+  return n <= 3 ? '1-3' : n <= 10 ? '4-10' : n <= 25 ? '11-25' : '26+'
+}
+/** «Разбор → Плечо»: только непустые группы, по порядку плеча */
+export function byLeverage(closed: ClosedTrade[]): Group<LeverageBucket>[] {
+  return groupBy(closed, (t) => [leverageBucket(t.leverage)]).sort((a, b) => LEVERAGE_BUCKETS.indexOf(a.key) - LEVERAGE_BUCKETS.indexOf(b.key))
+}
+
+/**
+ * Строка «Итого» под таблицей «Разбора»: по всем сделкам периода (сделка с двумя тегами считается один раз).
+ * mistakes — только сделки, у которых есть хоть одна ошибка (для вкладки «Ошибки»).
+ */
+export function groupTotal(closed: ClosedTrade[], mistakes = false): Group<'total'> {
+  const list = mistakes ? closed.filter((t) => t.tagIds.length > 0) : closed
+  return groupBy(list, () => ['total' as const])[0] ?? finish([makeGroup<'total'>('total')])[0]
+}
+
+export type GroupSortKey = 'pnl' | 'winrate' | 'count' | 'loss'
+/** Сортировка строк «Разбора»: по PnL / винрейту / числу сделок — по убыванию; по убыткам — самые дорогие сверху */
+export function sortGroups<K>(groups: Group<K>[], key: GroupSortKey, dir: 'asc' | 'desc' = 'desc'): Group<K>[] {
+  const v = (g: Group<K>) => (key === 'pnl' ? g.pnl : key === 'winrate' ? g.winrate : key === 'count' ? g.count : -g.lossSum)
+  const sign = dir === 'desc' ? -1 : 1
+  return [...groups].sort((a, b) => sign * (v(a) - v(b)) || b.count - a.count)
 }
 
 /**

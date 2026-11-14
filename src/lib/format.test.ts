@@ -55,3 +55,25 @@ describe('formatPnlShort — короткая сумма для клетки к�
     }
   })
 })
+
+import { formatDuration } from './format'
+describe('formatDuration — «В сделке»', () => {
+  const MIN = 60_000
+  it('ru: минуты, часы с минутами, дни с часами', () => {
+    setLang('ru')
+    expect(formatDuration(45 * MIN)).toBe('45 мин')
+    expect(formatDuration((4 * 60 + 12) * MIN)).toBe('4 ч 12 мин')
+    expect(formatDuration(2 * 60 * MIN)).toBe('2 ч')
+    expect(formatDuration((3 * 1440 + 2 * 60 + 40) * MIN)).toBe('3 д 2 ч')
+    expect(formatDuration(1440 * MIN)).toBe('1 д')
+    expect(formatDuration(20_000)).toBe('< 1 мин')
+    expect(formatDuration(null)).toBe('—')
+  })
+  it('en', () => {
+    setLang('en')
+    expect(formatDuration(45 * MIN)).toBe('45 min')
+    expect(formatDuration((4 * 60 + 12) * MIN)).toBe('4 h 12 min')
+    expect(formatDuration((3 * 1440 + 2 * 60) * MIN)).toBe('3 d 2 h')
+    setLang('ru')
+  })
+})

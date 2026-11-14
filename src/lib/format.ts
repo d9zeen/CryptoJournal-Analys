@@ -73,6 +73,24 @@ export function formatDateTime(iso: string | null | undefined): string {
   return new Intl.DateTimeFormat(intlLocale(), { dateStyle: 'short', timeStyle: 'short' }).format(new Date(iso))
 }
 
+/**
+ * Сколько длилась сделка: «45 мин», «4 ч 12 мин», «3 д 2 ч» (en: «45 min», «4 h 12 min», «3 d 2 h»).
+ * Меньше минуты — «< 1 мин»; от суток — дни и часы (минуты уже не важны); null — открытая сделка («—»).
+ */
+export function formatDuration(ms: number | null | undefined): string {
+  if (ms === null || ms === undefined || !Number.isFinite(ms) || ms < 0) return '—'
+  const en = getLang() === 'en'
+  const u = en ? { d: 'd', h: 'h', m: 'min', lt: '< 1 min' } : { d: 'д', h: 'ч', m: 'мин', lt: '< 1 мин' }
+  const min = Math.floor(ms / 60_000)
+  if (min < 1) return u.lt
+  const d = Math.floor(min / 1440)
+  const h = Math.floor((min % 1440) / 60)
+  const m = min % 60
+  if (d > 0) return h ? `${d} ${u.d} ${h} ${u.h}` : `${d} ${u.d}`
+  if (h > 0) return m ? `${h} ${u.h} ${m} ${u.m}` : `${h} ${u.h}`
+  return `${m} ${u.m}`
+}
+
 /** Только время 14:05 (ru) / 2:05 PM (en) — в часовом поясе пользователя (профиль) */
 export function formatTimeIn(iso: string, timeZone: string): string {
   return new Intl.DateTimeFormat(intlLocale(), { timeZone, timeStyle: 'short' }).format(new Date(iso))

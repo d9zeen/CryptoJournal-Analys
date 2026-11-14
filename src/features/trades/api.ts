@@ -136,3 +136,40 @@ export function useDeleteTrade() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['trades'] }),
   })
 }
+
+/** Массовые действия со списком сделок: запросы пачками по 100 id (длинный адрес запроса иначе не пройдёт) */
+const BATCH = 100
+const chunks = <T,>(xs: T[]) => Array.from({ length: Math.ceil(xs.length / BATCH) }, (_, i) => xs.slice(i * BATCH, i * BATCH + BATCH))
+
+/** Назначить сетап выбранным сделкам (null — убрать сетап) */
+export function useBulkSetSetup() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ ids, setupId }: { ids: string[]; setupId: string | null }) => {
+      for (const part of chunks(ids)) {
+        const { error } = await supabase.from('trades').update({ setup_id: setupId }).in('id', part)
+        if (error) throw error
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['trades'] }),
+  })
+}
+
+/** Удалить выбранные сделки вместе с их скриншотами */
+export function useBulkDelete() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (trades: Pick<TradeWithTags, 'id' | 'screenshot_path' | 'trade_screenshots'>[]) => {
+      for (const part of chunks(trades)) {
+        const { error } = await supabase.from('trades').delete().in('id', part.map((t) => t.id))
+        if (error) throw error
+        const paths = part.flatMap((t) => [...(t.trade_screenshots ?? []).map((s) => s.path), ...(t.screenshot_path ? [t.screenshot_path] : [])])
+        if (paths.length) await deleteScreenshots([...new Set(paths)])
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['trades'] })
+      qc.invalidateQueries({ queryKey: ['usage'] })
+    },
+  })
+}
