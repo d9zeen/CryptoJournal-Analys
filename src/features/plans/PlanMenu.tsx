@@ -136,9 +136,13 @@ export function PlanMenu({ align = 'left' }: { align?: 'left' | 'right' }) {
             })}
           </ul>
 
-          <div className="mt-2 border-t border-border px-2.5 pt-2.5 pb-1">
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-border px-2.5 pt-2.5 pb-1">
             <Link to="/plans" viewTransition className="text-xs font-medium text-primary hover:underline">
               {p.compare} →
+            </Link>
+            {/* срок, лимит и оплата — во вкладке «Тариф» настроек */}
+            <Link to="/settings#plan" className="text-xs text-muted hover:text-text hover:underline">
+              {t.settings.planInSettings}
             </Link>
           </div>
         </div>

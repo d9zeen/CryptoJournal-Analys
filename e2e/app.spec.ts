@@ -298,17 +298,125 @@ test.describe('импорт', () => {
     ])
     expect(db.imports[0]).toMatchObject({ exchange: 'binance', rows_imported: 2 })
   })
+
+  test('большой файл: при записи в базу — полоса прогресса «500 из 1 040 сделок» (по пачкам)', async ({ page, db }) => {
+    db.usage = { plan: 'pro_plus', trades_created: 0, trade_limit: null }
+    await fakeSupabase(page, db)
+    // каждую пачку «база» отвечает с задержкой — успеваем увидеть полосу
+    await page.route('**/rest/v1/trades*', async (route) => {
+      if (route.request().method() === 'POST') await new Promise((r) => setTimeout(r, 700))
+      await route.fallback()
+    })
+    const base = Date.UTC(2026, 9, 1, 0)
+    const lines = ['Date(UTC),Symbol,Side,Price,Quantity,Amount,Fee,Realized Profit']
+    for (let i = 0; i < 1040; i++) {
+      const at = (ms: number) => new Date(base + i * 2 * 3_600_000 + ms).toISOString().slice(0, 19).replace('T', ' ')
+      lines.push(`${at(0)},BTCUSDT,BUY,60000,0.01,600,0.2USDT,0`, `${at(3_600_000)},BTCUSDT,SELL,61000,0.01,610,0.2USDT,10`)
+    }
+    await page.goto('import')
+    await page.locator('input[type=file]').setInputFiles({ name: 'binance-big.csv', mimeType: 'text/csv', buffer: Buffer.from(lines.join('\n')) })
+    await page.getByRole('button', { name: /Импортировать 1\s?040/ }).click()
+    const bar = page.getByRole('progressbar', { name: 'Записываю сделки…' })
+    await expect(bar).toContainText(/500 из 1\s040 сделок/)
+    await expect(bar).toHaveAttribute('aria-valuenow', '500')
+    await expect(page.getByText(/Готово: импортировано сделок — 1\s?040/)).toBeVisible()
+    await expect(bar).toHaveCount(0)
+  })
 })
 
 test.describe('настройки', () => {
   test('включение 2FA показывает QR-код', async ({ page, db }) => {
     await fakeSupabase(page, db)
-    await page.goto('settings')
+    await page.goto('settings#security')
     await page.getByRole('button', { name: 'Включить 2FA' }).click()
     const qr = page.getByAltText('QR')
     await expect(qr).toBeVisible()
     expect(await qr.evaluate((i: HTMLImageElement) => i.naturalWidth)).toBeGreaterThan(0)
     await expect(page.getByText('JBSWY3DPEHPK3PXP')).toBeVisible()
+  })
+})
+
+test.describe('настройки: вкладки', () => {
+  test('/settings#security сразу открывает «Безопасность»; без адреса — «Профиль»; клик меняет адрес', async ({ page, db }) => {
+    await fakeSupabase(page, db)
+    await page.goto('settings#security')
+    await expect(page.getByRole('tab', { name: 'Безопасность' })).toHaveAttribute('aria-selected', 'true')
+    await expect(page.getByRole('tabpanel')).toContainText('Двухфакторная защита (2FA)')
+    await expect(page.getByRole('tabpanel')).not.toContainText('Часовой пояс')
+    await page.goto('settings')
+    await expect(page.getByRole('tab', { name: 'Профиль' })).toHaveAttribute('aria-selected', 'true')
+    await expect(page.getByRole('tabpanel')).toContainText('Часовой пояс')
+    await page.getByRole('tab', { name: 'Списки' }).click()
+    await expect(page).toHaveURL(/\/settings#lists$/)
+    await expect(page.getByRole('heading', { name: 'Сетапы' })).toBeVisible()
+    // стрелки переключают вкладки
+    await page.keyboard.press('ArrowRight')
+    await expect(page).toHaveURL(/\/settings#data$/)
+    await expect(page.getByRole('tabpanel').getByRole('button', { name: 'Выйти' })).toBeVisible()
+  })
+
+  test('на компьютере вкладки — колонкой слева, на телефоне — полосой сверху; активная видна целиком', async ({ page, db }) => {
+    await fakeSupabase(page, db)
+    await page.goto('settings#plan')
+    const tabs = page.getByRole('tab')
+    const first = (await tabs.first().boundingBox())!
+    const second = (await tabs.nth(1).boundingBox())!
+    const panel = (await page.getByRole('tabpanel').boundingBox())!
+    if ((page.viewportSize()?.width ?? 0) >= 1024) {
+      expect(second.y).toBeGreaterThan(first.y) // друг под другом
+      expect(panel.x).toBeGreaterThan(first.x + first.width) // содержимое справа
+    } else {
+      expect(Math.abs(second.y - first.y)).toBeLessThan(2) // в одну строку
+      expect(panel.y).toBeGreaterThan(first.y + first.height) // содержимое ниже
+      const active = (await page.getByRole('tab', { name: 'Тариф' }).boundingBox())!
+      const vw = page.viewportSize()!.width
+      expect(active.x).toBeGreaterThanOrEqual(0)
+      expect(active.x + active.width).toBeLessThanOrEqual(vw)
+    }
+  })
+
+  test('на 390px ни одна вкладка (кроме «Списков») не длиннее ~1,5 экрана', async ({ page, db }) => {
+    db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
+    await page.setViewportSize({ width: 390, height: 844 })
+    await fakeSupabase(page, db)
+    for (const tab of ['profile', 'appearance', 'security', 'data', 'plan']) {
+      await page.goto(`settings#${tab}`)
+      await expect(page.getByRole('tab', { selected: true })).toBeVisible()
+      await page.waitForTimeout(200)
+      const h = await page.evaluate(() => document.documentElement.scrollHeight)
+      expect(h, tab).toBeLessThanOrEqual(844 * 1.5)
+    }
+  })
+
+  test('профиль: «Сохранить» и «Отмена» активны только после изменений; «Отмена» возвращает как было', async ({ page, db }) => {
+    await fakeSupabase(page, db)
+    await page.goto('settings#profile')
+    const save = page.getByRole('button', { name: 'Сохранить' })
+    const cancel = page.getByRole('button', { name: 'Отмена' })
+    await expect(save).toBeDisabled()
+    await expect(cancel).toBeDisabled()
+    const balance = page.getByLabel('Стартовый депозит, $')
+    const before = await balance.inputValue()
+    await balance.fill('12345')
+    await expect(save).toBeEnabled()
+    await cancel.click()
+    await expect(balance).toHaveValue(before)
+    await expect(save).toBeDisabled()
+    await balance.fill('777')
+    await save.click()
+    await expect(page.getByText('Сохранено')).toBeVisible()
+  })
+
+  test('ссылки ведут на нужную вкладку: окошко тарифа → «Тариф»', async ({ page, db }) => {
+    test.skip((page.viewportSize()?.width ?? 0) < 1024, 'пилюля тарифа у логотипа — на широком экране')
+    db.usage = { plan: 'pro', trades_created: 3, trade_limit: null }
+    await fakeSupabase(page, db)
+    await page.goto('dashboard')
+    await page.getByRole('button', { name: 'Тариф: Pro' }).click()
+    await page.getByRole('dialog', { name: 'Тариф' }).getByRole('link', { name: 'Тариф в настройках' }).click()
+    await expect(page).toHaveURL(/\/settings#plan$/)
+    await expect(page.getByRole('tab', { name: 'Тариф' })).toHaveAttribute('aria-selected', 'true')
+    await expect(page.locator('[data-payment-placeholder]')).toBeVisible()
   })
 })
 
@@ -321,7 +429,7 @@ test.describe('оформление', () => {
     if ((page.viewportSize()?.width ?? 0) < 640) {
       // на узком телефоне в шапке только язык EN | RU, тема — в «Настройки → Оформление»
       await expect(page.getByRole('button', { name: 'Тёмная тема' }).filter({ visible: true })).toHaveCount(0)
-      await page.goto('settings')
+      await page.goto('settings#appearance')
       await page.getByRole('radio', { name: 'Тёмная' }).click()
     } else {
       await page.getByRole('button', { name: 'Тёмная тема' }).filter({ visible: true }).first().click()
@@ -329,7 +437,7 @@ test.describe('оформление', () => {
     await expect(html).not.toHaveAttribute('data-theme', 'light')
     await page.reload()
     await expect(html).not.toHaveAttribute('data-theme', 'light')
-    await page.goto('settings')
+    await page.goto('settings#appearance')
     await page.getByRole('radio', { name: 'Светлая' }).click()
     await expect(html).toHaveAttribute('data-theme', 'light')
   })
@@ -414,7 +522,7 @@ test('страница тарифов: Basic, Pro, Pro Plus; цены тольк
   await fakeSupabase(page, db)
   // телефон: ссылка из настроек (тарифа в шапке нет); компьютер: пилюля тарифа у логотипа → окошко → «Сравнить тарифы»
   const phone = (page.viewportSize()?.width ?? 0) < 768
-  await page.goto(phone ? 'settings' : 'dashboard')
+  await page.goto(phone ? 'settings#plan' : 'dashboard')
   if (phone) await page.getByRole('link', { name: 'Сравнить тарифы' }).click()
   else {
     await page.getByRole('button', { name: 'Тариф: Pro' }).click()
@@ -516,7 +624,7 @@ test('ключевые цифры: последние 10 сделок буква
 
 test('палитра в «Настройки → Оформление» на Basic: три бесплатные, остальные под замком', async ({ page, db }) => {
   await fakeSupabase(page, db)
-  await page.goto('settings')
+  await page.goto('settings#appearance')
   const strip = page.locator('[data-shot="palette"]')
   await expect(strip.getByRole('link', { name: 'Ещё 5 палитр — в Pro' })).toBeVisible()
   await expect(strip.getByRole('radio', { name: 'Палитра 4' })).toBeDisabled()
@@ -529,7 +637,7 @@ test('палитра в «Настройки → Оформление» на Bas
 test('палитра на Pro: выбор в настройках сохраняется в профиле и ставится на страницу', async ({ page, db }) => {
   db.usage.plan = 'pro'
   await fakeSupabase(page, db)
-  await page.goto('settings')
+  await page.goto('settings#appearance')
   const strip = page.locator('[data-shot="palette"]')
   await strip.getByRole('radio', { name: 'Палитра 4' }).click()
   await expect(page.locator('html')).toHaveAttribute('data-palette', 'cyan_wine')
@@ -583,7 +691,7 @@ test('Pro со сроком: «Pro до …», за 3 дня — плашка «
   db.planUntil = new Date(Date.now() + 10 * 86_400_000).toISOString()
   db.trades = [makeTrade(1, { pnl: 50 })]
   await fakeSupabase(page, db)
-  await page.goto('settings')
+  await page.goto('settings#plan')
   await expect(page.getByText(/^Pro до \d\d\.\d\d\.\d{4}$/).locator('visible=true').first()).toBeVisible()
   await page.goto('dashboard')
   await expect(page.locator('[data-plan-ending]')).toHaveCount(0)
@@ -707,7 +815,7 @@ test('«Биржи»: пока файла нет — «Где взять фай�
   await expect(howto).not.toContainText('Закрытые P&L')
   // на широком экране — справа от зоны загрузки
   if ((page.viewportSize()?.width ?? 0) >= 1280) {
-    const drop = (await page.getByText('Выбрать файл').boundingBox())!
+    const drop = (await page.locator('[data-shot="dropzone"]').boundingBox())!
     const box = (await howto.boundingBox())!
     expect(box.x).toBeGreaterThan(drop.x + drop.width)
   }
@@ -754,13 +862,16 @@ test('настройки: «Светлая» первой, оплата — «с
   db.planUntil = new Date(Date.now() + 5 * 86_400_000).toISOString()
   db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
   await fakeSupabase(page, db)
-  await page.goto('settings')
+  await page.goto('settings#appearance')
   const theme = page.getByRole('radiogroup', { name: 'Тема' })
   await expect(theme.getByRole('radio').first()).toHaveText('Светлая')
+  await page.getByRole('tab', { name: 'Тариф' }).click()
+  await expect(page).toHaveURL(/\/settings#plan$/)
   const pay = page.locator('[data-payment-placeholder]')
   await expect(pay).toContainText('Оплата на сайте скоро появится.')
   await expect(pay).toContainText(/Сейчас у тебя пробный Pro Plus до \d{2}\.\d{2}\.\d{4}\./)
   await expect(page.getByText(/владелец/)).toHaveCount(0)
+  await page.getByRole('tab', { name: 'Данные' }).click()
   const del = page.getByRole('button', { name: 'Удалить аккаунт…' })
   await expect(del).toHaveClass(/border-down/)
   await expect(del).toHaveClass(/text-down/)
@@ -950,7 +1061,7 @@ test.describe('«Сделки»: быстрые фильтры, сортиров
     await page.getByRole('region', { name: 'Выбрано: 1' }).getByRole('button', { name: 'Удалить' }).click()
     await dialog.getByRole('button', { name: 'Удалить 1' }).click()
     await expect(page.getByText('Удалено сделок: 1')).toBeVisible()
-    expect(db.tradeWrites!.find((w) => w.method === 'DELETE')!.ids).toEqual(['00000000-0000-0000-0000-000000000001'])
+    await expect.poll(() => db.tradeWrites?.find((w) => w.method === 'DELETE')?.ids).toEqual(['00000000-0000-0000-0000-000000000001'])
     await expect(page.getByText('Сделок: 3')).toBeVisible()
   })
 

@@ -3,7 +3,7 @@ import { UpgradeLine } from '@/components/UpgradeLine'
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { Link, useLocation } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
-import { fmt, useT } from '@/i18n'
+import { fmt, plural, useT } from '@/i18n'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { useUsage } from '@/features/settings/api'
 import { Card } from '@/components/ui/Card'
@@ -12,7 +12,7 @@ import { Alert } from '@/components/ui/Alert'
 import { SelectField } from '@/components/ui/Field'
 import { exchangeName } from '@/lib/exchanges'
 import { dbErrorMessage } from '@/lib/errors'
-import { formatDateTime, formatPnl, formatUsd, pnlClass } from '@/lib/format'
+import { formatDateTime, formatNumber, formatPnl, formatUsd, pnlClass } from '@/lib/format'
 import { IMPORT_PARSERS, parserFor } from '@/lib/import/registry'
 import { planImport, prepareImport, type RowStatus } from '@/lib/import/plan'
 import type { ColumnMapping } from '@/lib/import/mapping'
@@ -50,6 +50,8 @@ export function ImportPage() {
   const [showMapping, setShowMapping] = useState(false)
   const [result, setResult] = useState<RunImportResult | null>(null)
   const [dragging, setDragging] = useState(false)
+  // запись в базу идёт пачками — после каждой обновляем полосу прогресса
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   // со стартового экрана «Подключить биржу» ведёт сюда с #connections — сразу показываем подключения
   const { hash } = useLocation()
@@ -139,7 +141,19 @@ export function ImportPage() {
 
   async function submit() {
     if (!plan || !file || !prepared) return
-    const res = await run.mutateAsync({ exchange, filename: file.name, rowsTotal: prepared.rows.length, trades: plan.toInsert })
+    setProgress({ done: 0, total: plan.toInsert.length })
+    let res: RunImportResult
+    try {
+      res = await run.mutateAsync({
+        exchange,
+        filename: file.name,
+        rowsTotal: prepared.rows.length,
+        trades: plan.toInsert,
+        onProgress: (done, total) => setProgress({ done, total }),
+      })
+    } finally {
+      setProgress(null)
+    }
     setResult(res)
     setFile(null)
     if (inputRef.current) inputRef.current.value = ''
@@ -171,15 +185,39 @@ export function ImportPage() {
         {/* Слева: файл, где его взять, история */}
         <div className="flex flex-col gap-4">
           <Card className="flex flex-col gap-4 !p-4">
+            {/* зона загрузки — образец 21st.dev file-upload: крупная иконка, «Перетащи файл или выбери» одной строкой, под ней форматы */}
             <label
-              className={`flex cursor-pointer flex-col items-center gap-3 rounded-lg border-2 border-dashed px-4 py-10 text-center transition-colors ${dragging ? 'border-primary bg-primary/10' : 'border-border hover:border-muted'}`}
+              data-shot="dropzone"
+              className={`group flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-9 text-center transition-colors ${dragging ? 'border-primary bg-primary/10' : 'border-border bg-surface-2/40 hover:border-muted'}`}
             >
-              <svg viewBox="0 0 24 24" className="size-8 text-muted" fill="none" stroke="currentColor" strokeWidth={1.6} aria-hidden>
-                <path d="M12 16V4m0 0l-4 4m4-4l4 4M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3" strokeLinecap="round" strokeLinejoin="round" />
+              <svg
+                viewBox="0 0 24 24"
+                className={`mb-2 size-12 transition-colors ${dragging ? 'text-primary' : 'text-muted group-hover:text-text'}`}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.7}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <path d="M12 13v8M8 17l4-4 4 4" />
+                <path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.24" />
               </svg>
-              <span className="font-medium">{file ? file.name : t.import.drop}</span>
-              <span className="text-xs text-muted">{file ? fmt(t.import.rowsInFile, { n: table?.rows.length ?? 0 }) : t.import.supported}</span>
-              <span className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-on-primary">{file ? t.import.another : t.import.pick}</span>
+              {file ? (
+                <>
+                  <span className="font-semibold break-all">{file.name}</span>
+                  <span className="text-xs text-muted">{fmt(t.import.rowsInFile, { n: table?.rows.length ?? 0 })}</span>
+                  <span className="mt-1 text-sm font-medium text-primary group-hover:underline">{t.import.another}</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-base font-semibold">
+                    {t.import.drop} <span className="text-primary underline-offset-2 group-hover:underline">{t.import.pick}</span>
+                  </span>
+                  <span className="text-sm text-muted">{t.import.formats}</span>
+                  <span className="mt-1 text-xs text-muted">{t.import.supported}</span>
+                </>
+              )}
               <input
                 ref={inputRef}
                 type="file"
@@ -276,6 +314,8 @@ export function ImportPage() {
                       </Button>
                     )}
                   </div>
+
+                  {run.isPending && progress && <ImportProgress {...progress} />}
 
                   <p className="text-xs text-muted">{prepared.mode === 'fills' ? fmt(t.import.formatFills, { rows: prepared.table.rows.length }) : t.import.formatPositions}</p>
                   {prepared.sideFallback && <p className="text-xs text-warning">{t.import.sideFallback[prepared.sideFallback]}</p>}
@@ -424,6 +464,23 @@ function HowToCard() {
       <p className="text-sm leading-relaxed">{howTo[ex]}</p>
       <p className="text-xs text-muted">{t.import.previewEmpty}</p>
     </Card>
+  )
+}
+
+/** Полоса прогресса записи в базу: «312 из 1 040 сделок»; анимируется только scaleX */
+function ImportProgress({ done, total }: { done: number; total: number }) {
+  const t = useT()
+  const text = fmt(plural(total, t.import.progress), { done: formatNumber(done, 0), total: formatNumber(total, 0) })
+  return (
+    <div data-progress role="progressbar" aria-label={t.import.progressTitle} aria-valuemin={0} aria-valuemax={total} aria-valuenow={done} aria-valuetext={text}>
+      <div className="flex items-baseline justify-between gap-3 text-sm">
+        <span>{t.import.progressTitle}</span>
+        <span className="num text-muted">{text}</span>
+      </div>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-2">
+        <div className="h-full origin-left rounded-full bg-primary transition-transform duration-500" style={{ transform: `scaleX(${total ? done / total : 0})` }} />
+      </div>
+    </div>
   )
 }
 

@@ -54,7 +54,7 @@ test.describe('в дневнике', () => {
 
   test('язык меняется в «Настройки → Оформление»', async ({ page, db }) => {
     await fakeSupabase(page, db)
-    await page.goto('settings')
+    await page.goto('settings#appearance')
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
     // в «Оформлении» — полные названия языков
     await page.getByRole('radio', { name: 'Русский' }).click()

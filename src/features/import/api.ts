@@ -58,6 +58,8 @@ export type RunImportArgs = {
   trades: ImportedTrade[]
   /** 'api' — сделки пришли синхронизацией с биржей */
   source?: 'import' | 'api'
+  /** после каждой отправленной пачки: сколько сделок уже обработано из скольких (для полосы прогресса) */
+  onProgress?: (done: number, total: number) => void
 }
 
 export type RunImportResult = {
@@ -74,7 +76,7 @@ export type RunImportResult = {
  * Если пачка упёрлась в дубль (кто-то успел раньше) — досылаем её по одной, пропуская дубли.
  * Лимит Free дополнительно проверяет триггер в базе: на нём останавливаемся.
  */
-export async function runImport({ exchange, filename, rowsTotal, trades, source = 'import' }: RunImportArgs): Promise<RunImportResult> {
+export async function runImport({ exchange, filename, rowsTotal, trades, source = 'import', onProgress }: RunImportArgs): Promise<RunImportResult> {
   const { data: rec, error: recErr } = await supabase
     .from('imports')
     .insert({ exchange, filename: filename.slice(0, 200), rows_total: rowsTotal })
@@ -87,11 +89,13 @@ export async function runImport({ exchange, filename, rowsTotal, trades, source 
   let inserted = 0
   let duplicates = 0
   let stopError: unknown = null
+  onProgress?.(0, trades.length)
 
   outer: for (const part of chunks(trades, CHUNK)) {
     const { error } = await supabase.from('trades').insert(part.map(toRow))
     if (!error) {
       inserted += part.length
+      onProgress?.(inserted + duplicates, trades.length)
       continue
     }
     if (error.code !== '23505') {
@@ -107,6 +111,7 @@ export async function runImport({ exchange, filename, rowsTotal, trades, source 
         break outer
       }
     }
+    onProgress?.(inserted + duplicates, trades.length)
   }
 
   await supabase

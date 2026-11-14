@@ -1,6 +1,9 @@
 import { PasswordInput } from '@/components/PasswordInput'
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
+import { FormActions } from '@/components/FormActions'
+import type { SaveState } from '@/components/SaveButton'
+import { pause } from '@/lib/motion'
 import { useT } from '@/i18n'
 import { supabase } from '@/lib/supabase'
 import { queryClient } from '@/lib/queryClient'
@@ -137,7 +140,7 @@ function PasswordBlock() {
   const s = t.security
   const [pw, setPw] = useState('')
   const [pw2, setPw2] = useState('')
-  const [busy, setBusy] = useState(false)
+  const [state, setState] = useState<SaveState>('idle')
   const [msg, setMsg] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
 
   async function onSubmit(e: FormEvent) {
@@ -146,13 +149,18 @@ function PasswordBlock() {
     const problem = passwordProblem(pw)
     if (problem) return setMsg({ tone: 'error', text: t.auth.errors.passwordShort })
     if (pw !== pw2) return setMsg({ tone: 'error', text: t.auth.errors.passwordMismatch })
-    setBusy(true)
+    setState('busy')
     const { error } = await supabase.auth.updateUser({ password: pw })
-    setBusy(false)
-    if (error) return setMsg({ tone: 'error', text: authErrorMessage(error, t) })
+    if (error) {
+      setState('idle')
+      return setMsg({ tone: 'error', text: authErrorMessage(error, t) })
+    }
+    setState('done')
+    setMsg({ tone: 'success', text: s.passwordChanged })
+    await pause(600)
     setPw('')
     setPw2('')
-    setMsg({ tone: 'success', text: s.passwordChanged })
+    setState('idle')
   }
 
   return (
@@ -160,10 +168,16 @@ function PasswordBlock() {
       <h3 className="text-sm font-medium">{s.passwordTitle}</h3>
       <PasswordInput label={s.passwordNew} autoComplete="new-password" meter hint={s.passwordHint} invalid={msg?.tone === 'error'} value={pw} onChange={(e) => setPw(e.target.value)} />
       <PasswordInput label={s.passwordRepeat} autoComplete="new-password" invalid={msg?.tone === 'error'} value={pw2} onChange={(e) => setPw2(e.target.value)} />
-      <Button type="submit" variant="secondary" className="self-start" loading={busy} disabled={!pw}>
-        {s.passwordSave}
-      </Button>
       {msg && <Alert tone={msg.tone}>{msg.text}</Alert>}
+      <FormActions
+        dirty={Boolean(pw || pw2)}
+        state={state}
+        onCancel={() => {
+          setPw('')
+          setPw2('')
+          setMsg(null)
+        }}
+      />
     </form>
   )
 }

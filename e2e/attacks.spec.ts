@@ -34,14 +34,14 @@ test.describe('вредный код в данных показывается к
     db.imports = [{ id: 'i1', exchange: P.js, filename: P.img + '.csv', rows_total: 1, rows_imported: 1, rows_skipped: 0, created_at: '2026-11-01T00:00:00Z' }]
     await fakeSupabase(page, db)
 
-    for (const path of ['dashboard', 'trades', `trades/${db.trades[0].id}`, 'import', 'settings']) {
+    for (const path of ['dashboard', 'trades', `trades/${db.trades[0].id}`, 'import', 'settings#lists']) {
       await page.goto(path)
       await page.waitForLoadState('networkidle')
       await page.waitForTimeout(300)
       await noXss(page)
     }
     // и вредный текст действительно на странице — просто как текст
-    await page.goto('settings')
+    await page.goto('settings#lists')
     await expect(page.getByText(P.img, { exact: true }).first()).toBeAttached()
     await page.goto(`trades/${db.trades[0].id}`)
     await expect(page.getByLabel('Заметка')).toHaveValue(ALL.join('\n'))
