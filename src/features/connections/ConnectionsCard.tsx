@@ -1,7 +1,8 @@
 /**
  * Блок «Подключённые биржи» на странице «Биржи»: каждое подключение — карточка со статусом (Работает / Ошибка / На паузе / Синхронизация…),
  * временем обновления, «Обновить» и «Отключить» (с подтверждением). Ниже — бледные карточки бирж «скоро по API».
- * Подключить: Bybit (ключ «только чтение»), Hyperliquid / Polymarket (адрес). Сделки подтягиваются сами (useAutoSync в AppLayout).
+ * Подключить: Bybit, Binance, OKX, BingX, Bitget (ключ «только чтение»; у OKX и Bitget — ещё кодовая фраза), Hyperliquid / Polymarket (адрес).
+ * Сделки подтягиваются сами (useAutoSync в AppLayout).
  */
 import { intlLocale } from '@/lib/locale'
 import { useEffect, useState, type FormEvent } from 'react'
@@ -26,6 +27,7 @@ import { SaveButton, type SaveState } from '@/components/SaveButton'
 import { pause } from '@/lib/motion'
 import {
   CONNECTABLE,
+  NEEDS_PASSPHRASE,
   SyncError,
   errorCodeOf,
   shortKey,
@@ -47,6 +49,7 @@ export function connectionError(e: unknown, t: Dict): string {
   for (const code of [
     'BAD_WALLET',
     'BAD_API_KEY',
+    'PASSPHRASE_REQUIRED',
     'CONNECTION_LIMIT_REACHED',
     'TOO_MANY_CONNECTIONS',
     'CONNECTION_EXISTS',
@@ -58,7 +61,7 @@ export function connectionError(e: unknown, t: Dict): string {
 }
 
 /** Биржи, которые скоро можно будет подключить по API (имена собственные — не переводятся) */
-const SOON = ['Binance', 'OKX', 'BingX', 'Bitget', 'MEXC', 'Lighter'] as const
+const SOON = ['MEXC', 'Lighter'] as const
 
 export function ConnectionsCard() {
   const t = useT()
@@ -322,20 +325,29 @@ function AddForm({ count, admin, onDone, onCancel }: { count: number; admin: boo
   const allowed = block === null
   const [apiKey, setApiKey] = useState('')
   const [secret, setSecret] = useState('')
+  const [passphrase, setPassphrase] = useState('')
   const [label, setLabel] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [demo, setDemo] = useState(false)
   // №15: «Подключить» — крутилка в круге (идёт проверка ключа), галочка цветом прибыли
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const kind = CONNECTABLE.find((x) => x.id === exchange)!.kind
+  const needsPassphrase = NEEDS_PASSPHRASE.has(exchange)
 
   async function submit(e: FormEvent) {
     e.preventDefault()
     setError(null)
     setSaveState('busy')
     try {
-      const id = await add.mutateAsync({ exchange, apiKey, secret: kind === 'cex' ? secret : undefined, label })
+      const id = await add.mutateAsync({
+        exchange,
+        apiKey,
+        secret: kind === 'cex' ? secret : undefined,
+        passphrase: needsPassphrase ? passphrase : undefined,
+        label,
+      })
       setSecret('')
+      setPassphrase('')
       // сразу первая синхронизация (ошибку покажет строка подключения) — до паузы на галочку, чтобы автосинхронизация не начала её второй раз
       sync.mutate({
         id,
@@ -401,6 +413,16 @@ function AddForm({ count, admin, onDone, onCancel }: { count: number; admin: boo
                 required
                 hint={c.secretHint}
               />
+              {needsPassphrase && (
+                <PasswordInput
+                  label={c.passphrase}
+                  value={passphrase}
+                  onChange={(e) => setPassphrase(e.target.value)}
+                  autoComplete="new-password"
+                  required
+                  hint={c.passphraseHint}
+                />
+              )}
             </>
           ) : (
             <TextField

@@ -26,6 +26,8 @@ export type FakeDb = {
   connCalls?: { fn: string; body: Record<string, unknown> }[]
   /** ответ Bybit на проверку ключа: 1 — только чтение */
   bybitReadOnly?: number
+  /** права ключа OKX (по умолчанию read_only) */
+  okxPerm?: string
   /** палитра в профиле (0015) */
   palette?: string
   /** срок тарифа и пробный период в профиле (0016) */
@@ -119,8 +121,16 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
           data: [{ conditionId: '0xabcdef0123456789', title: 'Will BTC hit 150k in 2026?', outcome: 'Yes', avgPrice: 0.4, totalBought: 100, realizedPnl: 60, timestamp: 1793000000 }],
           pagination: { next_cursor: null },
         })
-      // exchange-proxy: ответы Bybit
       const params = (b.params ?? {}) as Record<string, number | string>
+      // exchange-proxy: ответы OKX (права ключа, инструменты, закрытые позиции)
+      if (b.path === '/api/v5/account/config') return json({ code: '0', msg: '', data: [{ perm: db.okxPerm ?? 'read_only' }] })
+      if (b.path === '/api/v5/public/instruments') return json({ code: '0', msg: '', data: [{ instId: 'BTC-USDT-SWAP', ctVal: '0.01', ctType: 'linear' }] })
+      if (b.path === '/api/v5/account/positions-history') {
+        const t = String(Date.now() - 3_600_000)
+        const pos = { instId: 'BTC-USDT-SWAP', posId: 'okx-1', direction: 'long', type: '2', openAvgPx: '60000', closeAvgPx: '61000', closeTotalPos: '3', realizedPnl: '29.1', fee: '-0.72', fundingFee: '-0.18', lever: '10', cTime: t, uTime: t }
+        return json({ code: '0', msg: '', data: Number(params.after) > Date.now() - 60_000 ? [pos] : [] })
+      }
+      // exchange-proxy: ответы Bybit
       if (b.path === '/v5/user/query-api') return json({ retCode: 0, retMsg: 'OK', result: { readOnly: db.bybitReadOnly ?? 1 } })
       const recent = params.category === 'linear' && Number(params.endTime) > Date.now() - 7 * 86_400_000 && !params.cursor
       const item = { symbol: 'ETHUSDT', orderId: 'bb-1', side: 'Buy', closedSize: '1', cumEntryValue: '3000', avgEntryPrice: '3000', cumExitValue: '2900', avgExitPrice: '2900', closedPnl: '98', leverage: '5', createdTime: String(Date.now() - 3_600_000), updatedTime: String(Date.now() - 3_600_000) }

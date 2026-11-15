@@ -1,4 +1,4 @@
-/** Подключения бирж: Hyperliquid по адресу кошелька, Bybit по ключу «только чтение» */
+/** Подключения бирж: Hyperliquid по адресу кошелька, Bybit и OKX по ключу «только чтение» (у OKX — с кодовой фразой) */
 import { test, expect, fakeSupabase } from './fixtures'
 
 const WALLET = '0xAbCdEf0123456789abcdef0123456789ABCDEF01'
@@ -63,6 +63,45 @@ test('Bybit: ключ «только чтение» — закрытые поз�
   expect(rows[0]).toMatchObject({ exchange: 'bybit', symbol: 'ETHUSDT', side: 'short', pnl: 98, external_id: 'o:bb-1', source: 'api' })
   // секрет в браузер больше не попадает: в запросах к серверной функции его нет
   for (const c of db.connCalls!.filter((x) => x.fn === 'exchange-proxy')) expect(JSON.stringify(c.body)).not.toContain('SuperSecret')
+})
+
+test('OKX: ключ с кодовой фразой — фраза уходит в базу, в серверную функцию — нет; позиции загружаются', async ({ page, db }) => {
+  db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
+  await fakeSupabase(page, db)
+  await page.goto('import')
+  await page.getByRole('button', { name: '+ Подключить' }).click()
+  await expect(page.getByLabel('Кодовая фраза (Passphrase)')).toHaveCount(0) // у Bybit фразы нет
+  await page.getByLabel('Биржа').selectOption('okx')
+  await expect(page.getByText('Европейский аккаунт (my.okx.com) тоже подходит')).toBeVisible()
+  await page.getByLabel('API Key').fill('a1b2c3d4-0000-4000-8000-123456789abc')
+  await page.getByLabel('API Secret').fill('ABCDEF0123456789ABCDEF0123456789')
+  await page.getByLabel('Кодовая фраза (Passphrase)').fill('Фраза #1')
+  await page.getByRole('button', { name: 'Подключить', exact: true }).click()
+  await expect(page.getByText('OKX подключена')).toBeVisible()
+  const add = db.connCalls!.find((c) => c.fn === 'add_exchange_connection')!
+  expect(add.body).toMatchObject({ p_exchange: 'okx', p_passphrase: 'Фраза #1' })
+  await expect.poll(() => db.inserted.filter((x) => x.table === 'trades').length, { timeout: 20_000 }).toBe(1)
+  const rows = db.inserted.find((x) => x.table === 'trades')!.body as Record<string, unknown>[]
+  expect(rows[0]).toMatchObject({ exchange: 'okx', symbol: 'BTCUSDT', side: 'long', pnl: 29.1, size_usd: 1800, source: 'api' })
+  for (const c of db.connCalls!.filter((x) => x.fn === 'exchange-proxy')) {
+    expect(JSON.stringify(c.body)).not.toContain('ABCDEF0123456789')
+    expect(JSON.stringify(c.body)).not.toContain('Фраза')
+  }
+})
+
+test('OKX: ключ с правом торговли не принимаем — подключение удаляется', async ({ page, db }) => {
+  db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
+  db.okxPerm = 'read_only,trade'
+  await fakeSupabase(page, db)
+  await page.goto('import')
+  await page.getByRole('button', { name: '+ Подключить' }).click()
+  await page.getByLabel('Биржа').selectOption('okx')
+  await page.getByLabel('API Key').fill('a1b2c3d4-0000-4000-8000-123456789abc')
+  await page.getByLabel('API Secret').fill('ABCDEF0123456789ABCDEF0123456789')
+  await page.getByLabel('Кодовая фраза (Passphrase)').fill('phrase')
+  await page.getByRole('button', { name: 'Подключить', exact: true }).click()
+  await expect(page.getByText('Этот ключ может торговать')).toBeVisible()
+  expect(db.connCalls?.map((c) => c.fn)).toEqual(['add_exchange_connection', 'exchange-proxy', 'delete_exchange_connection'])
 })
 
 test('Pro Plus: синхронизация на сервере каждые 3 часа и предупреждение о сроке ключа Bybit', async ({ page, db }) => {
@@ -182,7 +221,8 @@ test('Карточка подключения: «Ошибка» с подска�
   await expect(ok.locator('[data-pill]')).toHaveText('Работает')
   await expect(ok).toContainText('Обновлено 10 мин назад · следующее примерно через 2 ч 50 мин')
   // «скоро по API» — бледные карточки без кнопок, старой строки текста нет
-  await expect(page.locator('[data-soon]')).toHaveCount(6)
+  await expect(page.locator('[data-soon]')).toHaveCount(2)
+  await expect(page.locator('[data-soon="Binance"]')).toHaveCount(0)
   await expect(page.locator('[data-soon="Lighter"]')).toContainText('Скоро')
   await expect(page.locator('[data-soon] button')).toHaveCount(0)
   await expect(page.getByText('Скоро по API: Binance')).toHaveCount(0)

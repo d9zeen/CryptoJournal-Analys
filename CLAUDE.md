@@ -69,7 +69,8 @@ src/
                        В капсуле до 1280px — только значки (подпись при наведении), с 1280px — только подписи; над активным — чёрточка цвета кнопок, у активного — подложка.
                        Контент — mx-auto max-w-[2200px] по той же ширине; на телефоне — шапка (логотип, «+» новая сделка,
                        язык EN | RU, тема от 640px, шестерёнка настроек) и нижнее меню из 5 пунктов (Статистика, Календарь, Сделки, Разбор, Биржи); «Выйти» — в «Настройки → Данные», «Админка» — внизу страницы настроек (только телефон, только админ)
-  lib/sync/            подключения бирж по API: run.ts (общий движок), bybit.ts (closed-pnl), hyperliquid.ts (исполнения кошелька),
+  lib/sync/            подключения бирж по API: run.ts (общий движок, CEX_MODULES), bybit.ts (closed-pnl), hyperliquid.ts (исполнения кошелька),
+                       cex.ts (общее для бирж с ключом) + okx.ts / bitget.ts / bingx.ts (закрытые позиции) / binance.ts (позиции из исполнений), тесты — cex.test.ts,
                        polymarket.ts (закрытые позиции по адресу; рынок prediction: цена исхода 0…1, проигрыш — выход 0, название — trades.title) + тесты
   features/calendar/   вкладка «Календарь» (/calendar): карта месяца (плюс — --color-up, минус — --color-down, один ровный тон без яркости по сумме), под ней полоска палитры (PaletteStrip — оставить!), справа панель итогов 320px: на xl первой карточкой «Итог месяца»
                        (MonthTotalCard, рамка border-primary: результат крупно, «16 сделок · винрейт 50 %», ru «Лучшая / Худшая сделка», en Max win / Max loss); уже xl «Итог месяца» — строкой сразу под сеткой.
@@ -105,7 +106,7 @@ src/
                        import (пункт меню «Биржи», адрес /import: сверху «Подключённые биржи» — каждое подключение отдельной карточкой в сетке (1 / 2 от sm / 3 от xl):
                        название, метка, пилюля статуса data-status («Работает» --color-up, «Ошибка» --color-down + подсказка из словаря и «Ответ биржи: …» из last_error,
                        «На паузе» серый — сверх тарифа, «Синхронизация…» — useSyncing(id), в т.ч. автосинхронизация), «Обновлено 20 мин назад», на Pro Plus «следующее примерно через …» (last_sync_at + 3 ч),
-                       «Обновить» и «Отключить» (ConfirmDialog); ниже бледные карточки «Скоро» (Binance, OKX, BingX, Bitget, MEXC, Lighter — без кнопок; строки текста «Скоро по API…» нет);
+                       «Обновить» и «Отключить» (ConfirmDialog); ниже бледные карточки «Скоро» (MEXC, Lighter — без кнопок; строки текста «Скоро по API…» нет);
                        ниже файл и история; зона загрузки — образец 21st.dev file-upload (крупная иконка, «Перетащи файл или выбери» одной строкой, под ней форматы);
                        при записи в базу — полоса прогресса «312 из 1 040 сделок» по пачкам runImport (onProgress, анимация — только scaleX);
                        пока файл не выбран — справа «Где взять файл» (HowToCard: пилюли бирж,
@@ -199,8 +200,8 @@ docs/SECURITY.md       вся защита (база, сайт, сборка) + 
 | `VITE_SUPABASE_ANON_KEY` | anon key или publishable key (публичный) |
 | `BASE_PATH` | только при сборке для GitHub Pages: `/CryptoJournal-Analys/` (ставит workflow) |
 
-Проект Supabase: `cryptojournal`, ref `dkjavndvuulnzflowdhj` (Frankfurt), миграции 0001–0015 применены (0016 — новые тарифы, 0017 — заметки дня: ждут применения владельцем) (0005 — админка, владелец добавлен в `admins`; 0006 — подключения бирж; 0007–0008 — синхронизация по расписанию; 0009 — админ без лимитов; 0010–0011 — Polymarket, рынок `prediction`, `trades.title`; 0012–0013 — тарифы Pro / Pro Plus; 0014 — выдача админки на сайте, 05.11.2026; 0015 — палитра profiles.palette, 07.11.2026).
-Подключения бирж (как TradeZella): `features/connections` + `lib/sync` + серверная функция `supabase/functions/exchange-proxy` (выложена; при изменении — выложить заново через коннектор Supabase, verify_jwt = true). Секреты ключей — в Vault, браузер их не видит. Новые биржи: `connection_kind` в новой миграции + модуль в `lib/sync` + `CONNECTABLE`.
+Проект Supabase: `cryptojournal`, ref `dkjavndvuulnzflowdhj` (Frankfurt), миграции 0001–0015 применены (0016 — новые тарифы, 0017 — заметки дня, 0018 — Binance / OKX / BingX / Bitget по API: ждут применения владельцем, строго по порядку) (0005 — админка, владелец добавлен в `admins`; 0006 — подключения бирж; 0007–0008 — синхронизация по расписанию; 0009 — админ без лимитов; 0010–0011 — Polymarket, рынок `prediction`, `trades.title`; 0012–0013 — тарифы Pro / Pro Plus; 0014 — выдача админки на сайте, 05.11.2026; 0015 — палитра profiles.palette, 07.11.2026).
+Подключения бирж (как TradeZella): `features/connections` + `lib/sync` + серверная функция `supabase/functions/exchange-proxy` (index.ts + sign.ts; при изменении — выложить заново через коннектор Supabase, verify_jwt = true). Секреты ключей — в Vault, браузер их не видит; у OKX / Bitget в Vault JSON {s, p} с кодовой фразой (0018, `parseSecret`). По ключу: Bybit, Binance, OKX, BingX, Bitget (0018). Новые биржи: `connection_kind` в новой миграции + адреса чтения и подпись в `exchange-proxy/sign.ts` + модуль в `lib/sync` (CEX_MODULES) + `CONNECTABLE`.
 Синхронизация по расписанию (Pro Plus, каждые 3 ч): pg_cron `cj-sync` → `dispatch_sync()` → pg_net → функция `sync-worker` (verify_jwt = false, проверяет секрет `cj_sync_secret` из Vault).
 Логика одна для браузера и сервера: `src/lib/sync/run.ts`; `supabase/functions/sync-worker/engine.js` собирается `npm run build:functions` (CI проверяет, что он свежий).
 Выкладка sync-worker: в index.ts импорт `./engine.js` заменить на `https://cdn.jsdelivr.net/gh/d9zeen/CryptoJournal-Analys@<SHA коммита>/supabase/functions/sync-worker/engine.js` (коммит уже запушен) и выложить через коннектор Supabase.

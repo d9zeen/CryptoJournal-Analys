@@ -1,6 +1,7 @@
 /**
  * Подключения бирж (как у TradeZella): сделки подтягиваются сами.
- *  - Bybit: ключ API «только чтение»; запросы подписывает серверная функция exchange-proxy (секрет в браузер не попадает).
+ *  - Bybit, Binance, OKX, BingX, Bitget: ключ API «только чтение» (у OKX и Bitget — с кодовой фразой);
+ *    запросы подписывает серверная функция exchange-proxy (секрет в браузер не попадает).
  *  - Hyperliquid: только адрес кошелька; история открыта, запросы идут напрямую в api.hyperliquid.xyz.
  *  - Polymarket: только адрес кошелька; закрытые позиции через exchange-proxy (без ключей).
  * Найденные сделки проходят тот же путь, что импорт файла: проверка дублей → лимит Free → запись в «Историю импортов».
@@ -10,9 +11,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FunctionRegion } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/features/auth/AuthProvider'
-import { checkBybitKey, type BybitCall, type BybitResponse } from '@/lib/sync/bybit'
+import { checkBybitKey, type BybitCall } from '@/lib/sync/bybit'
+import type { CexCall } from '@/lib/sync/cex'
 import { pmPositionToTrade, type PmGet } from '@/lib/sync/polymarket'
-import { SyncError, errorCodeOf, runSync, toSyncError, type SyncResult } from '@/lib/sync/run'
+import { CEX_MODULES, SyncError, errorCodeOf, runSync, toSyncError, type SyncResult } from '@/lib/sync/run'
 import { fetchExistingIds, runImport } from '@/features/import/api'
 import { useUsage } from '@/features/settings/api'
 import { activeConnections } from '@/lib/plans'
@@ -37,10 +39,17 @@ export type Connection = {
 /** Биржи, которые умеем подключать: cex — ключ API, wallet — адрес кошелька */
 export const CONNECTABLE = [
   { id: 'bybit', kind: 'cex' },
+  { id: 'binance', kind: 'cex' },
+  { id: 'okx', kind: 'cex' },
+  { id: 'bingx', kind: 'cex' },
+  { id: 'bitget', kind: 'cex' },
   { id: 'hyperliquid', kind: 'wallet' },
   { id: 'polymarket', kind: 'wallet' },
 ] as const
 export type ConnectableId = (typeof CONNECTABLE)[number]['id']
+
+/** Биржи, у ключа которых есть кодовая фраза (Passphrase) — как и в базе (add_exchange_connection, 0018) */
+export const NEEDS_PASSPHRASE: ReadonlySet<string> = new Set(['okx', 'bitget'])
 
 /** Как часто подтягивать сами, пока сайт открыт */
 export const AUTO_SYNC_MS = 15 * 60_000
@@ -61,12 +70,12 @@ export function useConnections() {
   })
 }
 
-/** Запрос к Bybit через серверную функцию (подпись ключом пользователя) */
-function bybitCall(connectionId: string): BybitCall {
+/** Запрос к бирже через серверную функцию (подпись ключом пользователя; только адреса для чтения) */
+function cexCall(connectionId: string): CexCall {
   return async (path, params) => {
     const { data, error } = await supabase.functions.invoke('exchange-proxy', {
       body: { connectionId, path, params },
-      region: FunctionRegion.EuCentral1, // Bybit не работает из США: запросы — из Франкфурта
+      region: FunctionRegion.EuCentral1, // Bybit и Binance не работают из США: запросы — из Франкфурта
     })
     if (error) {
       // у ошибки функции тело с кодом (NOT_ALLOWED, EXCHANGE_HTTP…)
@@ -79,7 +88,7 @@ function bybitCall(connectionId: string): BybitCall {
       }
       throw new SyncError(code === 'EXCHANGE_HTTP' ? 'EXCHANGE_DOWN' : code === 'PLAN_REQUIRED' ? 'PLAN_REQUIRED' : 'PROXY', code)
     }
-    return data as BybitResponse<unknown>
+    return data
   }
 }
 
@@ -129,7 +138,7 @@ export function syncConnection(conn: Connection, remaining: () => Promise<number
   const running = inFlight.get(conn.id)
   if (running) return running
   const p = runSync(conn, {
-    bybitCall: bybitCall(conn.id),
+    cexCall: cexCall(conn.id),
     polymarketGet: polymarketGet(conn.id),
     existingIds: fetchExistingIds,
     remaining,
@@ -162,24 +171,28 @@ async function remainingTrades(): Promise<number | null> {
   return u && u.trade_limit !== null ? Math.max(0, u.trade_limit - u.trades_created) : null
 }
 
-/** Подключить биржу. Bybit: сразу проверяем, что ключ только для чтения, иначе удаляем его */
+/** Подключить биржу. Ключ API: сразу проверяем у биржи, что он рабочий и только для чтения, иначе удаляем подключение */
 export function useAddConnection() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (args: { exchange: ConnectableId; apiKey: string; secret?: string; label?: string }) => {
+    mutationFn: async (args: { exchange: ConnectableId; apiKey: string; secret?: string; passphrase?: string; label?: string }) => {
       const { data: id, error } = await supabase.rpc('add_exchange_connection', {
         p_exchange: args.exchange,
         p_api_key: args.apiKey.trim(),
         p_secret: args.secret?.trim() || null,
         p_label: args.label?.trim() || null,
+        // кодовую фразу не обрезаем: пробелы по краям могут быть её частью
+        ...(NEEDS_PASSPHRASE.has(args.exchange) ? { p_passphrase: args.passphrase || null } : {}),
       })
       if (error) throw error
       const connId = id as string
-      if (args.exchange === 'bybit') {
+      const mod = CEX_MODULES[args.exchange]
+      if (args.exchange === 'bybit' || mod) {
         try {
-          const info = await checkBybitKey(bybitCall(connId))
+          const call = cexCall(connId)
+          const info = mod ? await mod.check(call) : await checkBybitKey(call as BybitCall)
           if (!info.readOnly) throw new SyncError('KEY_NOT_READONLY')
-          await supabase.rpc('set_connection_key_expiry', { p_id: connId, p_expires: info.expiresAt })
+          if (info.expiresAt !== undefined) await supabase.rpc('set_connection_key_expiry', { p_id: connId, p_expires: info.expiresAt })
         } catch (e) {
           await supabase.rpc('delete_exchange_connection', { p_id: connId })
           throw toSyncError(e)

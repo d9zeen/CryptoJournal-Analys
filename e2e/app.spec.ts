@@ -537,7 +537,7 @@ test('страница тарифов: Basic, Pro, Pro Plus; цены тольк
   if (!phone) await expect(page.getByText('Всё автоматически')).toBeVisible()
   await expect(page.getByText('Сделок в месяц', { exact: true }).locator('visible=true')).toBeVisible()
   await expect(page.getByRole('row').filter({ hasText: 'без лимита' })).toContainText(/50.*без лимита.*без лимита/)
-  await expect(page.getByText('Биржи и кошельки: Bybit по ключу, Hyperliquid по адресу').locator('visible=true')).toBeVisible()
+  await expect(page.getByText('Биржи по ключу, Hyperliquid по адресу').locator('visible=true')).toBeVisible()
   // оплаты за год пока нет: ни переключателя «Месяц / Год», ни годовых цен, ни «цены основателя»
   await expect(page.getByRole('radio', { name: /^(Месяц|Год)/ })).toHaveCount(0)
   await expect(page.getByText(/в год|основател/)).toHaveCount(0)

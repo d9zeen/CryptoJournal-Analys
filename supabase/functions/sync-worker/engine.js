@@ -790,18 +790,18 @@ function round(n, digits = 8) {
 * одна запись = одна закрытая позиция с ценами входа / выхода и PnL от биржи (уже за вычетом комиссий и фандинга).
 * Запросы подписывает серверная функция exchange-proxy (секрет в браузер не попадает).
 */
-const num$1 = (s) => s === void 0 || s === "" ? null : Number(s);
+const num$2 = (s) => s === void 0 || s === "" ? null : Number(s);
 /** Одна закрытая позиция Bybit → сделка для дневника (null — если данные неполные) */
 function bybitClosedToTrade(item, category) {
 	const symbol = normalizeSymbol(item.symbol);
-	const entry = num$1(item.avgEntryPrice);
-	const exit = num$1(item.avgExitPrice);
-	const pnlRaw = num$1(item.closedPnl);
-	const time = num$1(item.updatedTime) ?? num$1(item.createdTime);
+	const entry = num$2(item.avgEntryPrice);
+	const exit = num$2(item.avgExitPrice);
+	const pnlRaw = num$2(item.closedPnl);
+	const time = num$2(item.updatedTime) ?? num$2(item.createdTime);
 	if (!symbol || !entry || !exit || entry <= 0 || exit <= 0 || pnlRaw === null || !time) return null;
 	const side = item.side === "Sell" ? "long" : "short";
 	const market = category;
-	const size = market === "inverse" ? num$1(item.closedSize) : num$1(item.cumEntryValue);
+	const size = market === "inverse" ? num$2(item.closedSize) : num$2(item.cumEntryValue);
 	if (!size || size <= 0) return null;
 	const toUsd = (v) => market === "inverse" ? v * exit : v;
 	const pnl = round(toUsd(pnlRaw), 8);
@@ -814,8 +814,8 @@ function bybitClosedToTrade(item, category) {
 	}) ?? 0;
 	let fee;
 	let funding;
-	const openFee = num$1(item.openFee);
-	const closeFee = num$1(item.closeFee);
+	const openFee = num$2(item.openFee);
+	const closeFee = num$2(item.closeFee);
 	if (openFee !== null && closeFee !== null) {
 		fee = round(toUsd(Math.abs(openFee) + Math.abs(closeFee)), 8);
 		funding = round(pnl - (gross - fee), 8);
@@ -825,7 +825,7 @@ function bybitClosedToTrade(item, category) {
 		funding = diff > 0 ? 0 : -diff;
 	}
 	const at = new Date(time).toISOString();
-	const lev = num$1(item.leverage) ?? 1;
+	const lev = num$2(item.leverage) ?? 1;
 	return {
 		exchange: "bybit",
 		market_type: market,
@@ -844,8 +844,8 @@ function bybitClosedToTrade(item, category) {
 		external_id: `o:${item.orderId}`
 	};
 }
-const DAY = 864e5;
-const WINDOW = 7 * DAY;
+const DAY$1 = 864e5;
+const WINDOW$1 = 7 * DAY$1;
 var BybitError = class extends Error {
 	code;
 	constructor(code, message) {
@@ -856,7 +856,7 @@ var BybitError = class extends Error {
 /** Все закрытые позиции с from по to (мс): окна по 7 дней, страницы по 100, linear и inverse */
 async function fetchBybitTrades(call, from, to, onProgress) {
 	const windows = [];
-	for (let s = from; s < to; s += WINDOW) windows.push([s, Math.min(s + WINDOW - 1, to)]);
+	for (let s = from; s < to; s += WINDOW$1) windows.push([s, Math.min(s + WINDOW$1 - 1, to)]);
 	const jobs = ["linear", "inverse"].flatMap((category) => windows.map((w) => ({
 		category,
 		w
@@ -1059,7 +1059,7 @@ function parsePositions(table, mapping, { utcOffsetMinutes, market: marketChoice
 * когда позиция вернулась в ноль — это одна закрытая сделка. Если встречное исполнение
 * больше позиции (разворот), лишняя часть открывает новую позицию в другую сторону.
 */
-const EPS = 1e-9;
+const EPS$1 = 1e-9;
 /**
 * Long / Short без PnL и без «открытие / закрытие»: какие исполнения закрывают позицию?
 * Перебираем варианты (лучевой поиск) и берём тот, где позиция чаще всего возвращается ровно в ноль:
@@ -1097,7 +1097,7 @@ function guessCloses(fills, keyOf) {
 					parent: i,
 					close: false
 				});
-				if (st.pos > EPS && f.qty <= st.pos * (1 + 1e-6)) {
+				if (st.pos > EPS$1 && f.qty <= st.pos * (1 + 1e-6)) {
 					const left = st.pos - f.qty;
 					const flat = left <= st.pos * 1e-6;
 					add({
@@ -1353,11 +1353,11 @@ function parseFills(table, mapping, { utcOffsetMinutes, market: marketChoice, si
 			p.pnlSeen = true;
 		}
 		p.exitAt = f.at;
-		if (p.open <= EPS * p.entryQty) {
+		if (p.open <= EPS$1 * p.entryQty) {
 			emit(p);
 			open.delete(k);
 			const rest = f.qty - close;
-			if (rest > EPS * f.qty) {
+			if (rest > EPS$1 * f.qty) {
 				if (f.market === "spot") out.push({
 					line: f.line,
 					trade: null,
@@ -1522,7 +1522,7 @@ const PM_API = "https://data-api.polymarket.com";
 const pick = (o, ...keys) => {
 	for (const k of keys) if (o[k] !== void 0 && o[k] !== null && o[k] !== "") return o[k];
 };
-const num = (o, ...keys) => {
+const num$1 = (o, ...keys) => {
 	const v = pick(o, ...keys);
 	const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
 	return Number.isFinite(n) ? n : null;
@@ -1534,7 +1534,7 @@ const str = (o, ...keys) => {
 const toIso = (ts) => ts !== null && ts > 0 ? new Date(ts < 0xe8d4a51000 ? ts * 1e3 : ts).toISOString() : null;
 /** Время закрытия: последнее событие позиции (секунды или мс), иначе дата окончания рынка */
 function closeTime(p) {
-	const iso = toIso(num(p, "last_event_at", "lastEventAt", "timestamp", "closedAt", "closed_at", "updatedAt", "updated_at"));
+	const iso = toIso(num$1(p, "last_event_at", "lastEventAt", "timestamp", "closedAt", "closed_at", "updatedAt", "updated_at"));
 	if (iso) return iso;
 	const d = str(p, "endDate", "end_date", "closedAt", "closed_at");
 	if (d && !Number.isNaN(Date.parse(d))) return new Date(Date.parse(d)).toISOString();
@@ -1543,15 +1543,15 @@ function closeTime(p) {
 /** Одна закрытая позиция → сделка (null — данных не хватает) */
 function pmPositionToTrade(p) {
 	const cond = str(p, "conditionId", "condition_id", "market");
-	const avg = num(p, "avgPrice", "avg_price");
-	const shares = num(p, "total_size", "totalSize", "totalBought", "total_bought", "size");
-	const pnl = num(p, "realizedPnl", "realized_pnl", "cashPnl", "cash_pnl");
+	const avg = num$1(p, "avgPrice", "avg_price");
+	const shares = num$1(p, "total_size", "totalSize", "totalBought", "total_bought", "size");
+	const pnl = num$1(p, "realizedPnl", "realized_pnl", "cashPnl", "cash_pnl");
 	const at = closeTime(p);
 	if (!cond || avg === null || avg <= 0 || !shares || shares <= 0 || pnl === null || !at) return null;
-	const outcome = str(p, "outcome") ?? `#${num(p, "outcomeIndex", "outcome_index") ?? 0}`;
+	const outcome = str(p, "outcome") ?? `#${num$1(p, "outcomeIndex", "outcome_index") ?? 0}`;
 	const title = str(p, "title", "question", "market_title") ?? cond;
 	const exit = Math.min(1, Math.max(0, avg + pnl / shares));
-	const opened = toIso(num(p, "first_entry_at", "firstEntryAt"));
+	const opened = toIso(num$1(p, "first_entry_at", "firstEntryAt"));
 	const entryAt = opened && opened <= at ? opened : at;
 	const code = outcome.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12) || "O";
 	return {
@@ -1604,12 +1604,628 @@ function pmDirectGet(fetchFn = fetch) {
 	};
 }
 
+// src/lib/sync/cex.ts
+var ExchangeError = class extends Error {
+	kind;
+	detail;
+	constructor(kind, detail) {
+		super(detail);
+		this.kind = kind;
+		this.detail = detail;
+	}
+};
+const DAY = 864e5;
+/** Число из строки биржи; пусто / мусор — null */
+const num = (v) => {
+	if (v === void 0 || v === null || v === "") return null;
+	const n = Number(v);
+	return Number.isFinite(n) ? n : null;
+};
+/** Отрезок [from, to] → окна не длиннее size */
+function windows(from, to, size) {
+	const out = [];
+	for (let s = from; s < to; s += size) out.push([s, Math.min(s + size - 1, to)]);
+	return out;
+}
+/** Задачи по `parallel` одновременно (биржи ограничивают число запросов в секунду) */
+async function inBatches(items, parallel, fn) {
+	for (let i = 0; i < items.length; i += parallel) await Promise.all(items.slice(i, i + parallel).map(fn));
+}
+/** BTC-USDT, BTC-USDT-SWAP, BTC_USDT → BTCUSDT (как у Bybit) */
+const plainSymbol = (s) => s.toUpperCase().replace(/-SWAP$/, "").replace(/[-_/]/g, "");
+const clampLeverage = (v) => Math.min(1e3, Math.max(1, v && v > 0 ? v : 1));
+
+// src/lib/sync/bingx.ts
+/**
+* BingX (бессрочные USDT / USDC) → сделки. Источник — /openApi/swap/v2/trade/positionHistory (закрытые позиции).
+* BingX отдаёт историю только по одной паре — список пар берём из движения средств (/openApi/swap/v2/user/income,
+* записи REALIZED_PNL: пара, в которой что-то закрывалось). Глубина — 90 дней.
+*/
+function bingxError(r) {
+	const code = Number(r?.code ?? -1);
+	const detail = `${code}: ${r?.msg ?? ""}`;
+	if ([
+		100001,
+		100412,
+		100413,
+		100421
+	].includes(code)) return new ExchangeError("KEY_INVALID", detail);
+	if (code === 100419) return new ExchangeError("KEY_IP", detail);
+	if (code === 100004) return new ExchangeError("KEY_NO_PERMISSION", detail);
+	if (code === 100410 || code === 109400) return new ExchangeError("RATE_LIMIT", detail);
+	return new ExchangeError("EXCHANGE", detail);
+}
+async function bingxGet(call, path, params) {
+	const r = await call(path, params);
+	if (!r || r.code !== void 0 && r.code !== 0) throw bingxError(r);
+	return r.data ?? r;
+}
+/**
+* Одна закрытая позиция → сделка. Количество монет считаем из валового PnL и цен:
+* поле positionAmt у BingX бывает в контрактах, а realisedProfit = (выход − вход) × количество — точно.
+*/
+function bingxPositionToTrade(p) {
+	if (p.closeAllPositions === false) return null;
+	const entry = num(p.avgPrice);
+	const exit = num(p.avgClosePrice);
+	const gross = num(p.realisedProfit ?? p.realizedProfit);
+	const net = num(p.netProfit);
+	const opened = num(p.openTime);
+	const closed = num(p.updateTime);
+	if (!entry || !exit || entry <= 0 || exit <= 0 || gross === null || net === null || !closed) return null;
+	const side = String(p.positionSide).toUpperCase() === "SHORT" ? "short" : "long";
+	const move = side === "long" ? exit - entry : entry - exit;
+	const qty = Math.abs(move) / entry > 1e-7 && gross !== 0 ? gross / move : num(p.closePositionAmt ?? p.positionAmt);
+	if (!qty || qty <= 0) return null;
+	return {
+		exchange: "bingx",
+		market_type: "linear",
+		symbol: plainSymbol(p.symbol),
+		side,
+		entry_at: new Date(opened ?? closed).toISOString(),
+		exit_at: new Date(closed).toISOString(),
+		entry_price: entry,
+		exit_price: exit,
+		size_usd: round(qty * entry, 8),
+		leverage: clampLeverage(num(p.leverage)),
+		fee: round(Math.abs(num(p.positionCommission) ?? 0), 8),
+		funding: round(num(p.totalFunding) ?? 0, 8),
+		pnl: round(net, 8),
+		pnl_manual: false,
+		external_id: `bx:${p.positionId}`
+	};
+}
+/** Ключ: только право «Чтение» (2). 1 — спот, 3 — фьючерсы, 4 — переводы, 5 — вывод, 7 — переводы субаккаунтов */
+async function checkBingxKey(call) {
+	const perms = ((await bingxGet(call, "/openApi/v1/account/apiPermissions", {}))?.permissions ?? []).map(Number);
+	return { readOnly: perms.length > 0 && perms.every((p) => p === 2) };
+}
+const INCOME_WINDOW$1 = 7 * DAY;
+const HISTORY_WINDOW = 90 * DAY;
+const PAGE$2 = 100;
+/** Пары, в которых с from по to что-то закрывалось (USDT- и USDC-контракты) */
+async function bingxSymbols(call, from, to) {
+	const found = /* @__PURE__ */ new Set();
+	const jobs = ["USDT", "USDC"].flatMap((currency) => windows(from, to, INCOME_WINDOW$1).map((w) => ({
+		currency,
+		w
+	})));
+	await inBatches(jobs, 3, async ({ currency, w }) => {
+		const rows = await bingxGet(call, "/openApi/swap/v2/user/income", {
+			currency,
+			incomeType: "REALIZED_PNL",
+			startTime: w[0],
+			endTime: w[1],
+			limit: 1e3
+		});
+		for (const r of Array.isArray(rows) ? rows : []) if (r.symbol) found.add(r.symbol);
+	});
+	return [...found].sort();
+}
+async function fetchBingxTrades(call, from, to) {
+	const symbols = await bingxSymbols(call, from, to);
+	const out = /* @__PURE__ */ new Map();
+	const seen = /* @__PURE__ */ new Set();
+	const jobs = symbols.flatMap((symbol) => windows(from, to, HISTORY_WINDOW).map((w) => ({
+		symbol,
+		w
+	})));
+	await inBatches(jobs, 3, async ({ symbol, w }) => {
+		for (let pageIndex = 0; pageIndex < 50; pageIndex++) {
+			const d = await bingxGet(call, "/openApi/swap/v2/trade/positionHistory", {
+				symbol,
+				currency: symbol.endsWith("-USDC") ? "USDC" : "USDT",
+				startTime: w[0],
+				endTime: w[1],
+				pageIndex,
+				pageSize: PAGE$2
+			});
+			const list = Array.isArray(d) ? d : d?.positionHistory ?? [];
+			let fresh = 0;
+			for (const p of list) {
+				if (seen.has(p.positionId)) continue;
+				seen.add(p.positionId);
+				fresh++;
+				const t = bingxPositionToTrade(p);
+				if (t) out.set(t.external_id, t);
+			}
+			if (list.length < PAGE$2 || fresh === 0) break;
+		}
+	});
+	return [...out.values()];
+}
+const bingxModule = {
+	historyDays: 90,
+	overlapMs: 2 * DAY,
+	check: checkBingxKey,
+	fetch: async (call, from, to) => ({
+		trades: await fetchBingxTrades(call, from, to),
+		cursor: to
+	})
+};
+
+// src/lib/sync/okx.ts
+/**
+* OKX API v5 → сделки. Источник — /api/v5/account/positions-history (закрытые позиции за 3 месяца):
+* одна запись = одна позиция с ценами входа / выхода, PnL, комиссиями и фандингом от биржи.
+* Размер — в контрактах: стоимость контракта (ctVal) берём из списка инструментов (/api/v5/public/instruments).
+* Только бессрочные контракты (SWAP). Регион ключа (общий, Европа, США) подбирает подпись (callExchange).
+*/
+function okxError(r) {
+	const code = String(r?.code ?? "");
+	const detail = `${code}: ${r?.msg ?? ""}`;
+	if ([
+		"50100",
+		"50101",
+		"50105",
+		"50111",
+		"50113",
+		"50119"
+	].includes(code)) return new ExchangeError("KEY_INVALID", detail);
+	if (code === "50110") return new ExchangeError("KEY_IP", detail);
+	if (code === "50120" || code === "50030") return new ExchangeError("KEY_NO_PERMISSION", detail);
+	if (code === "50011" || code === "50061") return new ExchangeError("RATE_LIMIT", detail);
+	return new ExchangeError("EXCHANGE", detail);
+}
+async function okxGet(call, path, params) {
+	const r = await call(path, params);
+	if (!r || r.code !== "0") throw okxError(r);
+	return r.data ?? [];
+}
+/** Полностью закрытые (в том числе ликвидацией и ADL); частичные закрытия придут позже — целой позицией */
+const FULL = /* @__PURE__ */ new Set([
+	"2",
+	"3",
+	"5"
+]);
+/** Одна закрытая позиция OKX → сделка (null — неполная запись или неизвестный инструмент) */
+function okxPositionToTrade(p, inst) {
+	if (!inst || !FULL.has(p.type)) return null;
+	const entry = num(p.openAvgPx);
+	const exit = num(p.closeAvgPx);
+	const contracts = num(p.closeTotalPos);
+	const ctVal = num(inst.ctVal);
+	const pnlRaw = num(p.realizedPnl);
+	const opened = num(p.cTime);
+	const closed = num(p.uTime);
+	if (!entry || !exit || entry <= 0 || exit <= 0 || !contracts || contracts <= 0 || !ctVal || pnlRaw === null || !closed) return null;
+	const market = inst.ctType === "inverse" ? "inverse" : "linear";
+	const side = p.direction === "short" ? "short" : "long";
+	const size = market === "inverse" ? contracts * ctVal : contracts * ctVal * entry;
+	const toUsd = (v) => market === "inverse" ? v * exit : v;
+	return {
+		exchange: "okx",
+		market_type: market,
+		symbol: plainSymbol(p.instId),
+		side,
+		entry_at: new Date(opened ?? closed).toISOString(),
+		exit_at: new Date(closed).toISOString(),
+		entry_price: entry,
+		exit_price: exit,
+		size_usd: round(size, 8),
+		leverage: clampLeverage(num(p.lever)),
+		fee: round(toUsd(Math.abs(num(p.fee) ?? 0) + Math.abs(num(p.liqPenalty) ?? 0)), 8),
+		funding: round(toUsd(num(p.fundingFee) ?? 0), 8),
+		pnl: round(toUsd(pnlRaw), 8),
+		pnl_manual: false,
+		external_id: `okx:${p.posId}:${p.cTime}`
+	};
+}
+/** Ключ: права только «Чтение» (perm = read_only; trade / withdraw — отказ) */
+async function checkOkxKey(call) {
+	const [cfg] = await okxGet(call, "/api/v5/account/config", {});
+	const perms = (cfg?.perm ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+	return { readOnly: perms.length > 0 && perms.every((p) => p === "read_only") };
+}
+const PAGE$1 = 100;
+/** Закрытые позиции с from по to: страницы по 100 от новых к старым (after = uTime последней) */
+async function fetchOkxTrades(call, from, to) {
+	const instruments = new Map((await okxGet(call, "/api/v5/public/instruments", { instType: "SWAP" })).map((i) => [i.instId, i]));
+	const out = [];
+	let after = String(to);
+	for (let page = 0; page < 200; page++) {
+		const list = await okxGet(call, "/api/v5/account/positions-history", {
+			instType: "SWAP",
+			limit: PAGE$1,
+			after
+		});
+		for (const p of list) {
+			const t = (num(p.uTime) ?? 0) >= from ? okxPositionToTrade(p, instruments.get(p.instId)) : null;
+			if (t) out.push(t);
+		}
+		const oldest = Math.min(...list.map((p) => num(p.uTime) ?? Infinity));
+		if (list.length < PAGE$1 || !Number.isFinite(oldest) || oldest < from || String(oldest) === after) break;
+		after = String(oldest);
+	}
+	return out;
+}
+const okxModule = {
+	historyDays: 90,
+	overlapMs: 2 * DAY,
+	check: checkOkxKey,
+	fetch: async (call, from, to) => ({
+		trades: await fetchOkxTrades(call, from, to),
+		cursor: to
+	})
+};
+
+// src/lib/sync/bitget.ts
+/**
+* Bitget → сделки. Источник — история закрытых позиций (последние 90 дней):
+*  - единый торговый аккаунт (UTA): /api/v3/position/history-position (окна до 30 дней, страницы по cursor);
+*  - классический аккаунт: /api/v2/mix/position/history-position (страницы по idLessThan).
+* Какой аккаунт — узнаём по /api/v3/account/settings (у классического он отвечает ошибкой).
+* Одна запись = одна закрытая позиция: цены входа / выхода, размер в монете, чистый результат, комиссии и фандинг.
+*/
+function bitgetError(r) {
+	const code = String(r?.code ?? "");
+	const detail = `${code}: ${r?.msg ?? ""}`;
+	if ([
+		"40006",
+		"40009",
+		"40011",
+		"40012",
+		"40037"
+	].includes(code)) return new ExchangeError("KEY_INVALID", detail);
+	if (code === "40018") return new ExchangeError("KEY_IP", detail);
+	if (code === "40014" || code === "40022") return new ExchangeError("KEY_NO_PERMISSION", detail);
+	if (code === "429" || code === "43001") return new ExchangeError("RATE_LIMIT", detail);
+	return new ExchangeError("EXCHANGE", detail);
+}
+async function bitgetGet(call, path, params) {
+	const r = await call(path, params);
+	if (!r || r.code !== "00000") throw bitgetError(r);
+	return r.data;
+}
+/** Фьючерсы: USDT, USDC и монетные (COIN-M — инверсные) */
+const PRODUCTS = [
+	"USDT-FUTURES",
+	"USDC-FUTURES",
+	"COIN-FUTURES"
+];
+/** Одна закрытая позиция Bitget → сделка (null — неполная запись) */
+function bitgetPositionToTrade(p, product) {
+	const entry = num(p.openPriceAvg ?? p.openAvgPrice);
+	const exit = num(p.closePriceAvg ?? p.closeAvgPrice);
+	const qty = num(p.closeTotalPos);
+	const net = num(p.netProfit);
+	const opened = num(p.createdTime ?? p.ctime);
+	const closed = num(p.updatedTime ?? p.utime);
+	if (!entry || !exit || entry <= 0 || exit <= 0 || !qty || qty <= 0 || net === null || !closed) return null;
+	const market = product === "COIN-FUTURES" ? "inverse" : "linear";
+	const side = (p.posSide ?? p.holdSide) === "short" ? "short" : "long";
+	const toUsd = (v) => market === "inverse" ? v * exit : v;
+	const fee = Math.abs(num(p.openFeeTotal ?? p.openFee) ?? 0) + Math.abs(num(p.closeFeeTotal ?? p.closeFee) ?? 0);
+	const at = opened ?? closed;
+	return {
+		exchange: "bitget",
+		market_type: market,
+		symbol: plainSymbol(p.symbol),
+		side,
+		entry_at: new Date(at).toISOString(),
+		exit_at: new Date(closed).toISOString(),
+		entry_price: entry,
+		exit_price: exit,
+		size_usd: round(qty * entry, 8),
+		leverage: clampLeverage(num(p.leverage)),
+		fee: round(toUsd(fee), 8),
+		funding: round(toUsd(num(p.totalFunding) ?? 0), 8),
+		pnl: round(toUsd(net), 8),
+		pnl_manual: false,
+		external_id: `bg:${p.symbol}:${side}:${at}`
+	};
+}
+/**
+* Ключ: «только чтение» (permType = read-only). У классического аккаунта этот адрес может не ответить —
+* тогда ключ принимаем: сайт всё равно ходит к Bitget только за историей (список адресов в exchange-proxy).
+*/
+async function checkBitgetKey(call) {
+	const r = await call("/api/v3/account/info", {});
+	if (r?.code === "00000") return { readOnly: r.data?.permType === "read-only" };
+	const err = bitgetError(r);
+	if (err.kind !== "EXCHANGE") throw err;
+	await bitgetGet(call, "/api/v2/mix/position/history-position", {
+		productType: "USDT-FUTURES",
+		limit: 1
+	});
+	return { readOnly: true };
+}
+const PAGE = 100;
+const WINDOW = 30 * DAY;
+async function isUta(call) {
+	const r = await call("/api/v3/account/settings", {});
+	if (r?.code === "00000") return true;
+	const err = bitgetError(r);
+	if (err.kind !== "EXCHANGE") throw err;
+	return false;
+}
+async function fetchBitgetTrades(call, from, to) {
+	const uta = await isUta(call);
+	const out = [];
+	for (const product of PRODUCTS) for (const [s, e] of windows(from, to, WINDOW)) {
+		let cursor = "";
+		for (let page = 0; page < 100; page++) {
+			const base = {
+				startTime: s,
+				endTime: e,
+				limit: PAGE
+			};
+			const data = uta ? await bitgetGet(call, "/api/v3/position/history-position", {
+				...base,
+				category: product,
+				...cursor ? { cursor } : {}
+			}) : await bitgetGet(call, "/api/v2/mix/position/history-position", {
+				...base,
+				productType: product,
+				...cursor ? { idLessThan: cursor } : {}
+			});
+			const list = data?.list ?? [];
+			for (const p of list) {
+				const t = bitgetPositionToTrade(p, product);
+				if (t) out.push(t);
+			}
+			const next = (uta ? data.cursor : data.endId) ?? "";
+			if (list.length < PAGE || !next || next === cursor) break;
+			cursor = next;
+		}
+	}
+	return out;
+}
+const bitgetModule = {
+	historyDays: 90,
+	overlapMs: 2 * DAY,
+	check: checkBitgetKey,
+	fetch: async (call, from, to) => ({
+		trades: await fetchBitgetTrades(call, from, to),
+		cursor: to
+	})
+};
+
+// src/lib/sync/binance.ts
+/**
+* Binance USDⓈ-M фьючерсы → сделки. Готовой истории закрытых позиций у Binance нет — собираем позиции из исполнений:
+*  1. движение средств /fapi/v1/income (90 дней): пары, где были комиссии / PnL, и фандинг по парам;
+*  2. исполнения /fapi/v1/userTrades по каждой паре — окнами по 7 дней (так требует Binance);
+*  3. исполнения → позиции: от нуля до нуля (в режиме хеджирования LONG и SHORT — отдельно, переворот в одном исполнении делится).
+* PnL = сумма realizedPnl биржи − комиссии + фандинг за время позиции. Комиссия в BNB в доллары не переводится (0).
+* Курсор — как у Hyperliquid: если позиция ещё открыта, в следующий раз грузим с её первого исполнения.
+*/
+function binanceError(r) {
+	const code = Number(r.code);
+	const detail = `${code}: ${r.msg ?? ""}`;
+	if ([
+		-2008,
+		-2014,
+		-2015,
+		-1022
+	].includes(code)) return new ExchangeError("KEY_INVALID", detail);
+	if (code === -1003 || code === -1015) return new ExchangeError("RATE_LIMIT", detail);
+	if (code === -2011 || code === -1002) return new ExchangeError("KEY_NO_PERMISSION", detail);
+	return new ExchangeError("EXCHANGE", detail);
+}
+async function binanceGet(call, path, params) {
+	const r = await call(path, params);
+	if (r && typeof r === "object" && !Array.isArray(r) && typeof r.code === "number" && r.code < 0) throw binanceError(r);
+	return r;
+}
+/** Ключ: включено только «Чтение» (торговля, вывод, переводы, маржа, опционы — выключены) */
+async function checkBinanceKey(call) {
+	const r = await binanceGet(call, "/sapi/v1/account/apiRestrictions", {});
+	if (!r || r.enableReading !== true) return { readOnly: false };
+	return { readOnly: Object.entries(r).filter(([k]) => /^(enable|permits)/.test(k) && k !== "enableReading").every(([, v]) => v === false) };
+}
+const EPS = 1e-9;
+/** Комиссия в долларах: USDT / USDC — как есть, BNB и прочее — 0 (курса нет) */
+const feeUsd = (f) => USD_COINS.has(f.commissionAsset?.toUpperCase()) ? Math.abs(num(f.commission) ?? 0) : 0;
+/**
+* Исполнения → закрытые позиции и время начала ещё открытых.
+* Исполнения, которые закрывают позицию, открытую до начала периода (realizedPnl ≠ 0 «с нуля»), пропускаем.
+*/
+function binanceFillsToTrades(fills, funding = []) {
+	const groups = /* @__PURE__ */ new Map();
+	for (const f of fills) {
+		const key = `${f.symbol}|${f.positionSide ?? "BOTH"}`;
+		groups.set(key, [...groups.get(key) ?? [], f]);
+	}
+	const trades = [];
+	const openStarts = [];
+	const finish = (o) => {
+		if (o.openQty <= EPS || o.closeQty <= EPS) return;
+		const entry = o.openVal / o.openQty;
+		const exit = o.closeVal / o.closeQty;
+		const fund = funding.filter((x) => x.symbol === o.symbol && x.incomeType === "FUNDING_FEE" && x.time >= o.start && x.time <= o.end).reduce((s, x) => s + (num(x.income) ?? 0), 0);
+		trades.push({
+			exchange: "binance",
+			market_type: "linear",
+			symbol: o.symbol,
+			side: o.side,
+			entry_at: new Date(o.start).toISOString(),
+			exit_at: new Date(o.end).toISOString(),
+			entry_price: round(entry, 10),
+			exit_price: round(exit, 10),
+			size_usd: round(o.openVal, 8),
+			leverage: 1,
+			fee: round(o.fee, 8),
+			funding: round(fund, 8),
+			pnl: round(o.realized - o.fee + fund, 8),
+			pnl_manual: false,
+			external_id: `bn:${o.key}:${o.firstId}`
+		});
+	};
+	for (const [key, list] of groups) {
+		list.sort((a, b) => a.time - b.time || a.id - b.id);
+		let cur = null;
+		let started = false;
+		const forced = key.endsWith("|LONG") ? 1 : key.endsWith("|SHORT") ? -1 : 0;
+		for (const f of list) {
+			const qty = num(f.qty) ?? 0;
+			const price = num(f.price) ?? 0;
+			if (qty <= 0 || price <= 0) continue;
+			const sign = f.side === "BUY" ? 1 : -1;
+			const fee = feeUsd(f);
+			const pnl = num(f.realizedPnl) ?? 0;
+			if (!cur) {
+				if (!started && pnl !== 0) continue;
+				if (forced && sign !== forced) continue;
+				started = true;
+				cur = {
+					key,
+					symbol: f.symbol,
+					side: sign > 0 ? "long" : "short",
+					firstId: f.id,
+					start: f.time,
+					end: f.time,
+					openQty: 0,
+					openVal: 0,
+					closeQty: 0,
+					closeVal: 0,
+					fee: 0,
+					realized: 0,
+					pos: 0
+				};
+			}
+			cur.end = f.time;
+			if (sign === (cur.side === "long" ? 1 : -1)) {
+				cur.openQty += qty;
+				cur.openVal += qty * price;
+				cur.fee += fee;
+				cur.pos += sign * qty;
+				continue;
+			}
+			const closing = Math.min(qty, Math.abs(cur.pos));
+			const share = closing / qty;
+			cur.closeQty += closing;
+			cur.closeVal += closing * price;
+			cur.fee += fee * share;
+			cur.realized += pnl;
+			cur.pos += sign * closing;
+			if (Math.abs(cur.pos) <= EPS * Math.max(1, cur.openQty)) {
+				finish(cur);
+				const rest = qty - closing;
+				cur = null;
+				if (rest > EPS * qty && key.endsWith("|BOTH")) cur = {
+					key,
+					symbol: f.symbol,
+					side: sign > 0 ? "long" : "short",
+					firstId: f.id,
+					start: f.time,
+					end: f.time,
+					openQty: rest,
+					openVal: rest * price,
+					closeQty: 0,
+					closeVal: 0,
+					fee: fee * (1 - share),
+					realized: 0,
+					pos: sign * rest
+				};
+			}
+		}
+		if (cur) openStarts.push(cur.start);
+	}
+	return {
+		trades,
+		openStarts
+	};
+}
+const TRADES_WINDOW = 7 * DAY;
+const INCOME_WINDOW = 7 * DAY;
+/** Движение средств с from по to: окна по 7 дней, по 1000 записей (полная страница — продолжаем с её последнего времени) */
+async function fetchBinanceIncome(call, from, to) {
+	const out = /* @__PURE__ */ new Map();
+	await inBatches(windows(from, to, INCOME_WINDOW), 3, async ([s, e]) => {
+		let start = s;
+		for (let page = 0; page < 20; page++) {
+			const rows = await binanceGet(call, "/fapi/v1/income", {
+				startTime: start,
+				endTime: e,
+				limit: 1e3
+			});
+			const list = Array.isArray(rows) ? rows : [];
+			for (const r of list) out.set(`${r.incomeType}:${r.tranId ?? ""}:${r.symbol ?? ""}:${r.time}:${r.income}`, r);
+			if (list.length < 1e3) break;
+			const last = Math.max(...list.map((r) => r.time));
+			if (last <= start) break;
+			start = last;
+		}
+	});
+	return [...out.values()];
+}
+/** Исполнения пары с from по to: окна по 7 дней; полная страница — дальше по fromId */
+async function fetchBinanceFills(call, symbol, from, to) {
+	const out = /* @__PURE__ */ new Map();
+	for (const [s, e] of windows(from, to, TRADES_WINDOW)) {
+		let list = await binanceGet(call, "/fapi/v1/userTrades", {
+			symbol,
+			startTime: s,
+			endTime: e,
+			limit: 1e3
+		});
+		for (let page = 0; page < 20 && Array.isArray(list); page++) {
+			for (const f of list) if (f.time <= e) out.set(f.id, f);
+			if (list.length < 1e3 || list.some((f) => f.time > e)) break;
+			list = await binanceGet(call, "/fapi/v1/userTrades", {
+				symbol,
+				fromId: Math.max(...list.map((f) => f.id)) + 1,
+				limit: 1e3
+			});
+		}
+	}
+	return [...out.values()];
+}
+async function fetchBinanceTrades(call, from, to) {
+	const income = await fetchBinanceIncome(call, from, to);
+	const symbols = [...new Set(income.filter((r) => r.symbol && (r.incomeType === "COMMISSION" || r.incomeType === "REALIZED_PNL")).map((r) => r.symbol))].sort();
+	const fills = [];
+	await inBatches(symbols, 3, async (symbol) => {
+		fills.push(...await fetchBinanceFills(call, symbol, from, to));
+	});
+	const { trades, openStarts } = binanceFillsToTrades(fills, income);
+	const lastFill = fills.length ? Math.max(...fills.map((f) => f.time)) + 1 : to;
+	return {
+		trades,
+		cursor: openStarts.length ? Math.min(...openStarts) : Math.min(lastFill, to)
+	};
+}
+const binanceModule = {
+	historyDays: 90,
+	overlapMs: 0,
+	check: checkBinanceKey,
+	fetch: fetchBinanceTrades
+};
+
 // src/lib/sync/run.ts
 /**
 * Синхронизация одного подключения — общий движок для браузера и сервера (sync-worker по расписанию).
 * Всё внешнее (запросы к бирже, база) передаётся снаружи в deps: в браузере — с правами пользователя,
 * на сервере — с правами service_role. Так логика одна и покрыта одними тестами.
 */
+/** Биржи с ключом API, кроме Bybit (у него свой путь — с датой окончания ключа) */
+const CEX_MODULES = {
+	bingx: bingxModule,
+	okx: okxModule,
+	bitget: bitgetModule,
+	binance: binanceModule
+};
 /** Ошибка подключения / синхронизации — код для текста в i18n (connections.errors) */
 var SyncError = class extends Error {
 	code;
@@ -1635,6 +2251,7 @@ function bybitErrorCode(e) {
 function toSyncError(e) {
 	if (e instanceof SyncError) return e;
 	if (e instanceof BybitError) return new SyncError(bybitErrorCode(e), `${e.code}: ${e.message}`);
+	if (e instanceof ExchangeError) return new SyncError(e.kind, e.detail);
 	const msg = e && typeof e === "object" && "message" in e ? String(e.message) : String(e);
 	if (msg.includes("FREE_LIMIT_REACHED")) return new SyncError("FREE_LIMIT");
 	if (/HL_HTTP|PM_HTTP|fetch|network/i.test(msg)) return new SyncError("EXCHANGE_DOWN", msg);
@@ -1649,12 +2266,22 @@ async function runSync(conn, deps) {
 		let trades;
 		let nextCursor;
 		if (conn.exchange === "bybit") {
-			const info = await checkBybitKey(deps.bybitCall);
+			const call = deps.cexCall;
+			const info = await checkBybitKey(call);
 			if (!info.readOnly) throw new SyncError("KEY_NOT_READONLY");
 			await deps.setKeyExpiry?.(info.expiresAt);
-			const from = conn.cursor_at ? Date.parse(conn.cursor_at) - 2 * DAY : now - 730 * DAY;
-			trades = await fetchBybitTrades(deps.bybitCall, from, now);
+			const from = conn.cursor_at ? Date.parse(conn.cursor_at) - 2 * DAY$1 : now - 730 * DAY$1;
+			trades = await fetchBybitTrades(call, from, now);
 			nextCursor = now;
+		} else if (CEX_MODULES[conn.exchange]) {
+			const m = CEX_MODULES[conn.exchange];
+			const info = await m.check(deps.cexCall);
+			if (!info.readOnly) throw new SyncError("KEY_NOT_READONLY");
+			if (info.expiresAt !== void 0) await deps.setKeyExpiry?.(info.expiresAt);
+			const from = conn.cursor_at ? Date.parse(conn.cursor_at) - m.overlapMs : now - m.historyDays * DAY$1;
+			const res = await m.fetch(deps.cexCall, Math.max(from, now - m.historyDays * DAY$1), now);
+			trades = res.trades;
+			nextCursor = res.cursor;
 		} else if (conn.exchange === "hyperliquid") {
 			const from = conn.cursor_at ? Date.parse(conn.cursor_at) : 0;
 			const res = hlFillsToTrades(await fetchHlFills(conn.api_key, from, deps.fetchFn));
@@ -1701,32 +2328,251 @@ async function runSync(conn, deps) {
 }
 
 // supabase/functions/exchange-proxy/sign.ts
-/**
-* Подпись запросов Bybit v5 (HMAC-SHA256) и строка параметров.
-* Чистые функции без Deno — их проверяют тесты Vitest (sign.test.ts).
-*/
+const CEX_IDS = [
+	"bybit",
+	"bingx",
+	"okx",
+	"bitget",
+	"binance"
+];
+const isCex = (exchange) => CEX_IDS.includes(exchange);
+/** Адреса, к которым пускаем: история сделок и права ключа. Ни торговли, ни вывода, ни переводов */
+const READ_PATHS = {
+	bybit: /* @__PURE__ */ new Set([
+		"/v5/position/closed-pnl",
+		"/v5/user/query-api",
+		"/v5/execution/list"
+	]),
+	bingx: /* @__PURE__ */ new Set([
+		"/openApi/swap/v2/trade/positionHistory",
+		"/openApi/swap/v2/user/income",
+		"/openApi/v1/account/apiPermissions"
+	]),
+	okx: /* @__PURE__ */ new Set([
+		"/api/v5/account/positions-history",
+		"/api/v5/account/config",
+		"/api/v5/public/instruments"
+	]),
+	bitget: /* @__PURE__ */ new Set([
+		"/api/v2/mix/position/history-position",
+		"/api/v3/position/history-position",
+		"/api/v3/account/settings",
+		"/api/v3/account/info"
+	]),
+	binance: /* @__PURE__ */ new Set([
+		"/fapi/v1/income",
+		"/fapi/v1/userTrades",
+		"/sapi/v1/account/apiRestrictions"
+	])
+};
 /** Какие параметры можно передать бирже (всё остальное отбрасываем) */
-const ALLOWED_PARAMS = /* @__PURE__ */ new Set([
-	"category",
-	"symbol",
-	"startTime",
-	"endTime",
-	"limit",
-	"cursor"
-]);
-/** Параметры → строка запроса в том же порядке, в котором её подписываем */
-function buildQuery(params) {
-	return Object.entries(params).filter(([k, v]) => ALLOWED_PARAMS.has(k) && (typeof v === "string" || typeof v === "number") && String(v) !== "").map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join("&");
+const PARAMS = {
+	bybit: /* @__PURE__ */ new Set([
+		"category",
+		"symbol",
+		"startTime",
+		"endTime",
+		"limit",
+		"cursor"
+	]),
+	bingx: /* @__PURE__ */ new Set([
+		"symbol",
+		"currency",
+		"incomeType",
+		"startTime",
+		"endTime",
+		"limit",
+		"pageIndex",
+		"pageSize"
+	]),
+	okx: /* @__PURE__ */ new Set([
+		"instType",
+		"instId",
+		"after",
+		"before",
+		"limit"
+	]),
+	bitget: /* @__PURE__ */ new Set([
+		"productType",
+		"category",
+		"symbol",
+		"startTime",
+		"endTime",
+		"limit",
+		"idLessThan",
+		"cursor"
+	]),
+	binance: /* @__PURE__ */ new Set([
+		"symbol",
+		"incomeType",
+		"startTime",
+		"endTime",
+		"limit",
+		"fromId"
+	])
+};
+/** Значения параметров (кроме курсора Bybit) — только безопасные символы: подпись совпадает с адресом без кодирования */
+const SAFE_VALUE = /^[A-Za-z0-9_.-]{1,64}$/;
+/** Где биржа: у Binance фьючерсы и права ключа — на разных адресах; OKX — три региона (общий, Европа, США) */
+function hostsFor(exchange, path) {
+	switch (exchange) {
+		case "bybit": return ["https://api.bybit.com"];
+		case "bingx": return ["https://open-api.bingx.com"];
+		case "okx": return [
+			"https://www.okx.com",
+			"https://eea.okx.com",
+			"https://us.okx.com"
+		];
+		case "bitget": return ["https://api.bitget.com"];
+		case "binance": return [path.startsWith("/sapi/") ? "https://api.binance.com" : "https://fapi.binance.com"];
+	}
 }
-/** Подпись Bybit: HMAC-SHA256(секрет, timestamp + apiKey + recvWindow + queryString) в hex */
-async function bybitSignature(secret, payload) {
+/** Параметры → строка запроса Bybit (в том же порядке, в котором её подписываем) */
+function buildQuery(params) {
+	return Object.entries(params).filter(([k, v]) => PARAMS.bybit.has(k) && (typeof v === "string" || typeof v === "number") && String(v) !== "").map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join("&");
+}
+/** Разрешённые параметры биржи → пары [ключ, значение] (по алфавиту, если бирже нужен порядок) */
+function pickParams(exchange, params, sorted = false) {
+	const out = Object.entries(params ?? {}).filter(([k, v]) => PARAMS[exchange].has(k) && (typeof v === "string" || typeof v === "number") && SAFE_VALUE.test(String(v))).map(([k, v]) => [k, String(v)]);
+	return sorted ? out.sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0) : out;
+}
+const joinParams = (pairs) => pairs.map(([k, v]) => `${k}=${v}`).join("&");
+async function hmac(secret, payload) {
 	const enc = new TextEncoder();
 	const key = await crypto.subtle.importKey("raw", enc.encode(secret), {
 		name: "HMAC",
 		hash: "SHA-256"
 	}, false, ["sign"]);
-	const sig = new Uint8Array(await crypto.subtle.sign("HMAC", key, enc.encode(payload)));
-	return Array.from(sig, (b) => b.toString(16).padStart(2, "0")).join("");
+	return new Uint8Array(await crypto.subtle.sign("HMAC", key, enc.encode(payload)));
+}
+const hmacHex = async (secret, payload) => Array.from(await hmac(secret, payload), (b) => b.toString(16).padStart(2, "0")).join("");
+const hmacBase64 = async (secret, payload) => btoa(String.fromCharCode(...await hmac(secret, payload)));
+/** Подпись Bybit: HMAC-SHA256(секрет, timestamp + apiKey + recvWindow + queryString) в hex */
+const bybitSignature = hmacHex;
+/** Адреса Bybit, к которым функция пускает (оставлено для совместимости) */
+const BYBIT_READ_PATHS = READ_PATHS.bybit;
+/**
+* Секрет из Vault → секрет и кодовая фраза.
+* Ключи с кодовой фразой (OKX, Bitget) хранятся одной строкой JSON {"s": секрет, "p": фраза} (0018), остальные — как есть.
+*/
+function parseSecret(stored) {
+	if (stored.startsWith("{")) try {
+		const o = JSON.parse(stored);
+		if (typeof o.s === "string") return {
+			secret: o.s,
+			passphrase: typeof o.p === "string" ? o.p : null
+		};
+	} catch {}
+	return {
+		secret: stored,
+		passphrase: null
+	};
+}
+const RECV_WINDOW = "10000";
+/** Подписанный GET-запрос к бирже: адрес и заголовки. host — один из hostsFor() */
+async function signRequest(exchange, cred, path, params, host = hostsFor(exchange, path)[0], now = Date.now()) {
+	if (!READ_PATHS[exchange].has(path)) throw new Error("NOT_ALLOWED");
+	const ts = String(now);
+	switch (exchange) {
+		case "bybit": {
+			const query = buildQuery(params);
+			const sign = await hmacHex(cred.secret, ts + cred.apiKey + RECV_WINDOW + query);
+			return {
+				url: `${host}${path}${query ? `?${query}` : ""}`,
+				headers: {
+					"X-BAPI-API-KEY": cred.apiKey,
+					"X-BAPI-TIMESTAMP": ts,
+					"X-BAPI-RECV-WINDOW": RECV_WINDOW,
+					"X-BAPI-SIGN": sign
+				}
+			};
+		}
+		case "bingx": {
+			const query = joinParams([...pickParams("bingx", params, true), ["timestamp", ts]]);
+			return {
+				url: `${host}${path}?${query}&signature=${await hmacHex(cred.secret, query)}`,
+				headers: { "X-BX-APIKEY": cred.apiKey }
+			};
+		}
+		case "binance": {
+			const query = joinParams([
+				...pickParams("binance", params),
+				["recvWindow", RECV_WINDOW],
+				["timestamp", ts]
+			]);
+			return {
+				url: `${host}${path}?${query}&signature=${await hmacHex(cred.secret, query)}`,
+				headers: { "X-MBX-APIKEY": cred.apiKey }
+			};
+		}
+		case "okx": {
+			const query = joinParams(pickParams("okx", params));
+			const requestPath = `${path}${query ? `?${query}` : ""}`;
+			const iso = new Date(now).toISOString();
+			const sign = await hmacBase64(cred.secret, iso + "GET" + requestPath);
+			return {
+				url: `${host}${requestPath}`,
+				headers: {
+					"OK-ACCESS-KEY": cred.apiKey,
+					"OK-ACCESS-SIGN": sign,
+					"OK-ACCESS-TIMESTAMP": iso,
+					"OK-ACCESS-PASSPHRASE": cred.passphrase ?? ""
+				}
+			};
+		}
+		case "bitget": {
+			const query = joinParams(pickParams("bitget", params, true));
+			const requestPath = `${path}${query ? `?${query}` : ""}`;
+			const sign = await hmacBase64(cred.secret, ts + "GET" + requestPath);
+			return {
+				url: `${host}${requestPath}`,
+				headers: {
+					"ACCESS-KEY": cred.apiKey,
+					"ACCESS-SIGN": sign,
+					"ACCESS-TIMESTAMP": ts,
+					"ACCESS-PASSPHRASE": cred.passphrase ?? "",
+					locale: "en-US",
+					"Content-Type": "application/json"
+				}
+			};
+		}
+	}
+}
+/** OKX: «такого ключа нет» — ключ создан в другом регионе (my.okx.com → eea.okx.com, app.okx.com → us.okx.com) */
+const okxWrongRegion = (r) => r.json?.code === "50119";
+/** На каком адресе OKX нашёлся ключ (на время жизни функции — чтобы не перебирать регионы на каждой странице) */
+const okxHost = /* @__PURE__ */ new Map();
+/**
+* Запрос к бирже с подписью. Для OKX — сам находит регион ключа.
+* Ошибки сети пробрасываются; ответ с ошибкой биржи (4xx с JSON) возвращается как есть — его разбирает модуль биржи.
+*/
+async function callExchange(exchange, cred, path, params, fetchFn = fetch) {
+	const all = hostsFor(exchange, path);
+	const known = exchange === "okx" ? okxHost.get(cred.apiKey) : void 0;
+	const hosts = known ? [known, ...all.filter((h) => h !== known)] : all;
+	let reply = null;
+	for (const host of hosts) {
+		const { url, headers } = await signRequest(exchange, cred, path, params, host);
+		const res = await fetchFn(url, {
+			method: "GET",
+			headers
+		});
+		const text = await res.text();
+		let json = null;
+		try {
+			json = JSON.parse(text);
+		} catch {}
+		reply = {
+			status: res.status,
+			json,
+			text
+		};
+		if (exchange !== "okx" || !okxWrongRegion(reply)) {
+			if (exchange === "okx") okxHost.set(cred.apiKey, host);
+			return reply;
+		}
+	}
+	return reply;
 }
 
-export { SyncError, buildQuery, bybitSignature, runSync, toSyncError };
+export { READ_PATHS, SyncError, buildQuery, bybitSignature, callExchange, isCex, parseSecret, runSync, toSyncError };

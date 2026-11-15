@@ -7,23 +7,23 @@
  * Защита:
  *  - вызвать может только вошедший пользователь (JWT проверяет Supabase + getUser ниже);
  *  - подключение читается С ЕГО ПРАВАМИ (RLS + 2FA): чужое подключение просто не найдётся;
- *  - к бирже — только адреса для чтения (BYBIT_READ_PATHS) и только разрешённые параметры;
+ *  - к бирже (Bybit, BingX, OKX, Bitget, Binance) — только GET на адреса для чтения (READ_PATHS в sign.ts) и только разрешённые параметры;
+ *    секрет (и кодовая фраза OKX / Bitget) — из Vault, наружу не отдаётся; ответ биржи с ошибкой ключа (4xx) возвращается как есть —
+ *    его разбирает модуль биржи на сайте (понятный текст ошибки), 5xx и не-JSON — EXCHANGE_HTTP;
  *  - Polymarket: только закрытые позиции адреса из подключения (чужой адрес не подставить; браузер не упирается в CORS);
  *    демо ({ demo: true }) — одна страница закрытых позиций фиксированного публичного кошелька;
  *  - тариф: как в базе (connection_active, 0016): Polymarket — Pro Plus, биржи и кошельки — Pro (1) и Pro Plus (до 5); демо — всем;
- *  - ключ с правом торговли отклоняет сайт при подключении (/v5/user/query-api → readOnly).
+ *  - ключ с правом торговли отклоняет сайт при подключении и при каждой синхронизации (права ключа у биржи → readOnly).
  *
  * Выкладка: Supabase → Edge Functions → exchange-proxy (или коннектор Supabase у Claude).
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { BYBIT_READ_PATHS, buildQuery, bybitSignature } from './sign.ts'
+import { READ_PATHS, callExchange, isCex, parseSecret } from './sign.ts'
 
 const ORIGINS = ['https://d9zeen.github.io', 'http://localhost:5173', 'http://127.0.0.1:4173']
-const BYBIT = 'https://api.bybit.com'
 const POLYMARKET = 'https://data-api.polymarket.com'
 // Демо Polymarket: публичный кошелёк активного трейдера (только закрытые позиции, без имени — сайт показывает рынки и PnL)
 const POLYMARKET_DEMO = '0x821dab0565ebf5b327f51db06223fdcfe01acf16'
-const RECV_WINDOW = '10000'
 
 function corsHeaders(origin: string): Record<string, string> {
   return {
@@ -88,21 +88,17 @@ Deno.serve(async (req) => {
       return new Response(text, { headers: { ...cors, 'Content-Type': 'application/json' } })
     }
 
-    if (conn.exchange !== 'bybit' || !BYBIT_READ_PATHS.has(path)) return json({ error: 'NOT_ALLOWED' }, 403)
+    if (!isCex(conn.exchange) || !READ_PATHS[conn.exchange].has(path)) return json({ error: 'NOT_ALLOWED' }, 403)
 
     const admin = createClient(url, serviceKey, { auth: { persistSession: false } })
     const { data: secret, error: secretErr } = await admin.rpc('get_connection_secret', { p_id: conn.id })
     if (secretErr || typeof secret !== 'string') return json({ error: 'NO_SECRET' }, 500)
 
-    const query = buildQuery(typeof body.params === 'object' && body.params ? body.params : {})
-    const ts = Date.now().toString()
-    const sign = await bybitSignature(secret, ts + conn.api_key + RECV_WINDOW + query)
-    const res = await fetch(`${BYBIT}${path}${query ? `?${query}` : ''}`, {
-      headers: { 'X-BAPI-API-KEY': conn.api_key, 'X-BAPI-TIMESTAMP': ts, 'X-BAPI-RECV-WINDOW': RECV_WINDOW, 'X-BAPI-SIGN': sign },
-    })
-    const text = await res.text()
-    if (!res.ok) return json({ error: 'EXCHANGE_HTTP', status: res.status, body: text.slice(0, 300) }, 502)
-    return new Response(text, { headers: { ...cors, 'Content-Type': 'application/json' } })
+    const params = typeof body.params === 'object' && body.params && !Array.isArray(body.params) ? body.params : {}
+    const reply = await callExchange(conn.exchange, { apiKey: conn.api_key, ...parseSecret(secret) }, path, params)
+    // ошибка ключа / частоты у биржи (4xx с JSON) — как есть: сайт покажет понятный текст; сбой биржи — EXCHANGE_HTTP
+    if (reply.status >= 500 || reply.json === null) return json({ error: 'EXCHANGE_HTTP', status: reply.status, body: reply.text.slice(0, 300) }, 502)
+    return json(reply.json)
   } catch (e) {
     return json({ error: 'PROXY_ERROR', message: String(e).slice(0, 300) }, 500)
   }

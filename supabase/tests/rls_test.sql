@@ -564,6 +564,29 @@ select pg_temp.expect_error($$insert into trades (exchange, market_type, symbol,
 select pg_temp.check(true, 'слишком длинное название рынка отклоняется');
 reset role;
 
+-- 0018: Binance, OKX, BingX, Bitget по ключу; у OKX и Bitget — кодовая фраза (в Vault вместе с секретом)
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
+select pg_temp.expect_error($$select add_exchange_connection('okx', 'a1b2c3d4-0000-4000-8000-123456789abc', 'ABCDEF0123456789ABCDEF0123456789')$$, 'PASSPHRASE_REQUIRED');
+select pg_temp.check(true, 'OKX без кодовой фразы не подключается');
+select pg_temp.check(add_exchange_connection('okx', 'a1b2c3d4-0000-4000-8000-123456789abc', 'ABCDEF0123456789ABCDEF0123456789', 'OKX', 'Фраза #1') is not null, 'OKX: ключ с дефисами и кодовая фраза');
+select pg_temp.check(add_exchange_connection('bitget', 'bg_0123456789abcdef0123456789abcdef', 'f00df00df00df00df00df00df00df00d', null, 'phrase') is not null, 'Bitget: ключ с подчёркиванием');
+select pg_temp.expect_error($$select add_exchange_connection('binance', 'KEY12345678', 'secret with spaces')$$, 'BAD_API_KEY');
+select pg_temp.check(true, 'секрет с пробелами отклоняется');
+select pg_temp.expect_error($$select add_exchange_connection('bingx', 'KEY<script>1', 'SecretSecret1')$$, 'BAD_API_KEY');
+select pg_temp.check(true, 'ключ со спецсимволами отклоняется');
+select pg_temp.expect_error($$select secret_id from exchange_connections where exchange = 'okx'$$, 'permission denied');
+select pg_temp.check(true, 'ссылку на секрет OKX браузер не видит');
+reset role;
+select pg_temp.check((select get_connection_secret(id)::jsonb = '{"s": "ABCDEF0123456789ABCDEF0123456789", "p": "Фраза #1"}'::jsonb from exchange_connections where exchange = 'okx'), 'в Vault — секрет и кодовая фраза одной строкой JSON');
+select pg_temp.check((select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'add_exchange_connection') = 1, 'старая add_exchange_connection на 4 параметра удалена');
+select pg_temp.check(not has_function_privilege('anon', 'public.add_exchange_connection(text, text, text, text, text)', 'execute'), 'аноним не может вызвать add_exchange_connection');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
+select delete_exchange_connection(id) from exchange_connections where exchange in ('okx', 'bitget');
+reset role;
+select pg_temp.check((select count(*) from vault.secrets where description in ('CryptoJournal: ключ API okx', 'CryptoJournal: ключ API bitget')) = 0, 'отключение OKX / Bitget удаляет секрет из Vault');
+
 -- Тарифы 0016: подключения Pro Plus (до 5, и Polymarket), понижение тарифа, admin_list_users видит пробный период
 insert into auth.users (id, email) values ('cccccccc-0000-0000-0000-000000000003', 'c@test');
 set role authenticated;
