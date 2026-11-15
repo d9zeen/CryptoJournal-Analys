@@ -107,22 +107,20 @@ export function AppLayout() {
 
 type NavItem = ReturnType<typeof useNavItems>[number]
 
-/** Вид верхнего меню — пока выбираем (A / B / C, задаётся при сборке); после выбора владельца останется один */
-const NAV_VARIANT = (import.meta.env.VITE_NAV_VARIANT as 'a' | 'b' | 'c' | undefined) ?? 'a'
-
 /**
- * Верхняя полоса (от 768px): слева логотип и тариф, в середине пункты меню, справа лимит (Basic), язык, тема, почта и выход.
- * Планшет (md): пункты — только значками (подпись при наведении); компьютер (lg): значок + подпись.
+ * Верхняя полоса (от 768px), образец — 21st.dev tubelight-navbar («капсула», выбор владельца 15.11.2026):
+ * слева логотип и тариф, строго по центру — капсула с пунктами меню (сетка 1fr / auto / 1fr — центр на любой ширине),
+ * справа лимит (Basic, от 1536px), язык, тема, почта (от 1024px) и выход.
+ * Над активным пунктом — чёрточка цвета кнопок. До 1280px в капсуле только значки (подпись — при наведении), с 1280px — значок не нужен, только подписи.
  */
 function TopNav({ items }: { items: NavItem[] }) {
   const t = useT()
   const { user, signOut } = useAuth()
-  const v = NAV_VARIANT
   return (
-    <header data-shot="topnav" data-variant={v} className="sticky top-0 z-20 hidden border-b border-border bg-bg/85 backdrop-blur md:block">
-      <div className={`mx-auto flex h-16 max-w-[2200px] items-center gap-3 px-4 lg:gap-5 lg:px-8 ${v === 'b' ? 'xl:grid xl:grid-cols-[1fr_auto_1fr]' : ''}`}>
-        <div className="flex shrink-0 items-center gap-2">
-          <NavLink to="/dashboard" viewTransition aria-label={t.app.name} className="flex items-center rounded-xl p-1">
+    <header data-shot="topnav" className="sticky top-0 z-20 hidden border-b border-border bg-bg/85 backdrop-blur md:block">
+      <div className="mx-auto grid h-16 max-w-[2200px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-4 lg:gap-5 lg:px-8">
+        <div className="flex min-w-0 items-center gap-2">
+          <NavLink to="/dashboard" viewTransition aria-label={t.app.name} className="flex shrink-0 items-center rounded-xl p-1">
             <span className="xl:hidden">
               <LogoMark className="size-8" />
             </span>
@@ -133,50 +131,46 @@ function TopNav({ items }: { items: NavItem[] }) {
           <PlanMenu />
         </div>
 
-        <nav
-          aria-label={t.nav.main}
-          className={`flex min-w-0 items-center ${
-            v === 'b' ? 'gap-0.5 justify-self-center rounded-full border border-border bg-surface p-1 shadow-sm' : v === 'c' ? 'h-full gap-1 self-stretch' : 'gap-1'
-          }`}
-        >
+        <nav aria-label={t.nav.main} data-shot="nav-capsule" className="flex items-center gap-0.5 rounded-full border border-border bg-surface p-1 shadow-sm">
           {items.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               viewTransition
-              title={item.label}
               aria-label={item.label}
-              className={({ isActive }) => {
-                const base = 'group relative flex shrink-0 items-center gap-2 text-sm font-medium whitespace-nowrap transition-colors'
-                if (v === 'b')
-                  return `${base} rounded-full px-3 py-1.5 lg:px-3.5 ${isActive ? 'bg-surface-2 text-text' : 'text-muted hover:text-text'}`
-                if (v === 'c') return `${base} h-full px-2.5 lg:px-3 ${isActive ? 'text-text' : 'text-muted hover:text-text'}`
-                return `${base} rounded-lg px-2.5 py-2 lg:px-3 ${isActive ? 'bg-surface-2 text-text' : 'text-muted hover:bg-surface-2/60 hover:text-text'}`
-              }}
+              className={({ isActive }) =>
+                `group relative flex shrink-0 items-center rounded-full px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors xl:px-3.5 ${
+                  isActive ? 'bg-surface-2 text-text' : 'text-muted hover:text-text'
+                }`
+              }
             >
               {({ isActive }) => (
                 <>
-                  {/* B: чёрточка цвета кнопок над активным пунктом (как «лампа» в образце tubelight) */}
-                  {v === 'b' && isActive && <span className="absolute -top-1 left-1/2 h-1 w-6 -translate-x-1/2 rounded-full bg-primary" aria-hidden />}
-                  {/* C: линия под активным пунктом по низу полосы */}
-                  {v === 'c' && isActive && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-primary" aria-hidden />}
-                  {/* A — подписи с 1024px; B и C шире (капсула / значок + подпись) — подписи с 1280px, до этого только значки */}
-                  <span className={v === 'a' ? 'lg:hidden' : v === 'b' ? 'xl:hidden' : ''}>
+                  {/* «лампа» над активным пунктом, как в образце */}
+                  {isActive && <span className="absolute -top-1 left-1/2 h-1 w-6 -translate-x-1/2 rounded-full bg-primary" aria-hidden />}
+                  <span className="xl:hidden">
                     <Icon d={item.icon} />
                   </span>
-                  <span className={`hidden ${v === 'a' ? 'lg:inline' : 'xl:inline'}`}>{item.label}</span>
+                  <span className="hidden xl:inline">{item.label}</span>
+                  {/* подпись при наведении — пока в капсуле одни значки (до 1280px) */}
+                  <span
+                    role="tooltip"
+                    className="pointer-events-none absolute top-full left-1/2 mt-2 -translate-x-1/2 -translate-y-1 rounded-lg border border-border bg-surface-2 px-2.5 py-1 text-xs font-medium whitespace-nowrap text-text opacity-0 shadow-lg transition-[opacity,translate] duration-150 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100 xl:hidden"
+                  >
+                    {item.label}
+                  </span>
                 </>
               )}
             </NavLink>
           ))}
         </nav>
 
-        <div className="ml-auto flex shrink-0 items-center gap-2 justify-self-end">
+        <div className="flex min-w-0 items-center justify-end gap-2">
           <UsageLine />
           <LangSwitch />
           <ThemeToggle />
           <span
-            className="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-xs font-semibold text-text uppercase"
+            className="hidden size-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-xs font-semibold text-text uppercase lg:flex"
             title={user?.email ?? ''}
             aria-hidden
           >
@@ -191,7 +185,7 @@ function TopNav({ items }: { items: NavItem[] }) {
   )
 }
 
-/** Лимит сделок в верхней полосе — только на Basic и от xl: «43 / 50» и тонкая полоска (у 90 % — красная); ведёт на тарифы */
+/** Лимит сделок в верхней полосе — только на Basic и от 2xl (1536px): «43 / 50» и тонкая полоска (у 90 % — красная); ведёт на тарифы */
 function UsageLine() {
   const t = useT()
   const { data: usage } = useUsage()
@@ -203,7 +197,7 @@ function UsageLine() {
       to="/plans"
       viewTransition
       title={fmt(t.settings.usageFree, { used: usage.trades_created, limit })}
-      className="mr-1 hidden w-24 rounded-lg px-1 py-1 transition-colors hover:bg-surface-2/60 xl:block"
+      className="mr-1 hidden w-24 shrink-0 rounded-lg px-1 py-1 transition-colors hover:bg-surface-2/60 2xl:block"
     >
       <div className="num text-xs text-muted">{fmt(t.nav.usageShort, { used: usage.trades_created, limit })}</div>
       <div className="mt-1.5 h-0.5 overflow-hidden rounded-full bg-surface-2">

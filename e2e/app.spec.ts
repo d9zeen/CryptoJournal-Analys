@@ -1139,3 +1139,34 @@ test.describe('«Разбор»: вкладки, «Итого», сортиро�
     await expect(table).toContainText('26×+')
   })
 })
+
+test('верхнее меню — капсула строго по центру на любой ширине от планшета; активный пункт отмечен, подписи — с 1280px', async ({ page, db }) => {
+  test.skip((page.viewportSize()?.width ?? 0) < 768, 'на телефоне — нижнее меню')
+  db.isAdmin = true
+  await fakeSupabase(page, db)
+  await page.goto('calendar')
+  const capsule = page.locator('[data-shot="nav-capsule"]')
+  await expect(capsule).toBeVisible()
+  await expect(page.locator('aside')).toHaveCount(0) // левой колонки больше нет
+  for (const width of [768, 820, 1024, 1280, 1440, 1920]) {
+    await page.setViewportSize({ width, height: 900 })
+    const box = (await capsule.boundingBox())!
+    expect(Math.abs(box.x + box.width / 2 - width / 2), `ширина ${width}`).toBeLessThanOrEqual(2)
+    // ничего не наезжает: капсула целиком внутри экрана, правый блок — правее капсулы
+    const right = (await page.locator('[data-shot="topnav"]').getByRole('button', { name: 'Выйти' }).boundingBox())!
+    expect(right.x, `ширина ${width}`).toBeGreaterThan(box.x + box.width)
+    const label = capsule.getByRole('link', { name: 'Календарь' })
+    await expect(label).toHaveAttribute('aria-current', 'page')
+    // с 1280px — подпись, раньше — только значок (подпись — всплывающая при наведении)
+    const caption = label.locator('span:not([role=tooltip])', { hasText: 'Календарь' })
+    if (width >= 1280) {
+      await expect(caption).toBeVisible()
+      await expect(label.locator('svg')).toBeHidden()
+    } else {
+      await expect(label.locator('svg')).toBeVisible()
+      await expect(caption).toBeHidden()
+    }
+  }
+  await capsule.getByRole('link', { name: 'Сделки' }).click()
+  await expect(page).toHaveURL(/\/trades$/)
+})
