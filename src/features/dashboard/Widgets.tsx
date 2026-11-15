@@ -251,16 +251,22 @@ export function KpiRow({
         {/* не второй одинаковый полукруг, а последние торговые дни квадратиками W / L (как «Последние 10 сделок») */}
         {days ? (
           <>
-            <div className={big}>{num(score.dayWinrate, (v) => formatPercent(v))}</div>
+            {/* W / L — сразу у процента (владелец, 15.11.2026), под ними квадратики дней */}
+            <div data-shot="day-counts" className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+              <div className={big}>{num(score.dayWinrate, (v) => formatPercent(v))}</div>
+              <Counts a={score.dayWins} b={score.dayLosses} />
+            </div>
             <DaySquares days={days} />
           </>
         ) : (
-          <div className={gaugeRow}>
-            <div className={big}>{num(score.dayWinrate, (v) => formatPercent(v))}</div>
-            <HalfGauge a={score.dayWins} b={score.dayLosses} />
-          </div>
+          <>
+            <div className={gaugeRow}>
+              <div className={big}>{num(score.dayWinrate, (v) => formatPercent(v))}</div>
+              <HalfGauge a={score.dayWins} b={score.dayLosses} />
+            </div>
+            <Counts a={score.dayWins} b={score.dayLosses} />
+          </>
         )}
-        <Counts a={score.dayWins} b={score.dayLosses} />
         <DeltaPill d={deltas?.dayWinrate} vs={vs} />
       </Widget>
 

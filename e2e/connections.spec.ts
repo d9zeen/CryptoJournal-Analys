@@ -31,7 +31,8 @@ test('Hyperliquid: подключение кошелька и первая си�
   expect(hlBodies[0]).toMatchObject({ type: 'userFillsByTime', user: WALLET.toLowerCase() })
   // после синхронизации запомнили, с какого места продолжать
   await expect.poll(() => db.connCalls?.find((c) => c.fn === 'touch_exchange_connection')?.body.p_cursor).toBe(new Date(t0 + 3_600_001).toISOString())
-  await expect(page.getByText(/Обновлено:/)).toBeVisible()
+  await expect(page.locator('[data-conn="hyperliquid"]')).toHaveAttribute('data-status', 'ok')
+  await expect(page.locator('[data-conn="hyperliquid"]')).toContainText(/Обновлено (только что|.+ назад)/)
 })
 
 test('Bybit: ключ с правом торговли не принимаем', async ({ page, db }) => {
@@ -73,7 +74,7 @@ test('Pro Plus: синхронизация на сервере каждые 3 ч
   await fakeSupabase(page, db)
   await page.goto('import')
   await expect(page.getByText(/Сделки подтягиваются на сервере каждые 3 часа/)).toBeVisible()
-  await expect(page.getByText(/дальше — сам каждые 3 часа/)).toBeVisible()
+  await expect(page.getByText(/следующее примерно через 2 ч (59|58) мин/)).toBeVisible()
   await expect(page.getByText(/Ключ Bybit перестанет работать/)).toBeVisible()
 })
 
@@ -119,8 +120,10 @@ test('Pro: старое подключение Polymarket не удаляетс�
   ]
   await fakeSupabase(page, db)
   await page.goto('import')
-  const row = page.locator('li').filter({ hasText: 'Polymarket' })
-  await expect(row.getByText('На паузе: по тарифу не положено, нужен Pro Plus.')).toBeVisible()
+  const row = page.locator('[data-conn="polymarket"]')
+  await expect(row).toHaveAttribute('data-status', 'paused')
+  await expect(row.locator('[data-pill]')).toHaveText('На паузе')
+  await expect(row.getByText('По тарифу не положено — нужен Pro Plus.')).toBeVisible()
   await expect(row.getByRole('button', { name: 'Обновить' })).toBeDisabled()
   // автосинхронизация его не трогает
   await page.waitForTimeout(500)
@@ -158,4 +161,49 @@ test('Polymarket: демо без подключения — пример сде
   expect(db.connCalls!.some((c) => c.fn === 'add_exchange_connection')).toBe(false)
   await dialog.getByRole('button', { name: 'Закрыть' }).click()
   await expect(dialog).toBeHidden()
+})
+
+test('Карточка подключения: «Ошибка» с подсказкой и ответом биржи при last_error; «Работает» и время до следующей синхронизации', async ({ page, db }) => {
+  db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
+  const now = Date.parse('2026-11-12T12:00:00Z')
+  await page.clock.setFixedTime(new Date(now))
+  db.connections = [
+    { id: 'c1', exchange: 'bybit', label: 'Основной', api_key: 'AbCdEf123456', last_sync_at: new Date(now - 10 * 60_000).toISOString(), cursor_at: null, last_error: null, key_expires_at: null, created_at: '2026-11-01T10:00:00Z' },
+    { id: 'c2', exchange: 'hyperliquid', label: null, api_key: WALLET.toLowerCase(), last_sync_at: new Date(now - 5 * 3_600_000).toISOString(), cursor_at: null, last_error: 'KEY_NO_PERMISSION | 10005 Permission denied', key_expires_at: null, created_at: '2026-11-02T10:00:00Z' },
+  ]
+  await fakeSupabase(page, db)
+  await page.goto('import')
+  const bad = page.locator('[data-conn="hyperliquid"]')
+  await expect(bad).toHaveAttribute('data-status', 'error')
+  await expect(bad.locator('[data-pill]')).toHaveText('Ошибка')
+  await expect(bad).toContainText('У ключа нет прав на чтение сделок')
+  await expect(bad).toContainText('Ответ биржи: 10005 Permission denied')
+  const ok = page.locator('[data-conn="bybit"]')
+  await expect(ok.locator('[data-pill]')).toHaveText('Работает')
+  await expect(ok).toContainText('Обновлено 10 мин назад · следующее примерно через 2 ч 50 мин')
+  // «скоро по API» — бледные карточки без кнопок, старой строки текста нет
+  await expect(page.locator('[data-soon]')).toHaveCount(6)
+  await expect(page.locator('[data-soon="Lighter"]')).toContainText('Скоро')
+  await expect(page.locator('[data-soon] button')).toHaveCount(0)
+  await expect(page.getByText('Скоро по API: Binance')).toHaveCount(0)
+})
+
+test('Отключение подключения — только после подтверждения в окне', async ({ page, db }) => {
+  db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
+  db.connections = [
+    { id: 'c1', exchange: 'bybit', label: 'Основной', api_key: 'AbCdEf123456', last_sync_at: new Date().toISOString(), cursor_at: null, last_error: null, key_expires_at: null, created_at: '2026-11-01T10:00:00Z' },
+  ]
+  await fakeSupabase(page, db)
+  await page.goto('import')
+  const card = page.locator('[data-conn="bybit"]')
+  await card.getByRole('button', { name: 'Отключить' }).click()
+  const dlg = page.getByRole('dialog', { name: 'Отключить Bybit?' })
+  await expect(dlg).toBeVisible()
+  await dlg.getByRole('button', { name: 'Отмена' }).click()
+  await expect(dlg).toBeHidden()
+  expect(db.connCalls?.some((c) => c.fn === 'delete_exchange_connection') ?? false).toBe(false)
+  await card.getByRole('button', { name: 'Отключить' }).click()
+  await dlg.getByRole('button', { name: 'Отключить' }).click()
+  await expect.poll(() => db.connCalls?.some((c) => c.fn === 'delete_exchange_connection')).toBe(true)
+  await expect(page.locator('[data-conn="bybit"]')).toHaveCount(0)
 })

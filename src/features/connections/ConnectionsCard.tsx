@@ -1,9 +1,10 @@
 /**
- * Блок «Подключённые биржи» на странице импорта: подключить Bybit (ключ «только чтение») или Hyperliquid (адрес кошелька),
- * синхронизировать вручную, отключить. Сами сделки подтягиваются автоматически (useAutoSync в AppLayout).
+ * Блок «Подключённые биржи» на странице «Биржи»: каждое подключение — карточка со статусом (Работает / Ошибка / На паузе / Синхронизация…),
+ * временем обновления, «Обновить» и «Отключить» (с подтверждением). Ниже — бледные карточки бирж «скоро по API».
+ * Подключить: Bybit (ключ «только чтение»), Hyperliquid / Polymarket (адрес). Сделки подтягиваются сами (useAutoSync в AppLayout).
  */
 import { intlLocale } from '@/lib/locale'
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { fmt, useT } from '@/i18n'
 import type { Dict } from '@/i18n/ru'
 import { Card } from '@/components/ui/Card'
@@ -12,7 +13,8 @@ import { Alert } from '@/components/ui/Alert'
 import { SelectField, TextField } from '@/components/ui/Field'
 import { exchangeName } from '@/lib/exchanges'
 import { dbErrorMessage } from '@/lib/errors'
-import { formatDateTime } from '@/lib/format'
+import { formatDuration } from '@/lib/format'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { useUsage } from '@/features/settings/api'
 import { activeConnections, connectBlock, connectionTypeOk, planFor, planInfo } from '@/lib/plans'
 import { useIsAdmin } from '@/features/admin/api'
@@ -31,6 +33,7 @@ import {
   useConnections,
   useDeleteConnection,
   useSyncConnection,
+  useSyncing,
   type ConnectableId,
   type Connection,
   type SyncResult,
@@ -54,6 +57,9 @@ export function connectionError(e: unknown, t: Dict): string {
   return dbErrorMessage(e, t)
 }
 
+/** Биржи, которые скоро можно будет подключить по API (имена собственные — не переводятся) */
+const SOON = ['Binance', 'OKX', 'BingX', 'Bitget', 'MEXC', 'Lighter'] as const
+
 export function ConnectionsCard() {
   const t = useT()
   const c = t.connections
@@ -67,6 +73,7 @@ export function ConnectionsCard() {
   const active = activeConnections(conns, plan, admin)
   const [adding, setAdding] = useState(false)
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
+  const now = useNow()
 
   const onSynced = (r: SyncResult) =>
     setNotice({
@@ -77,10 +84,12 @@ export function ConnectionsCard() {
     })
 
   return (
-    <Card className="flex flex-col gap-3 !p-4">
+    <section aria-labelledby="connections-title" className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="font-medium">{c.title}</h2>
+          <h2 id="connections-title" className="font-semibold">
+            {c.title}
+          </h2>
           <p className="mt-0.5 text-xs text-muted">{pro ? c.hintPro : c.hintFree}</p>
         </div>
         {!adding && (
@@ -93,44 +102,70 @@ export function ConnectionsCard() {
       {notice && <Alert tone={notice.tone}>{notice.text}</Alert>}
 
       {adding && (
-        <AddForm
-          count={conns.length}
-          admin={admin}
-          onDone={(name) => {
-            setAdding(false)
-            setNotice({ tone: 'success', text: fmt(c.added, { name }) })
-          }}
-          onCancel={() => setAdding(false)}
-        />
+        <Card className="!p-4">
+          <AddForm
+            count={conns.length}
+            admin={admin}
+            onDone={(name) => {
+              setAdding(false)
+              setNotice({ tone: 'success', text: fmt(c.added, { name }) })
+            }}
+            onCancel={() => setAdding(false)}
+          />
+        </Card>
       )}
 
       {isLoading ? (
         <p className="text-sm text-muted">{t.common.loading}</p>
       ) : conns.length === 0 ? (
         !adding && (
-          <>
+          <Card className="!p-4">
             <p className="text-sm text-muted">{c.empty}</p>
-            {usage && !admin && planInfo(plan).connections === 0 && <UpgradeLine text={t.plans.upgrade.connectionsFree} />}
-          </>
+            {usage && !admin && planInfo(plan).connections === 0 && <UpgradeLine className="mt-2" text={t.plans.upgrade.connectionsFree} />}
+          </Card>
         )
       ) : (
-        <ul className="flex flex-col">
+        // каждое подключение — своя карточка: 1 колонка на телефоне, 2 — от sm, 3 — от xl
+        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {conns.map((conn) => (
-            <ConnectionRow
+            <ConnectionTile
               key={conn.id}
               conn={conn}
               pro={pro}
               paused={!active.has(conn.id)}
               plan={plan}
+              now={now}
               onSynced={onSynced}
               onError={(text) => setNotice({ tone: 'error', text })}
             />
           ))}
         </ul>
       )}
-      <p className="text-xs text-muted">{t.exchange.soon}</p>
-    </Card>
+
+      {/* «скоро по API» — такими же карточками, только бледными и без кнопок */}
+      <ul aria-label={c.soonTitle} className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+        {SOON.map((name) => (
+          <li key={name} data-soon={name} className="flex flex-col gap-1 rounded-xl border border-border bg-surface px-3 py-2.5 opacity-60">
+            <span className="flex items-center justify-between gap-2">
+              <span className="truncate text-sm font-medium">{name}</span>
+              <span className="shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted">{c.soonBadge}</span>
+            </span>
+            <span className="text-xs text-muted">{c.soonHint}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
+}
+
+/** Текущее время, обновляется раз в минуту — для «обновлено 20 мин назад» */
+function useNow(): number {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 60_000)
+    return () => window.clearInterval(id)
+  }, [])
+  return now
 }
 
 /** Почему нельзя подключить — одна строка с предложением тарифа */
@@ -148,13 +183,26 @@ function pausedText(t: Dict, exchange: string, plan: Plan | undefined): string {
 }
 
 const DAY_MS = 86_400_000
+/** сервер Pro Plus синхронизирует раз в 3 часа */
+const SERVER_EVERY_MS = 3 * 3_600_000
 const dateOnly = () => new Intl.DateTimeFormat(intlLocale(), { day: 'numeric', month: 'long' })
 
-function ConnectionRow({
+type Status = 'ok' | 'error' | 'paused' | 'syncing' | 'waiting'
+const PILL: Record<Status, string> = {
+  ok: 'bg-up/12 text-up',
+  error: 'bg-down/12 text-down',
+  paused: 'bg-surface-2 text-muted',
+  syncing: 'bg-primary/12 text-primary',
+  waiting: 'bg-surface-2 text-muted',
+}
+const DOT: Record<Status, string> = { ok: 'bg-up', error: 'bg-down', paused: 'bg-muted', syncing: 'bg-primary', waiting: 'bg-muted' }
+
+function ConnectionTile({
   conn,
   pro,
   paused,
   plan,
+  now,
   onSynced,
   onError,
 }: {
@@ -163,6 +211,7 @@ function ConnectionRow({
   /** не по тарифу — синхронизация не идёт («нужен Pro Plus»), подключение не удаляется */
   paused: boolean
   plan: Plan | undefined
+  now: number
   onSynced: (r: SyncResult) => void
   onError: (text: string) => void
 }) {
@@ -170,61 +219,92 @@ function ConnectionRow({
   const c = t.connections
   const sync = useSyncConnection()
   const del = useDeleteConnection()
+  const syncing = useSyncing(conn.id) || sync.isPending
+  const [confirming, setConfirming] = useState(false)
   const code = errorCodeOf(conn.last_error)
   const errText = code ? ((c.errors as Record<string, string>)[code] ?? c.errors.UNKNOWN) : null
+  // что ответила биржа (после « | ») — мелко под подсказкой
+  const errDetail = conn.last_error?.split(' | ').slice(1).join(' | ').trim() || null
+  const status: Status = syncing ? 'syncing' : paused ? 'paused' : errText ? 'error' : conn.last_sync_at ? 'ok' : 'waiting'
+  const name = exchangeName(conn.exchange, t.exchange.other)
   // ключ Bybit без привязки к IP живёт 90 дней — предупреждаем за 14
   const expiresMs = conn.key_expires_at ? Date.parse(conn.key_expires_at) : null
   const expiry =
     expiresMs === null
       ? null
-      : expiresMs < Date.now()
+      : expiresMs < now
         ? { tone: 'text-loss', text: c.keyExpired }
-        : expiresMs - Date.now() < 14 * DAY_MS
+        : expiresMs - now < 14 * DAY_MS
           ? { tone: 'text-warning', text: fmt(c.keyExpiresSoon, { date: dateOnly().format(new Date(expiresMs)) }) }
           : null
+  const synced = conn.last_sync_at ? Date.parse(conn.last_sync_at) : null
+  const ago = synced === null ? null : now - synced
+  const next = synced === null ? null : synced + SERVER_EVERY_MS - now
 
   return (
-    <li className="flex flex-col gap-2 border-t border-border py-3 first:border-t-0 first:pt-0">
+    <li data-conn={conn.exchange} data-status={status} className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <span
-              className={`size-2 shrink-0 rounded-full ${paused ? 'bg-muted' : errText ? 'bg-loss' : conn.last_sync_at ? 'bg-profit' : 'bg-muted'}`}
-              aria-hidden
-            />
-            {exchangeName(conn.exchange, t.exchange.other)}
-            <span className="num truncate text-xs font-normal text-muted">{conn.label ?? shortKey(conn.api_key)}</span>
-          </div>
-          <div className="mt-0.5 text-xs text-muted">
-            {sync.isPending ? c.syncing : conn.last_sync_at ? fmt(c.lastSync, { date: formatDateTime(conn.last_sync_at) }) : c.neverSynced}
-            {!sync.isPending && pro && !errText && !paused && <span> · {c.autoPro}</span>}
-          </div>
+          <div className="font-semibold">{name}</div>
+          <div className="num truncate text-xs text-muted">{conn.label ?? shortKey(conn.api_key)}</div>
         </div>
-        <div className="flex shrink-0 gap-1">
-          <Button
-            variant="secondary"
-            className="!px-2.5 !py-1.5 text-xs"
-            loading={sync.isPending}
-            disabled={paused}
-            onClick={() => sync.mutate(conn, { onSuccess: onSynced, onError: (e) => onError(connectionError(e, t)) })}
-          >
-            {c.sync}
-          </Button>
-          <Button
-            variant="ghost"
-            className="!px-2.5 !py-1.5 text-xs"
-            loading={del.isPending}
-            onClick={() => {
-              if (window.confirm(c.removeConfirm)) del.mutate(conn.id, { onError: (e) => onError(connectionError(e, t)) })
-            }}
-          >
-            {c.remove}
-          </Button>
-        </div>
+        <span data-pill className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${PILL[status]}`}>
+          <span className={`size-1.5 rounded-full ${DOT[status]}`} aria-hidden />
+          {c.status[status]}
+        </span>
       </div>
+
+      {status === 'error' && (
+        <div className="rounded-lg bg-down/8 px-3 py-2 text-sm">
+          <p className="text-loss">{errText}</p>
+          {errDetail && <p className="num mt-1 text-xs break-words text-muted">{fmt(c.errorDetail, { text: errDetail })}</p>}
+        </div>
+      )}
       {paused && <UpgradeLine className="!text-xs" text={pausedText(t, conn.exchange, plan)} />}
-      {errText && !sync.isPending && !paused && <p className="text-xs text-loss">{errText}</p>}
       {expiry && !errText && <p className={`text-xs ${expiry.tone}`}>{expiry.text}</p>}
+
+      <p className="text-xs text-muted">
+        {syncing ? c.status.syncing : ago === null ? c.neverSynced : ago < 60_000 ? c.updatedNow : fmt(c.updatedAgo, { ago: formatDuration(ago) })}
+        {/* Pro Plus: сервер подтянет сам — примерно через 3 ч после прошлой синхронизации */}
+        {!syncing && pro && status === 'ok' && next !== null && (
+          <span> · {next > 60_000 ? fmt(c.nextIn, { in: formatDuration(next) }) : c.nextSoon}</span>
+        )}
+      </p>
+
+      <div className="mt-auto flex justify-end gap-2">
+        <Button variant="ghost" className="!px-3 !py-1.5 text-xs" disabled={del.isPending} onClick={() => setConfirming(true)}>
+          {c.remove}
+        </Button>
+        <Button
+          variant="secondary"
+          className="!px-3 !py-1.5 text-xs"
+          loading={syncing}
+          disabled={paused}
+          onClick={() => sync.mutate(conn, { onSuccess: onSynced, onError: (e) => onError(connectionError(e, t)) })}
+        >
+          {c.sync}
+        </Button>
+      </div>
+
+      <ConfirmDialog
+        open={confirming}
+        title={fmt(c.removeTitle, { name })}
+        confirm={c.remove}
+        cancel={t.common.cancel}
+        loading={del.isPending}
+        onClose={() => setConfirming(false)}
+        onConfirm={() =>
+          del.mutate(conn.id, {
+            onSuccess: () => setConfirming(false),
+            onError: (e) => {
+              setConfirming(false)
+              onError(connectionError(e, t))
+            },
+          })
+        }
+      >
+        {c.removeConfirm}
+      </ConfirmDialog>
     </li>
   )
 }
@@ -278,7 +358,7 @@ function AddForm({ count, admin, onDone, onCancel }: { count: number; admin: boo
   }
 
   return (
-    <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3 rounded-lg border border-border bg-surface-2/40 p-3">
+    <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3">
       <SelectField label={c.exchange} value={exchange} onChange={(e) => setExchange(e.target.value as ConnectableId)}>
         {CONNECTABLE.map((x) => (
           <option key={x.id} value={x.id}>

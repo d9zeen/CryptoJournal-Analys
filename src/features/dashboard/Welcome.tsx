@@ -63,7 +63,7 @@ function StartSteps() {
       ...w.steps.balance,
       actions: (
         <div className="mt-3">
-          <Button variant="secondary" onClick={() => navigate('/settings')}>
+          <Button variant="secondary" onClick={() => navigate('/settings#profile')}>
             {w.settings}
           </Button>
         </div>

@@ -5,7 +5,7 @@
  *  - Polymarket: только адрес кошелька; закрытые позиции через exchange-proxy (без ключей).
  * Найденные сделки проходят тот же путь, что импорт файла: проверка дублей → лимит Free → запись в «Историю импортов».
  */
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useSyncExternalStore } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FunctionRegion } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
@@ -112,6 +112,17 @@ export function usePolymarketDemo(enabled: boolean) {
 
 /** Синхронизации, которые идут прямо сейчас: одно подключение не качаем дважды (кнопка + авто) */
 const inFlight = new Map<string, Promise<SyncResult>>()
+const syncListeners = new Set<() => void>()
+const emitSyncing = () => syncListeners.forEach((l) => l())
+const subscribeSyncing = (cb: () => void) => {
+  syncListeners.add(cb)
+  return () => void syncListeners.delete(cb)
+}
+
+/** Идёт ли синхронизация этого подключения прямо сейчас (кнопка «Обновить», первая после подключения или автосинхронизация) */
+export function useSyncing(id: string): boolean {
+  return useSyncExternalStore(subscribeSyncing, () => inFlight.has(id))
+}
 
 /** Синхронизация из браузера — с правами пользователя (RLS + 2FA) */
 export function syncConnection(conn: Connection, remaining: () => Promise<number | null>): Promise<SyncResult> {
@@ -129,8 +140,12 @@ export function syncConnection(conn: Connection, remaining: () => Promise<number
     setKeyExpiry: async (iso) => {
       await supabase.rpc('set_connection_key_expiry', { p_id: conn.id, p_expires: iso })
     },
-  }).finally(() => inFlight.delete(conn.id))
+  }).finally(() => {
+    inFlight.delete(conn.id)
+    emitSyncing()
+  })
   inFlight.set(conn.id, p)
+  emitSyncing()
   return p
 }
 
