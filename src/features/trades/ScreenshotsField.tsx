@@ -27,6 +27,11 @@ export function ScreenshotsField({ saved, pending, onAdd, onRemoveSaved, onRemov
   const [error, setError] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [viewIndex, setViewIndex] = useState<number | null>(null)
+  const [noImage, setNoImage] = useState(false)
+  const [added, setAdded] = useState(false)
+  // ⌘ на Mac, Ctrl — у остальных; кнопка «Вставить из буфера» — где браузер умеет читать буфер по нажатию
+  const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent)
+  const canRead = typeof navigator !== 'undefined' && typeof navigator.clipboard?.read === 'function'
   // на Basic — 2 скриншота на сделку, на Pro и Pro Plus — 10 (то же проверяет база, 0016); админ — Pro Plus
   const { data: usage } = useUsage()
   const max = planInfo(usage?.plan).screenshots
@@ -55,9 +60,13 @@ export function ScreenshotsField({ saved, pending, onAdd, onRemoveSaved, onRemov
     const images = files.filter((f) => f.type.startsWith('image/')).slice(0, Math.max(0, latest.current.free))
     if (!images.length) return
     setError(false)
+    setNoImage(false)
     setProcessing(true)
     try {
       latest.current.onAdd(await Promise.all(images.map((f) => compressImage(f))))
+      // короткая подсветка зоны: «вставилось»
+      setAdded(true)
+      window.setTimeout(() => setAdded(false), 1200)
     } catch {
       setError(true)
     } finally {
@@ -65,10 +74,32 @@ export function ScreenshotsField({ saved, pending, onAdd, onRemoveSaved, onRemov
     }
   }
 
+  // кнопка «Вставить из буфера»: браузер спросит разрешение один раз
+  async function pasteFromClipboard() {
+    try {
+      const files: File[] = []
+      for (const item of await navigator.clipboard.read()) {
+        const type = item.types.find((x) => x.startsWith('image/'))
+        if (type) files.push(new File([await item.getType(type)], 'clipboard', { type }))
+      }
+      if (files.length) await handleFiles(files)
+      else setNoImage(true)
+    } catch {
+      setNoImage(true)
+    }
+  }
+
   // вставка из буфера обмена (Ctrl+V) в любом месте страницы
   useEffect(() => {
     function onPaste(e: ClipboardEvent) {
-      const files = Array.from(e.clipboardData?.files ?? []).filter((f) => f.type.startsWith('image/'))
+      const data = e.clipboardData
+      let files = Array.from(data?.files ?? []).filter((f) => f.type.startsWith('image/'))
+      // некоторые программы кладут картинку только как элемент буфера, без files
+      if (!files.length && data)
+        files = Array.from(data.items)
+          .filter((it) => it.kind === 'file' && it.type.startsWith('image/'))
+          .map((it) => it.getAsFile())
+          .filter((f): f is File => f !== null)
       if (files.length) {
         e.preventDefault()
         void handleFiles(files)
@@ -121,12 +152,38 @@ export function ScreenshotsField({ saved, pending, onAdd, onRemoveSaved, onRemov
             setDragOver(false)
             void handleFiles(Array.from(e.dataTransfer.files))
           }}
-          className={`flex flex-col items-center gap-3 rounded-lg border border-dashed p-5 text-center text-sm text-muted transition-colors ${dragOver ? 'border-primary bg-primary/5' : 'border-border'}`}
+          data-shot="screenshot-drop"
+          className={`flex flex-col items-center gap-3 rounded-lg border border-dashed p-5 text-center text-sm text-muted transition-colors ${dragOver || added ? 'border-primary bg-primary/5' : 'border-border'}`}
         >
-          <p>{processing ? t.tradeForm.screenshotProcessing : fmt(t.tradeForm.screenshotHint, { max })}</p>
-          <Button type="button" variant="secondary" onClick={() => inputRef.current?.click()} loading={processing}>
-            {items.length ? t.tradeForm.screenshotAdd : t.tradeForm.screenshotPick}
-          </Button>
+          {processing ? (
+            <p>{t.tradeForm.screenshotProcessing}</p>
+          ) : (
+            <>
+              {/* главное — вставка: скопировал скриншот (Win + Shift + S, «Копировать» в TradingView) → Ctrl + V */}
+              <p className="flex flex-wrap items-center justify-center gap-1.5 text-base text-text">
+                <kbd className="rounded-md border border-border bg-surface-2 px-2 py-0.5 font-sans text-sm font-semibold">{mac ? '⌘' : 'Ctrl'}</kbd>
+                <span aria-hidden>+</span>
+                <kbd className="rounded-md border border-border bg-surface-2 px-2 py-0.5 font-sans text-sm font-semibold">V</kbd>
+                <span>— {t.tradeForm.screenshotPasteTitle}</span>
+              </p>
+              <p className="max-w-md text-xs">{fmt(t.tradeForm.screenshotHint, { max })}</p>
+            </>
+          )}
+          <div className="flex flex-wrap justify-center gap-2">
+            {canRead && (
+              <Button type="button" onClick={() => void pasteFromClipboard()} loading={processing}>
+                {t.tradeForm.screenshotPasteBtn}
+              </Button>
+            )}
+            <Button type="button" variant="secondary" onClick={() => inputRef.current?.click()} disabled={processing}>
+              {items.length ? t.tradeForm.screenshotAdd : t.tradeForm.screenshotPick}
+            </Button>
+          </div>
+          {noImage && (
+            <p role="status" className="text-xs text-loss">
+              {t.tradeForm.screenshotPasteEmpty}
+            </p>
+          )}
         </div>
       ) : (
         <>

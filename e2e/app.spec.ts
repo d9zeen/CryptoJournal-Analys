@@ -148,7 +148,7 @@ test.describe('дашборд и сделки', () => {
     await expect(page).toHaveURL(/\/analysis$/)
     await expect(page.getByRole('heading', { name: 'Разбор сделок' })).toBeVisible()
     // одна таблица и вкладки над ней; Long / Short — сводка сверху
-    for (const name of ['Сетапы', 'Ошибки', 'Пары', 'Эмоции', 'Время суток', 'Плечо']) await expect(page.getByRole('tab', { name: new RegExp(`^${name}`) })).toBeVisible()
+    for (const name of ['Сетапы', 'Ошибки', 'Пары', 'Эмоции']) await expect(page.getByRole('tab', { name: new RegExp(`^${name}`) })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Long / Short' })).toBeAttached()
   })
 
@@ -1075,7 +1075,7 @@ test.describe('«Сделки»: быстрые фильтры, сортиров
   })
 })
 
-test.describe('«Разбор»: вкладки, «Итого», сортировка, время суток и плечо', () => {
+test.describe('«Разбор»: вкладки, «Итого», сортировка', () => {
   const at = (iso: string) => new Date(iso).toISOString()
   const seed = (db: { trades: Record<string, unknown>[]; listNames?: string[] }) => {
     db.listNames = ['Пробой', 'Отбой']
@@ -1142,30 +1142,24 @@ test.describe('«Разбор»: вкладки, «Итого», сортиро�
     await expect(page).toHaveURL(/\/trades$/)
   })
 
-  test('«Время суток» и «Плечо» — Pro Plus: на Basic вкладка видна, внутри предложение тарифа', async ({ page, db }) => {
+  test('вкладки — капсулой: только Сетапы, Ошибки, Пары, Эмоции; старые ссылки на «Время суток» и «Плечо» открывают Сетапы', async ({ page, db }) => {
     seed(db)
     await fakeSupabase(page, db)
-    await page.goto('analysis?tab=time')
-    await expect(page.getByRole('tab', { name: /Время суток/ })).toHaveAttribute('aria-selected', 'true')
-    await expect(page.getByText('Время суток и плечо — на Pro Plus.')).toBeVisible()
-    await expect(page.locator('[data-shot="analysis-table"]')).toHaveCount(0)
-  })
-
-  test('на Pro Plus: время суток — по 3 часа в поясе пользователя, плечо — группами', async ({ page, db }) => {
-    seed(db)
-    db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
-    await fakeSupabase(page, db)
-    await page.goto('analysis?tab=time')
-    const table = page.locator('[data-shot="analysis-table"]')
-    await expect(table.locator('tbody tr')).toHaveCount(2)
-    await expect(table.locator('tbody tr').first()).toContainText('03–06')
-    await expect(table.locator('tbody tr').nth(1)).toContainText('21–24')
-    await page.getByRole('tab', { name: 'Плечо' }).click()
-    await expect(page).toHaveURL(/\?tab=leverage$/)
-    await expect(table.locator('tbody tr')).toHaveCount(3)
-    await expect(table).toContainText('1–3×')
-    await expect(table).toContainText('4–10×')
-    await expect(table).toContainText('26×+')
+    await page.goto('analysis')
+    const tabs = page.getByRole('tab')
+    await expect(tabs).toHaveCount(4)
+    // у вкладки — число групп: «Пары 2» (BTCUSDT, ETHUSDT)
+    if ((page.viewportSize()?.width ?? 0) >= 640) await expect(page.getByRole('tab', { name: /Пары/ })).toContainText('2')
+    // все четыре помещаются без прокрутки (и на телефоне)
+    expect(await page.locator('[data-shot="analysis-tabs"]').evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true)
+    for (const old of ['time', 'leverage']) {
+      await page.goto(`analysis?tab=${old}`)
+      await expect(page.getByRole('tab', { name: /Сетапы/ })).toHaveAttribute('aria-selected', 'true')
+    }
+    // капсула по центру страницы (±4px)
+    const box = (await page.locator('[data-shot="analysis-tabs"]').boundingBox())!
+    const vw = page.viewportSize()!.width
+    if (box.width < vw - 40) expect(Math.abs(box.x + box.width / 2 - vw / 2)).toBeLessThan(40)
   })
 })
 
@@ -1198,4 +1192,44 @@ test('верхнее меню — капсула строго по центру 
   }
   await capsule.getByRole('link', { name: 'Сделки' }).click()
   await expect(page).toHaveURL(/\/trades$/)
+})
+
+test.describe('скриншот графика из буфера обмена', () => {
+  /** картинка в настоящий буфер — как после «Копировать» в TradingView или Ножницах */
+  const copyImage = (page: import('@playwright/test').Page) =>
+    page.evaluate(async () => {
+      const c = document.createElement('canvas')
+      c.width = 64
+      c.height = 40
+      c.getContext('2d')!.fillRect(0, 0, 64, 40)
+      const blob: Blob = await new Promise((r) => c.toBlob((b) => r(b!), 'image/png'))
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+    })
+
+  test.beforeEach(async ({ context, isMobile }) => {
+    test.skip(isMobile, 'Ctrl+V и чтение буфера — на компьютере')
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  })
+
+  test('Ctrl+V в любом месте формы добавляет скриншот', async ({ page, db }) => {
+    await fakeSupabase(page, db)
+    await page.goto('trades/new')
+    await expect(page.locator('[data-shot="screenshot-drop"]')).toContainText('вставить скриншот')
+    await copyImage(page)
+    await page.locator('body').click({ position: { x: 5, y: 300 } })
+    await page.keyboard.press('Control+V')
+    await expect(page.getByText('новый')).toBeVisible()
+  })
+
+  test('кнопка «Вставить из буфера»: есть картинка — добавляет, нет — подсказывает', async ({ page, db }) => {
+    await fakeSupabase(page, db)
+    await page.goto('trades/new')
+    await page.evaluate(() => navigator.clipboard.writeText('не картинка'))
+    await page.getByRole('button', { name: 'Вставить из буфера' }).click()
+    await expect(page.getByRole('status')).toContainText('В буфере нет картинки')
+    await copyImage(page)
+    await page.getByRole('button', { name: 'Вставить из буфера' }).click()
+    await expect(page.getByText('новый')).toBeVisible()
+    await expect(page.getByRole('status')).toHaveCount(0)
+  })
 })
