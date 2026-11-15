@@ -319,8 +319,16 @@ test.describe('импорт', () => {
     const bar = page.getByRole('progressbar', { name: 'Записываю сделки…' })
     await expect(bar).toContainText(/500 из 1\s040 сделок/)
     await expect(bar).toHaveAttribute('aria-valuenow', '500')
+    // анимация A: записанные сделки въезжают; окошко в углу показывает тот же прогресс
+    await expect(page.locator('[data-import-flow] li').first()).toBeVisible()
+    await expect(page.locator('[data-activity-item="file"]')).toContainText(/500 из 1\s040 сделок/)
     await expect(page.getByText(/Готово: импортировано сделок — 1\s?040/)).toBeVisible()
+    await expect(page.locator('[data-import-done]')).toBeVisible()
     await expect(bar).toHaveCount(0)
+    // окошко остаётся и на другой странице, со ссылкой «К сделкам»
+    await expect(page.locator('[data-activity-item="file"]')).toHaveAttribute('data-status', 'done')
+    await page.goto('trades')
+    await expect(page.locator('[data-activity]')).toHaveCount(0) // после перезагрузки страницы окошка нет — загрузка уже закончилась
   })
 })
 

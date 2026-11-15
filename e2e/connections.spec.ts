@@ -147,6 +147,9 @@ test('Pro: биржа или кошелёк — можно, Polymarket — не�
   await page.getByLabel('Адрес кошелька').fill(WALLET)
   await page.getByRole('button', { name: 'Подключить', exact: true }).click()
   await expect(page.getByText('Hyperliquid подключена')).toBeVisible()
+  // Hyperliquid в этом тесте не отвечает — синхронизация с ошибкой, подключение всё равно есть
+  await expect(page.locator('[data-bridge]')).toHaveAttribute('data-stage', /done|syncError/)
+  await page.keyboard.press('Escape') // закрыть панель
   await page.getByRole('button', { name: '+ Подключить' }).click()
   await expect(page.locator('[data-upgrade]').filter({ hasText: 'На Pro — одно подключение' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Подключить', exact: true })).toBeDisabled()
@@ -221,7 +224,7 @@ test('Карточка подключения: «Ошибка» с подска�
   await expect(ok.locator('[data-pill]')).toHaveText('Работает')
   await expect(ok).toContainText('Обновлено 10 мин назад · следующее примерно через 2 ч 50 мин')
   // «скоро по API» — бледные карточки без кнопок, старой строки текста нет
-  await expect(page.locator('[data-soon]')).toHaveCount(2)
+  await expect(page.locator('[data-soon]')).toHaveCount(1)
   await expect(page.locator('[data-soon="Binance"]')).toHaveCount(0)
   await expect(page.locator('[data-soon="Lighter"]')).toContainText('Скоро')
   await expect(page.locator('[data-soon] button')).toHaveCount(0)
@@ -246,4 +249,47 @@ test('Отключение подключения — только после п
   await dlg.getByRole('button', { name: 'Отключить' }).click()
   await expect.poll(() => db.connCalls?.some((c) => c.fn === 'delete_exchange_connection')).toBe(true)
   await expect(page.locator('[data-conn="bybit"]')).toHaveCount(0)
+})
+
+test('Сетка бирж: карточка OKX → панель «По API» с кодовой фразой; «Файлом» → выбор файла с этой биржей', async ({ page, db }) => {
+  db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
+  await fakeSupabase(page, db)
+  await page.goto('import')
+  const grid = page.locator('[data-exchanges]')
+  for (const id of ['bybit', 'binance', 'okx', 'bingx', 'bitget', 'hyperliquid', 'polymarket', 'mexc', 'other']) await expect(grid.locator(`[data-exchange="${id}"]`)).toBeVisible()
+  await grid.locator('[data-exchange="okx"]').click()
+  const panel = page.getByRole('dialog', { name: 'OKX' })
+  await expect(panel.getByRole('tab', { name: 'По API' })).toHaveAttribute('aria-selected', 'true')
+  await expect(panel.getByLabel('Кодовая фраза (Passphrase)')).toBeVisible()
+  await expect(panel.getByLabel('Биржа')).toHaveCount(0) // биржа уже выбрана карточкой
+  await panel.getByRole('tab', { name: 'Файлом' }).click()
+  await expect(panel).toContainText('OKX → Активы → История ордеров')
+  const chooser = page.waitForEvent('filechooser')
+  await panel.getByRole('button', { name: 'Выбрать файл' }).click()
+  await (await chooser).setFiles({ name: 'positions.csv', mimeType: 'text/csv', buffer: Buffer.from('Instrument,Direction,Open time,Close time,Open price,Close price,PnL\nBTC-USDT-SWAP,long,2026-11-01 10:00:00,2026-11-01 12:00:00,60000,61000,10\n') })
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(page.getByLabel('Биржа').first()).toHaveValue('okx')
+})
+
+test('Мост: подключение Bybit из карточки — шаги отмечаются, итог и окошко загрузок в углу', async ({ page, db }) => {
+  db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
+  await fakeSupabase(page, db)
+  await page.goto('import')
+  await page.locator('[data-exchange="bybit"]').click()
+  const panel = page.getByRole('dialog', { name: 'Bybit' })
+  await panel.getByLabel('API Key').fill('AbCdEf123456')
+  await panel.getByLabel('API Secret').fill('SuperSecret123456')
+  await panel.getByRole('button', { name: 'Подключить', exact: true }).click()
+  const bridge = panel.locator('[data-bridge]')
+  await expect(bridge).toHaveAttribute('data-stage', 'done', { timeout: 20_000 })
+  await expect(bridge.locator('[data-step="done"]')).toHaveCount(3)
+  await expect(bridge).toContainText('Только чтение — торговать и выводить нельзя')
+  await expect(bridge).toContainText('Загружено новых сделок: 1')
+  // окошко фоновых загрузок: синхронизация Bybit готова
+  const toast = page.locator('[data-activity]')
+  await expect(toast.locator('[data-activity-item="sync"]')).toHaveAttribute('data-status', 'done')
+  await expect(toast).toContainText('новых сделок: 1')
+  await panel.getByRole('button', { name: 'Закрыть', exact: true }).last().click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(page.locator('[data-exchange="bybit"]')).toContainText('Подключена')
 })

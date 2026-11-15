@@ -7,6 +7,7 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { LangSwitch } from '@/components/LangSwitch'
 import { useIsAdmin } from '@/features/admin/api'
 import { useAutoSync } from '@/features/connections/api'
+import { ActivityToast } from '@/components/ActivityToast'
 import { useProfile, useUsage } from '@/features/settings/api'
 import { applyPalette, canUsePalette, isPalette } from '@/lib/palette'
 import { useEffect } from 'react'
@@ -82,6 +83,9 @@ export function AppLayout() {
       <main className="mx-auto max-w-[2200px] px-4 py-6 lg:px-8 lg:py-8">
         <Outlet />
       </main>
+
+      {/* фоновые загрузки (файл, синхронизация биржи) — окошко в углу на любой странице */}
+      <ActivityToast />
 
       {/* Нижнее меню на телефоне: там нет наведения, поэтому подписи остаются. На форме сделки его нет */}
       <nav

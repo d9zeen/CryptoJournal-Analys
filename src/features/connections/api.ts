@@ -20,6 +20,8 @@ import { useUsage } from '@/features/settings/api'
 import { activeConnections } from '@/lib/plans'
 import { useIsAdmin } from '@/features/admin/api'
 import { markSynced } from '@/lib/arrivals'
+import { finishActivity, startActivity } from '@/lib/activity'
+import { exchangeName } from '@/lib/exchanges'
 
 export { SyncError, errorCodeOf, shortKey, type SyncResult } from '@/lib/sync/run'
 
@@ -133,10 +135,26 @@ export function useSyncing(id: string): boolean {
   return useSyncExternalStore(subscribeSyncing, () => inFlight.has(id))
 }
 
-/** Синхронизация из браузера — с правами пользователя (RLS + 2FA) */
-export function syncConnection(conn: Connection, remaining: () => Promise<number | null>): Promise<SyncResult> {
+/**
+ * Синхронизация из браузера — с правами пользователя (RLS + 2FA).
+ * announce — показать в окошке фоновых загрузок (кнопка «Обновить» и первая после подключения; автосинхронизация — тихо)
+ */
+export function syncConnection(conn: Connection, remaining: () => Promise<number | null>, announce = false): Promise<SyncResult> {
+  const activityId = `sync:${conn.id}`
+  const show = () => announce && startActivity({ id: activityId, kind: 'sync', label: [exchangeName(conn.exchange, ''), conn.label].filter(Boolean).join(' · ') })
   const running = inFlight.get(conn.id)
-  if (running) return running
+  if (running) {
+    // уже качается (например, автосинхронизация успела начать первой) — показываем в окошке ту же загрузку
+    if (announce) {
+      show()
+      running.then(
+        (r) => finishActivity(activityId, { inserted: r.inserted }),
+        () => finishActivity(activityId, { error: true }),
+      )
+    }
+    return running
+  }
+  show()
   const p = runSync(conn, {
     cexCall: cexCall(conn.id),
     polymarketGet: polymarketGet(conn.id),
@@ -149,10 +167,21 @@ export function syncConnection(conn: Connection, remaining: () => Promise<number
     setKeyExpiry: async (iso) => {
       await supabase.rpc('set_connection_key_expiry', { p_id: conn.id, p_expires: iso })
     },
-  }).finally(() => {
-    inFlight.delete(conn.id)
-    emitSyncing()
   })
+    .then(
+      (r) => {
+        if (announce) finishActivity(activityId, { inserted: r.inserted })
+        return r
+      },
+      (e) => {
+        if (announce) finishActivity(activityId, { error: true })
+        throw e
+      },
+    )
+    .finally(() => {
+      inFlight.delete(conn.id)
+      emitSyncing()
+    })
   inFlight.set(conn.id, p)
   emitSyncing()
   return p
@@ -175,7 +204,15 @@ async function remainingTrades(): Promise<number | null> {
 export function useAddConnection() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (args: { exchange: ConnectableId; apiKey: string; secret?: string; passphrase?: string; label?: string }) => {
+    mutationFn: async (args: {
+      exchange: ConnectableId
+      apiKey: string
+      secret?: string
+      passphrase?: string
+      label?: string
+      /** шаги для анимации «мост»: ключ сохранён → права проверены (только чтение) */
+      onStage?: (stage: 'added' | 'checked') => void
+    }) => {
       const { data: id, error } = await supabase.rpc('add_exchange_connection', {
         p_exchange: args.exchange,
         p_api_key: args.apiKey.trim(),
@@ -186,6 +223,7 @@ export function useAddConnection() {
       })
       if (error) throw error
       const connId = id as string
+      args.onStage?.('added')
       const mod = CEX_MODULES[args.exchange]
       if (args.exchange === 'bybit' || mod) {
         try {
@@ -198,6 +236,7 @@ export function useAddConnection() {
           throw toSyncError(e)
         }
       }
+      args.onStage?.('checked')
       return connId
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ['connections'] }),
@@ -218,7 +257,7 @@ export function useDeleteConnection() {
 export function useSyncConnection() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (conn: Connection) => syncConnection(conn, remainingTrades),
+    mutationFn: (conn: Connection) => syncConnection(conn, remainingTrades, true),
     onSuccess: (r) => {
       if (r.inserted > 0) markSynced()
     },
