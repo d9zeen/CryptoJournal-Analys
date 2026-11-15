@@ -16,26 +16,16 @@ import { Alert } from '@/components/ui/Alert'
 import { SideBadge } from '@/components/SideBadge'
 import { formatPercent, formatPnl, pnlClass } from '@/lib/format'
 import { rangeFor, type CustomRange, type PeriodPreset } from '@/lib/period'
-import { byEmotion, byHourBucket, byLeverage, bySetup, bySide, bySymbol, closedTrades, groupTotal, leverageBucket, topMistakes, type ClosedTrade, type Group, type StatTrade } from '@/lib/calc/stats'
-import { zonedParts } from '@/lib/tz'
-import { useProfile, useUsage } from '@/features/settings/api'
-import { browserTimeZone } from '@/lib/tz'
-import { UpgradeLine } from '@/components/UpgradeLine'
+import { byEmotion, bySetup, bySide, bySymbol, closedTrades, groupTotal, topMistakes, type ClosedTrade, type Group, type StatTrade } from '@/lib/calc/stats'
 import { GroupTable, type Row } from '@/features/dashboard/GroupTable'
 import { GroupTrades } from './GroupTrades'
 
-/** Вкладки «Разбора»; «Время суток» и «Плечо» — функция Pro Plus */
-const TABS = ['setups', 'mistakes', 'pairs', 'emotions', 'time', 'leverage'] as const
+/** Вкладки «Разбора» — капсулой по центру (как верхнее меню). «Время суток» и «Плечо» владелец убрал 15.11.2026 */
+const TABS = ['setups', 'mistakes', 'pairs', 'emotions'] as const
 type Tab = (typeof TABS)[number]
-const PRO_PLUS_TABS: readonly Tab[] = ['time', 'leverage']
-const pad = (n: number) => String(n).padStart(2, '0')
-/** 03 → «03–06» */
-const hourLabel = (h: number) => `${pad(h)}–${pad(h + 3)}`
-/** '4-10' → «4–10×», '26+' → «26×+» */
-const leverageLabel = (k: string) => (k.endsWith('+') ? `${k.slice(0, -1)}×+` : `${k.replace('-', '–')}×`)
 
 /** В какие строки таблицы вкладки попадает сделка (те же ключи, что у таблиц: «—» — без сетапа / эмоции) */
-function rowKeys(tab: Tab, tr: ClosedTrade, tz: string): string[] {
+function rowKeys(tab: Tab, tr: ClosedTrade): string[] {
   switch (tab) {
     case 'setups':
       return [tr.setup_id ?? '—']
@@ -45,10 +35,6 @@ function rowKeys(tab: Tab, tr: ClosedTrade, tz: string): string[] {
       return tr.tagIds
     case 'pairs':
       return [tr.symbol]
-    case 'time':
-      return [String(Math.floor(zonedParts(tr.entry_at, tz).hour / 3) * 3)]
-    case 'leverage':
-      return [leverageBucket(tr.leverage)]
   }
 }
 
@@ -97,9 +83,6 @@ export function AnalysisPage() {
   const { data: emotions = [] } = useList('emotions')
   const { data: tags = [] } = useList('mistake_tags')
 
-  const { data: profile } = useProfile()
-  const { data: usage } = useUsage()
-  const tz = profile?.timezone || browserTimeZone()
   // вкладка — в адресе (?tab=pairs): ссылка открывает тот же разрез
   const [params, setParams] = useSearchParams()
   const tab: Tab = TABS.includes(params.get('tab') as Tab) ? (params.get('tab') as Tab) : 'setups'
@@ -123,17 +106,14 @@ export function AnalysisPage() {
       emotions: byEmotion(closed),
       mistakes: topMistakes(closed),
       symbols: bySymbol(closed),
-      time: byHourBucket(closed, tz),
-      leverage: byLeverage(closed),
       total: groupTotal(closed),
       mistakesTotal: groupTotal(closed, true),
       // у рынков Polymarket вместо кода — название рынка
       titles: new Map((trades ?? []).flatMap((tr) => (tr.title ? [[tr.symbol, tr.title] as const] : []))),
     }
-  }, [trades, tz])
+  }, [trades])
 
   const c = t.dashboard.tables
-  const proPlus = usage?.plan === 'pro_plus'
   const names = (list: { id: string; name: string }[]) => new Map(list.map((x) => [x.id, x.name]))
   const toRows = (groups: Group<string | null>[], nameMap: Map<string, string>, noneLabel: string): Row[] =>
     groups.map((g) => ({ id: g.key ?? '—', label: g.key === null ? noneLabel : (nameMap.get(g.key) ?? c.deleted), group: g }))
@@ -149,7 +129,6 @@ export function AnalysisPage() {
         ].filter(Boolean)
       : []
 
-  const locked = PRO_PLUS_TABS.includes(tab) && !proPlus
   const tableProps = ((): { title: string; hint?: string; rows: Row[]; total: Group<unknown>; mode?: 'mistakes'; empty?: string } => {
     switch (tab) {
       case 'setups':
@@ -167,18 +146,20 @@ export function AnalysisPage() {
         return { title: t.analysis.tabs.pairs, rows: stats.symbols.map((g) => ({ id: g.key, label: stats.titles.get(g.key) ?? g.key, group: g })), total: stats.total }
       case 'emotions':
         return { title: t.analysis.tabs.emotions, rows: toRows(stats.emotions, names(emotions), c.noEmotion), total: stats.total }
-      case 'time':
-        return { title: t.analysis.tabs.time, hint: t.analysis.timeHint, rows: stats.time.map((g) => ({ id: String(g.key), label: hourLabel(g.key), group: g })), total: stats.total }
-      case 'leverage':
-        return { title: t.analysis.tabs.leverage, hint: t.analysis.leverageHint, rows: stats.leverage.map((g) => ({ id: g.key, label: leverageLabel(g.key), group: g })), total: stats.total }
     }
   })()
   const selectedRow = tableProps.rows.find((r) => r.id === selected) ?? null
   // сделки для карточек справа: выбранной строки или все сделки периода
   const groupTrades = useMemo(() => {
-    const ids = new Set(stats.closed.filter((tr) => !selectedRow || rowKeys(tab, tr, tz).includes(selectedRow.id)).map((tr) => tr.id))
+    const ids = new Set(stats.closed.filter((tr) => !selectedRow || rowKeys(tab, tr).includes(selectedRow.id)).map((tr) => tr.id))
     return (trades ?? []).filter((tr) => ids.has(tr.id))
-  }, [stats.closed, trades, selectedRow, tab, tz])
+  }, [stats.closed, trades, selectedRow, tab])
+  const tabCount: Record<Tab, number> = {
+    setups: stats.setups.filter((g) => g.key !== null).length,
+    mistakes: stats.mistakes.length,
+    pairs: stats.symbols.length,
+    emotions: stats.emotions.filter((g) => g.key !== null).length,
+  }
   // одна строка «Без сетапа» / «Не указана» — таблица ничего не сравнивает: вместо неё объяснение, что делать
   const unmarked = (tab === 'setups' || tab === 'emotions') && tableProps.rows.length === 1 && tableProps.rows[0].id === '—'
 
@@ -216,29 +197,35 @@ export function AnalysisPage() {
             {insight.join(' ')}
           </p>
         )}
-        {/* одна широкая таблица и вкладки над ней; активная — подчёркиванием (образец — 21st.dev inline-analytics-table) */}
-        <div role="tablist" aria-label={t.analysis.tabsLabel} data-shot="analysis-tabs" className="-mb-1 flex gap-1 overflow-x-auto overflow-y-hidden border-b border-border">
-          {TABS.map((k) => (
-            <button
-              key={k}
-              type="button"
-              role="tab"
-              aria-selected={tab === k}
-              onClick={() => setTab(k)}
-              className={`-mb-px border-b-2 px-3 py-2 text-sm whitespace-nowrap transition-colors ${tab === k ? 'border-primary font-medium text-text' : 'border-transparent text-muted hover:text-text'}`}
-            >
-              {t.analysis.tabs[k]}
-              {PRO_PLUS_TABS.includes(k) && !proPlus && <span className="ml-1 text-xs text-muted">· Pro Plus</span>}
-            </button>
-          ))}
+        {/* вкладки — капсулой по центру, как верхнее меню (образец — 21st.dev tubelight-navbar): над активной — «лампа», у каждой — сколько групп */}
+        <div className="flex justify-center">
+          <div
+            role="tablist"
+            aria-label={t.analysis.tabsLabel}
+            data-shot="analysis-tabs"
+            className="flex max-w-full items-center gap-0.5 overflow-x-auto overflow-y-hidden rounded-full border border-border bg-surface p-1 shadow-sm"
+          >
+            {TABS.map((k) => (
+              <button
+                key={k}
+                type="button"
+                role="tab"
+                aria-selected={tab === k}
+                onClick={() => setTab(k)}
+                className={`relative flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors sm:px-4 ${
+                  tab === k ? 'bg-surface-2 text-text' : 'text-muted hover:text-text'
+                }`}
+              >
+                {tab === k && <span className="absolute -top-1 left-1/2 h-1 w-6 -translate-x-1/2 rounded-full bg-primary" aria-hidden />}
+                {t.analysis.tabs[k]}
+                {/* число групп — от 640px: на телефоне иначе четыре вкладки не помещаются */}
+                <span className={`num hidden rounded-full px-1.5 text-xs sm:inline ${tab === k ? 'bg-primary/15 text-primary' : 'bg-surface-2 text-muted'}`}>{tabCount[k]}</span>
+              </button>
+            ))}
+          </div>
         </div>
         <div role="tabpanel" aria-label={t.analysis.tabs[tab]}>
-          {locked ? (
-            <Card>
-              <UpgradeLine text={t.analysis.locked} />
-            </Card>
-          ) : (
-            // сверху — лента сделок со скриншотами на всю ширину (листается вбок, клик → сделка), под ней — компактная таблица
+          {/* сверху — лента сделок со скриншотами на всю ширину (листается вбок, клик → сделка), под ней — компактная таблица */}
             <div className="flex flex-col gap-4">
               <GroupTrades key={`${tab}|${selected ?? ''}`} name={selectedRow?.label ?? null} trades={groupTrades} canPick={!unmarked} onReset={() => setSelected(null)} />
               {unmarked ? (
@@ -260,7 +247,6 @@ export function AnalysisPage() {
                 <GroupTable key={tab} compact rollKey={rk} {...tableProps} selectedId={selected} onSelect={(id) => setSelected((cur) => (cur === id ? null : id))} />
               )}
             </div>
-          )}
         </div>
         </>
       )}
