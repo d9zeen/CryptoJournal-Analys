@@ -21,6 +21,8 @@ export const en: Dict = {
     logout: 'Log out',
     toLight: 'Light theme',
     toDark: 'Dark theme',
+    main: 'Main menu',
+    usageShort: '{used} / {limit} trades',
   },
   auth: {
     email: 'Email',

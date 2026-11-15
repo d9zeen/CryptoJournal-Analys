@@ -19,6 +19,9 @@ export const ru = {
     logout: 'Выйти',
     toLight: 'Светлая тема',
     toDark: 'Тёмная тема',
+    main: 'Главное меню',
+    /** лимит Basic в верхней полосе */
+    usageShort: '{used} / {limit} сделок',
   },
   auth: {
     email: 'Email',
