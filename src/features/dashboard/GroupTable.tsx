@@ -26,9 +26,14 @@ type Props = {
   i?: number
   /** сменился (период) — суммы прокручиваются (№13) */
   rollKey?: unknown
+  /** «Разбор»: выбранная строка (её сделки — карточками справа) и выбор строки кликом / Enter */
+  selectedId?: string | null
+  onSelect?: (id: string) => void
+  /** плотнее строки (под лентой сделок в «Разборе») */
+  compact?: boolean
 }
 
-export function GroupTable({ title, hint, rows, total, mode = 'default', empty, limit = 12, i = 0, rollKey }: Props) {
+export function GroupTable({ title, hint, rows, total, mode = 'default', empty, limit = 12, i = 0, rollKey, selectedId, onSelect, compact = false }: Props) {
   const t = useT()
   const c = t.dashboard.tables
   const mistakes = mode === 'mistakes'
@@ -41,7 +46,8 @@ export function GroupTable({ title, hint, rows, total, mode = 'default', empty, 
     sort.dir,
   ).map((g) => rows.find((r) => r.group === g)!)
   const visible = expanded ? sorted : sorted.slice(0, limit)
-  const num = 'px-2 py-2.5 text-right whitespace-nowrap sm:px-3'
+  const py = compact ? 'py-1.5' : 'py-2.5'
+  const num = `px-2 ${py} text-right whitespace-nowrap sm:px-3`
   const val = (g: Group<unknown>) => (mistakes ? g.lossSum : g.pnl)
   const maxAbs = Math.max(1e-9, ...rows.map((r) => Math.abs(val(r.group))))
 
@@ -67,7 +73,7 @@ export function GroupTable({ title, hint, rows, total, mode = 'default', empty, 
   }
 
   return (
-    <Card className="rise !p-4 sm:!p-5" style={{ '--i': i } as CSSProperties}>
+    <Card className={`rise ${compact ? '!px-4 !py-3 sm:!px-5' : '!p-4 sm:!p-5'}`} style={{ '--i': i } as CSSProperties}>
       <h2 className="sr-only">{title}</h2>
       {hint && <p className="mb-2 text-xs text-muted">{hint}</p>}
       {rows.length === 0 ? (
@@ -76,7 +82,7 @@ export function GroupTable({ title, hint, rows, total, mode = 'default', empty, 
         <table data-shot="analysis-table" className="w-full text-sm">
           <thead className="align-bottom text-xs text-muted">
             <tr>
-              <th className="w-full border-b-2 border-transparent py-2.5 pr-3 text-left font-normal">{c.name}</th>
+              <th className={`w-full border-b-2 border-transparent py-2.5 pr-3 text-left font-normal ${onSelect ? 'pl-3' : ''}`}>{c.name}</th>
               {th('count', c.count, 'hidden sm:table-cell')}
               {mistakes ? (
                 <>
@@ -94,9 +100,28 @@ export function GroupTable({ title, hint, rows, total, mode = 'default', empty, 
           </thead>
           <tbody>
             {visible.map(({ id, label, group: g }) => (
-              <tr key={id} className="border-t border-border">
+              <tr
+                key={id}
+                data-row={id}
+                aria-selected={onSelect ? selectedId === id : undefined}
+                tabIndex={onSelect ? 0 : undefined}
+                onClick={onSelect ? () => onSelect(id) : undefined}
+                onKeyDown={
+                  onSelect
+                    ? (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          onSelect(id)
+                        }
+                      }
+                    : undefined
+                }
+                className={`border-t border-border ${onSelect ? 'cursor-pointer transition-colors hover:bg-surface-2/50 focus-visible:outline-2 focus-visible:outline-primary' : ''} ${
+                  selectedId === id ? 'bg-primary/10 shadow-[inset_3px_0_0_var(--color-primary)]' : ''
+                }`}
+              >
                 {/* название ужимается и переносится, деньги — никогда: у колонок с суммами whitespace-nowrap и ширина по содержимому */}
-                <td className="max-w-0 py-2.5 pr-3" title={label}>
+                <td className={`max-w-0 ${py} pr-3 ${onSelect ? 'pl-3' : ''}`} title={label}>
                   <div className="[overflow-wrap:anywhere]">{label}</div>
                   {/* на телефоне колонки «Сделок» нет (тесно для сумм) — число под названием */}
                   <div className="mt-1 text-xs text-muted sm:hidden">{fmt(t.dashboard.tooltipTrades, { n: g.count })}</div>
@@ -140,7 +165,7 @@ export function GroupTable({ title, hint, rows, total, mode = 'default', empty, 
             <tfoot>
               {/* «Итого» — как Total в образце: отдельная строка с фоном */}
               <tr data-total className="border-t-2 border-border bg-surface-2/60 font-semibold">
-                <td className="rounded-l-md py-2.5 pr-3 pl-2">
+                <td className={`rounded-l-md ${py} pr-3 pl-2`}>
                   {t.analysis.total}
                   <div className="text-xs font-normal text-muted sm:hidden">{fmt(t.dashboard.tooltipTrades, { n: total.count })}</div>
                 </td>

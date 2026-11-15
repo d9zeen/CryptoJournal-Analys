@@ -6,7 +6,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { AnalysisSkeleton } from '@/components/Skeleton'
 import { useNavigate, useSearchParams } from 'react-router'
-import { fmt, useT } from '@/i18n'
+import { fmt, plural, useT } from '@/i18n'
 import { useTrades } from '@/features/trades/api'
 import { useList } from '@/features/settings/api'
 import { PeriodFilter } from '@/components/PeriodFilter'
@@ -16,11 +16,13 @@ import { Alert } from '@/components/ui/Alert'
 import { SideBadge } from '@/components/SideBadge'
 import { formatPercent, formatPnl, pnlClass } from '@/lib/format'
 import { rangeFor, type CustomRange, type PeriodPreset } from '@/lib/period'
-import { byEmotion, byHourBucket, byLeverage, bySetup, bySide, bySymbol, closedTrades, groupTotal, topMistakes, type Group, type StatTrade } from '@/lib/calc/stats'
+import { byEmotion, byHourBucket, byLeverage, bySetup, bySide, bySymbol, closedTrades, groupTotal, leverageBucket, topMistakes, type ClosedTrade, type Group, type StatTrade } from '@/lib/calc/stats'
+import { zonedParts } from '@/lib/tz'
 import { useProfile, useUsage } from '@/features/settings/api'
 import { browserTimeZone } from '@/lib/tz'
 import { UpgradeLine } from '@/components/UpgradeLine'
 import { GroupTable, type Row } from '@/features/dashboard/GroupTable'
+import { GroupTrades } from './GroupTrades'
 
 /** Вкладки «Разбора»; «Время суток» и «Плечо» — функция Pro Plus */
 const TABS = ['setups', 'mistakes', 'pairs', 'emotions', 'time', 'leverage'] as const
@@ -31,6 +33,24 @@ const pad = (n: number) => String(n).padStart(2, '0')
 const hourLabel = (h: number) => `${pad(h)}–${pad(h + 3)}`
 /** '4-10' → «4–10×», '26+' → «26×+» */
 const leverageLabel = (k: string) => (k.endsWith('+') ? `${k.slice(0, -1)}×+` : `${k.replace('-', '–')}×`)
+
+/** В какие строки таблицы вкладки попадает сделка (те же ключи, что у таблиц: «—» — без сетапа / эмоции) */
+function rowKeys(tab: Tab, tr: ClosedTrade, tz: string): string[] {
+  switch (tab) {
+    case 'setups':
+      return [tr.setup_id ?? '—']
+    case 'emotions':
+      return [tr.emotion_id ?? '—']
+    case 'mistakes':
+      return tr.tagIds
+    case 'pairs':
+      return [tr.symbol]
+    case 'time':
+      return [String(Math.floor(zonedParts(tr.entry_at, tz).hour / 3) * 3)]
+    case 'leverage':
+      return [leverageBucket(tr.leverage)]
+  }
+}
 
 /** С какого числа сделок за период показывать строку-вывод */
 const MIN_INSIGHT = 10
@@ -83,7 +103,10 @@ export function AnalysisPage() {
   // вкладка — в адресе (?tab=pairs): ссылка открывает тот же разрез
   const [params, setParams] = useSearchParams()
   const tab: Tab = TABS.includes(params.get('tab') as Tab) ? (params.get('tab') as Tab) : 'setups'
+  // выбранная строка таблицы — её сделки карточками справа; при смене вкладки — сброс
+  const [selected, setSelected] = useState<string | null>(null)
   const setTab = (next: Tab) => {
+    setSelected(null)
     const p = new URLSearchParams(params)
     if (next === 'setups') p.delete('tab')
     else p.set('tab', next)
@@ -126,6 +149,39 @@ export function AnalysisPage() {
         ].filter(Boolean)
       : []
 
+  const locked = PRO_PLUS_TABS.includes(tab) && !proPlus
+  const tableProps = ((): { title: string; hint?: string; rows: Row[]; total: Group<unknown>; mode?: 'mistakes'; empty?: string } => {
+    switch (tab) {
+      case 'setups':
+        return { title: t.analysis.tabs.setups, rows: toRows(stats.setups, names(setups), c.noSetup), total: stats.total }
+      case 'mistakes':
+        return {
+          title: t.analysis.tabs.mistakes,
+          hint: c.mistakesHint,
+          mode: 'mistakes',
+          empty: c.mistakesEmpty,
+          rows: stats.mistakes.map((g) => ({ id: g.key, label: names(tags).get(g.key) ?? c.deleted, group: g })),
+          total: stats.mistakesTotal,
+        }
+      case 'pairs':
+        return { title: t.analysis.tabs.pairs, rows: stats.symbols.map((g) => ({ id: g.key, label: stats.titles.get(g.key) ?? g.key, group: g })), total: stats.total }
+      case 'emotions':
+        return { title: t.analysis.tabs.emotions, rows: toRows(stats.emotions, names(emotions), c.noEmotion), total: stats.total }
+      case 'time':
+        return { title: t.analysis.tabs.time, hint: t.analysis.timeHint, rows: stats.time.map((g) => ({ id: String(g.key), label: hourLabel(g.key), group: g })), total: stats.total }
+      case 'leverage':
+        return { title: t.analysis.tabs.leverage, hint: t.analysis.leverageHint, rows: stats.leverage.map((g) => ({ id: g.key, label: leverageLabel(g.key), group: g })), total: stats.total }
+    }
+  })()
+  const selectedRow = tableProps.rows.find((r) => r.id === selected) ?? null
+  // сделки для карточек справа: выбранной строки или все сделки периода
+  const groupTrades = useMemo(() => {
+    const ids = new Set(stats.closed.filter((tr) => !selectedRow || rowKeys(tab, tr, tz).includes(selectedRow.id)).map((tr) => tr.id))
+    return (trades ?? []).filter((tr) => ids.has(tr.id))
+  }, [stats.closed, trades, selectedRow, tab, tz])
+  // одна строка «Без сетапа» / «Не указана» — таблица ничего не сравнивает: вместо неё объяснение, что делать
+  const unmarked = (tab === 'setups' || tab === 'emotions') && tableProps.rows.length === 1 && tableProps.rows[0].id === '—'
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -161,7 +217,7 @@ export function AnalysisPage() {
           </p>
         )}
         {/* одна широкая таблица и вкладки над ней; активная — подчёркиванием (образец — 21st.dev inline-analytics-table) */}
-        <div role="tablist" aria-label={t.analysis.tabsLabel} data-shot="analysis-tabs" className="-mb-1 flex gap-1 overflow-x-auto border-b border-border">
+        <div role="tablist" aria-label={t.analysis.tabsLabel} data-shot="analysis-tabs" className="-mb-1 flex gap-1 overflow-x-auto overflow-y-hidden border-b border-border">
           {TABS.map((k) => (
             <button
               key={k}
@@ -177,51 +233,33 @@ export function AnalysisPage() {
           ))}
         </div>
         <div role="tabpanel" aria-label={t.analysis.tabs[tab]}>
-          {PRO_PLUS_TABS.includes(tab) && !proPlus ? (
+          {locked ? (
             <Card>
               <UpgradeLine text={t.analysis.locked} />
             </Card>
-          ) : tab === 'setups' ? (
-            <GroupTable key={tab} rollKey={rk} title={t.analysis.tabs.setups} rows={toRows(stats.setups, names(setups), c.noSetup)} total={stats.total} />
-          ) : tab === 'mistakes' ? (
-            <GroupTable
-              key={tab}
-              rollKey={rk}
-              title={t.analysis.tabs.mistakes}
-              hint={c.mistakesHint}
-              mode="mistakes"
-              empty={c.mistakesEmpty}
-              rows={stats.mistakes.map((g) => ({ id: g.key, label: names(tags).get(g.key) ?? c.deleted, group: g }))}
-              total={stats.mistakesTotal}
-            />
-          ) : tab === 'pairs' ? (
-            <GroupTable
-              key={tab}
-              rollKey={rk}
-              title={t.analysis.tabs.pairs}
-              rows={stats.symbols.map((g) => ({ id: g.key, label: stats.titles.get(g.key) ?? g.key, group: g }))}
-              total={stats.total}
-            />
-          ) : tab === 'emotions' ? (
-            <GroupTable key={tab} rollKey={rk} title={t.analysis.tabs.emotions} rows={toRows(stats.emotions, names(emotions), c.noEmotion)} total={stats.total} />
-          ) : tab === 'time' ? (
-            <GroupTable
-              key={tab}
-              rollKey={rk}
-              title={t.analysis.tabs.time}
-              hint={t.analysis.timeHint}
-              rows={stats.time.map((g) => ({ id: String(g.key), label: hourLabel(g.key), group: g }))}
-              total={stats.total}
-            />
           ) : (
-            <GroupTable
-              key={tab}
-              rollKey={rk}
-              title={t.analysis.tabs.leverage}
-              hint={t.analysis.leverageHint}
-              rows={stats.leverage.map((g) => ({ id: g.key, label: leverageLabel(g.key), group: g }))}
-              total={stats.total}
-            />
+            // сверху — лента сделок со скриншотами на всю ширину (листается вбок, клик → сделка), под ней — компактная таблица
+            <div className="flex flex-col gap-4">
+              <GroupTrades key={`${tab}|${selected ?? ''}`} name={selectedRow?.label ?? null} trades={groupTrades} canPick={!unmarked} onReset={() => setSelected(null)} />
+              {unmarked ? (
+                // всё «Без сетапа» / «Не указана»: вместо таблицы из одной строки — что сделать
+                <Card data-shot="analysis-empty" className="flex flex-col gap-3 border-dashed !py-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="font-semibold">{t.analysis.empty[tab as 'setups' | 'emotions'].title}</h2>
+                    <p className="mt-1 max-w-2xl text-sm text-muted">
+                      {fmt(t.analysis.empty[tab as 'setups' | 'emotions'].text, { trades: plural(stats.closed.length, t.dashboard.calendar.tradesN) })}
+                    </p>
+                  </div>
+                  {tab === 'setups' && (
+                    <Button className="shrink-0" onClick={() => navigate('/trades')}>
+                      {t.analysis.empty.setups.cta}
+                    </Button>
+                  )}
+                </Card>
+              ) : (
+                <GroupTable key={tab} compact rollKey={rk} {...tableProps} selectedId={selected} onSelect={(id) => setSelected((cur) => (cur === id ? null : id))} />
+              )}
+            </div>
           )}
         </div>
         </>
