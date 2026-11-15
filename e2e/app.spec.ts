@@ -1113,6 +1113,35 @@ test.describe('«Разбор»: вкладки, «Итого», сортиро�
     await expect(page.getByRole('tab', { name: 'Эмоции' })).toHaveAttribute('aria-selected', 'true')
   })
 
+  test('лента сделок над таблицей: клик по строке оставляет её сделки, карточка ведёт на сделку', async ({ page, db }) => {
+    seed(db)
+    await fakeSupabase(page, db)
+    await page.goto('analysis?tab=pairs')
+    const strip = page.locator('[data-strip]')
+    await expect(strip.locator('[data-trade-card]')).toHaveCount(3)
+    await page.locator('[data-row="ETHUSDT"]').click()
+    await expect(page.locator('[data-row="ETHUSDT"]')).toHaveAttribute('aria-selected', 'true')
+    await expect(strip.locator('[data-trade-card]')).toHaveCount(2)
+    await expect(page.locator('[data-shot="group-trades"] h2')).toContainText('ETHUSDT')
+    // повторный клик — снова все сделки
+    await page.locator('[data-row="ETHUSDT"]').click()
+    await expect(strip.locator('[data-trade-card]')).toHaveCount(3)
+    await strip.locator('[data-trade-card]').first().click()
+    await expect(page).toHaveURL(/\/trades\/00000000-0000-0000-0000-00000000000\d$/)
+  })
+
+  test('все сделки «Без сетапа»: вместо таблицы из одной строки — объяснение и кнопка', async ({ page, db }) => {
+    seed(db)
+    db.trades.forEach((tr) => (tr.setup_id = null))
+    await fakeSupabase(page, db)
+    await page.goto('analysis')
+    await expect(page.locator('[data-shot="analysis-empty"]')).toContainText('Сделки ещё не разделены по сетапам')
+    await expect(page.locator('[data-shot="analysis-table"]')).toHaveCount(0)
+    await expect(page.locator('[data-strip] [data-trade-card]')).toHaveCount(3)
+    await page.getByRole('button', { name: 'Назначить сетап списком' }).click()
+    await expect(page).toHaveURL(/\/trades$/)
+  })
+
   test('«Время суток» и «Плечо» — Pro Plus: на Basic вкладка видна, внутри предложение тарифа', async ({ page, db }) => {
     seed(db)
     await fakeSupabase(page, db)
