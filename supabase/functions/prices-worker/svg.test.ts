@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { safeSvg, svgColor, tradingViewLogo } from './svg'
+import { parseTvScan, pickLogoId, safeSvg, svgColor, tradingViewLogo } from './svg'
 
 const btc = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18"><path fill="#F7931A" d="M0 0h18v18H0z"/><path fill="#fff" d="M5 5h8v8H5z"/></svg>'
 
@@ -37,7 +37,26 @@ describe('логотипы TradingView', () => {
     expect(svgColor('<svg><path fill="#777"/><path fill="#777"/><path fill="#26A17B"/></svg>')).toBe('#26a17b')
     expect(svgColor('<svg><path style="fill:#627EEA"/></svg>')).toBe('#627eea')
   })
-  it('адрес логотипа', () => {
-    expect(tradingViewLogo('BTC')).toBe('https://s3-symbol-logo.tradingview.com/crypto/XTVCBTC.svg')
+  it('почти чёрный (XRP: #1A1E21) — не цвет монеты', () => {
+    expect(svgColor('<svg><stop stop-color="#1A1E21"/><stop stop-color="#06060A"/><path fill="#fff"/></svg>')).toBeNull()
+  })
+  it('логотип — по тикеру и названию из рейтинга TradingView (HYPE у них — две разные монеты)', () => {
+    // настоящий ответ сканера (сверено 16.11.2026) + чужая монета с тем же тикером
+    const list = parseTvScan({
+      totalCount: 3,
+      data: [
+        { s: 'CRYPTO:BTCUSD', d: ['BTC', 'Bitcoin', 'crypto/XTVCBTC', 1] },
+        { s: 'CRYPTO:HYPEHUSD', d: ['HYPE', 'Hyperliquid', 'crypto/XTVCHYPEH', 9] },
+        { s: 'CRYPTO:HYPEUSD', d: ['HYPE', 'Hype Token', 'crypto/XTVCHYPE', 1800] },
+        { s: 'X', d: ['EVIL', 'Evil', '../../etc/passwd', 5] },
+      ],
+    })
+    expect(list).toHaveLength(3)
+    expect(pickLogoId(list, 'HYPE', 'Hyperliquid')).toBe('crypto/XTVCHYPEH')
+    expect(pickLogoId(list, 'BTC', 'Bitcoin')).toBe('crypto/XTVCBTC')
+    expect(pickLogoId(list, 'USDT', 'Tether')).toBeNull()
+    // название другое и монета далеко в рейтинге — не берём
+    expect(pickLogoId([{ symbol: 'ABC', name: 'Other', logoid: 'crypto/XTVCABC', rank: 900 }], 'ABC', 'Alpha')).toBeNull()
+    expect(tradingViewLogo('crypto/XTVCBTC')).toBe('https://s3-symbol-logo.tradingview.com/crypto/XTVCBTC.svg')
   })
 })

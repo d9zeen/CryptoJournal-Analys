@@ -9,6 +9,7 @@
  *  2. Новые монеты: символы, которые держат, а монеты в coins нет (held_missing_symbols), — ищет у CoinGecko (/search),
  *     берёт только ранжированную монету с точно таким символом (мусорные токены не подхватит); не нашёл — coin_misses (сутки не ищем).
  *  3. Иконки (до 100 за запуск): логотип TradingView (SVG, после проверки safeSvg) → наш Storage coin-icons; цвет монеты — из логотипа.
+ *     Какой логотип — по рейтингу монет TradingView (сканер coin/scan): тот же тикер и то же название (тикеры у них повторяются).
  *     Нет логотипа у TradingView — картинка CoinGecko (PNG / JPEG / WebP). Браузер иконки берёт только с нашего Supabase:
  *     CSP не трогаем, сторонние сайты не узнают, у кого какие монеты.
  *
@@ -16,7 +17,7 @@
  * Выкладка: Supabase → Edge Functions → prices-worker (index.ts + svg.ts), verify_jwt = false.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { safeSvg, svgColor, tradingViewLogo } from './svg.ts'
+import { parseTvScan, pickLogoId, safeSvg, svgColor, tradingViewLogo, type TvCoin } from './svg.ts'
 
 const CG = 'https://api.coingecko.com/api/v3'
 const PAGES = 2
@@ -155,18 +156,37 @@ Deno.serve(async (req) => {
   // 3. Иконки и цвета: сначала TradingView (SVG), иначе CoinGecko
   const { data: todo } = await admin
     .from('coins')
-    .select('id, symbol, image_src')
+    .select('id, symbol, name, image_src')
     .is('icon', null)
     .or(`icon_checked_at.is.null,icon_checked_at.lt.${new Date(Date.now() - 7 * 86_400_000).toISOString()}`)
     .order('rank', { ascending: true, nullsFirst: false })
     .limit(ICONS_PER_RUN)
-  for (const c of (todo ?? []) as { id: string; symbol: string; image_src: string | null }[]) {
+  // рейтинг монет TradingView (тикер, название, id логотипа) — один запрос, только если есть монеты без иконки
+  let tvList: TvCoin[] = []
+  if (todo?.length) {
+    try {
+      const res = await fetch('https://scanner.tradingview.com/coin/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          columns: ['base_currency', 'base_currency_desc', 'base_currency_logoid', 'crypto_total_rank'],
+          sort: { sortBy: 'crypto_total_rank', sortOrder: 'asc' },
+          range: [0, 1500],
+        }),
+      })
+      if (res.ok) tvList = parseTvScan(await res.json())
+    } catch {
+      /* TradingView не ответил — возьмём картинки CoinGecko */
+    }
+  }
+  for (const c of (todo ?? []) as { id: string; symbol: string; name: string; image_src: string | null }[]) {
     try {
       let file: string | null = null
       let color: string | null = null
-      const tv = await fetch(tradingViewLogo(c.symbol))
+      const logoid = pickLogoId(tvList, c.symbol, c.name)
+      const tv = logoid ? await fetch(tradingViewLogo(logoid)) : null
       // S3 у TradingView может отдать SVG с типом binary/octet-stream — решаем по содержимому (safeSvg)
-      const svg = tv.ok ? safeSvg(await tv.text()) : null
+      const svg = tv?.ok ? safeSvg(await tv.text()) : null
       if (svg && svg.length <= ICON_MAX) {
         file = `${c.id}.svg`
         color = svgColor(svg)

@@ -54,7 +54,7 @@ export function svgColor(svg: string): string | null {
     const c = hex6(m[1])
     if (!c) continue
     const { s, l } = hsl(c)
-    if (l < 0.1 || l > 0.93) continue
+    if (l < 0.18 || l > 0.93) continue
     score.set(c, (score.get(c) ?? 0) + (s > 0.25 ? 3 : 1))
   }
   let best: string | null = null
@@ -63,5 +63,39 @@ export function svgColor(svg: string): string | null {
   return best
 }
 
-/** Адрес логотипа монеты у TradingView (их id логотипа для криптовалют — crypto/XTVC<символ>) */
-export const tradingViewLogo = (symbol: string) => `https://s3-symbol-logo.tradingview.com/crypto/XTVC${encodeURIComponent(symbol)}.svg`
+/** Строка рейтинга монет TradingView (scanner.tradingview.com/coin/scan): тикер, название, id логотипа, место */
+export type TvCoin = { symbol: string; name: string; logoid: string; rank: number }
+
+const LOGOID = /^crypto\/[A-Za-z0-9_-]{1,40}$/
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
+
+/** Ответ сканера TradingView → список монет (мусор отбрасываем) */
+export function parseTvScan(body: unknown): TvCoin[] {
+  const data = (body as { data?: unknown } | null)?.data
+  if (!Array.isArray(data)) return []
+  const out: TvCoin[] = []
+  for (const row of data) {
+    const d = (row as { d?: unknown } | null)?.d
+    if (!Array.isArray(d)) continue
+    const [symbol, name, logoid, rank] = d
+    if (typeof symbol !== 'string' || typeof logoid !== 'string' || !LOGOID.test(logoid)) continue
+    out.push({ symbol: symbol.toUpperCase(), name: typeof name === 'string' ? name : '', logoid, rank: typeof rank === 'number' ? rank : Infinity })
+  }
+  return out
+}
+
+/**
+ * id логотипа TradingView для нашей монеты: тот же тикер и, если таких несколько, — то же название
+ * (у TradingView под тикером HYPE есть и чужая монета, а Hyperliquid — XTVCHYPEH). Не нашли — null (будет картинка CoinGecko).
+ */
+export function pickLogoId(list: TvCoin[], symbol: string, name: string): string | null {
+  const same = list.filter((c) => c.symbol === symbol)
+  if (!same.length) return null
+  const byName = same.find((c) => norm(c.name) === norm(name)) ?? same.find((c) => norm(c.name).includes(norm(name)) || norm(name).includes(norm(c.name)))
+  if (byName) return byName.logoid
+  // названия не совпали: берём единственного кандидата, только если он в рейтинге высоко (иначе это, скорее всего, другая монета)
+  return same.length === 1 && same[0].rank <= 300 ? same[0].logoid : null
+}
+
+/** Адрес логотипа у TradingView по id логотипа (crypto/XTVCBTC) */
+export const tradingViewLogo = (logoid: string) => `https://s3-symbol-logo.tradingview.com/${logoid}.svg`
