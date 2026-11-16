@@ -802,6 +802,50 @@ select pg_temp.expect_error($$update coins set platforms = '"x"'$$, 'coins_platf
 select pg_temp.check(true, 'адреса контрактов — только объект');
 delete from auth.users where id = '99999999-0000-0000-0000-000000000009';
 
+-- Ссылка «поделиться портфелем» (0022): только по токену, без почты / id / количества; суммы — только если разрешил владелец
+insert into auth.users (id, email) values ('88888888-0000-0000-0000-000000000008', 's@test');
+set role authenticated;
+set request.jwt.claim.sub = '88888888-0000-0000-0000-000000000008';
+insert into holdings (account, symbol, amount) values ('manual', 'BTC', 0.5), ('manual', 'ETH', 3), ('manual', 'DUST', 1);
+select share_portfolio() as s_token \gset
+select pg_temp.check(:'s_token' ~ '^[0-9a-f]{32}$', 'ссылка: случайный токен из 32 знаков');
+select pg_temp.check(share_portfolio(true) = :'s_token', 'смена «показывать суммы» не меняет ссылку');
+select pg_temp.check(share_portfolio(false, true) <> :'s_token', 'новая ссылка — новый токен');
+select token as s_token from portfolio_shares \gset
+select pg_temp.expect_error($$insert into portfolio_shares (token) values ('00000000000000000000000000000000')$$, 'permission denied');
+select pg_temp.expect_error($$update portfolio_shares set show_amounts = true$$, 'permission denied');
+select pg_temp.check(true, 'ссылку напрямую не подделать — только функциями');
+reset role;
+set role anon;
+set request.jwt.claim.sub = '';
+select pg_temp.check((select (shared_portfolio(:'s_token')->>'show_amounts')::boolean = false
+  and shared_portfolio(:'s_token')->'total' = 'null'::jsonb), 'без входа: портфель по ссылке открывается, суммы скрыты');
+select pg_temp.check((select jsonb_agg(x->>'symbol') from jsonb_array_elements(shared_portfolio(:'s_token')->'coins') x) = '["BTC", "ETH"]'::jsonb, 'монеты по убыванию стоимости, без цены — не показаны');
+select pg_temp.check((select bool_and(not (x ? 'value') and not (x ? 'amount')) from jsonb_array_elements(shared_portfolio(:'s_token')->'coins') x), 'ни стоимости, ни количества монет, если суммы скрыты');
+select pg_temp.check(abs((shared_portfolio(:'s_token')->'coins'->0->>'share')::numeric - 50000 / 59000.0) < 0.0001, 'доля BTC — 50 000 из 59 000');
+select pg_temp.check(shared_portfolio('ffffffffffffffffffffffffffffffff') is null and shared_portfolio('x'' or 1=1 --') is null, 'чужой или кривой токен — ничего');
+select pg_temp.check(not (shared_portfolio(:'s_token')::text ~ '8888|s@test|user_id'), 'по ссылке нет почты и id владельца');
+select pg_temp.expect_error($$select * from portfolio_shares$$, 'permission denied');
+select pg_temp.check(true, 'аноним не видит список ссылок');
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '88888888-0000-0000-0000-000000000008';
+select share_portfolio(true);
+reset role;
+set role anon;
+select pg_temp.check((shared_portfolio(:'s_token')->>'total')::numeric = 59000 and (shared_portfolio(:'s_token')->'coins'->0->>'value')::numeric = 50000, 'разрешил суммы — видна стоимость');
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
+select pg_temp.check((select count(*) from portfolio_shares) = 0, 'B не видит чужую ссылку');
+set request.jwt.claim.sub = '88888888-0000-0000-0000-000000000008';
+select unshare_portfolio();
+reset role;
+set role anon;
+select pg_temp.check(shared_portfolio(:'s_token') is null, 'выключил ссылку — больше не открывается');
+reset role;
+delete from auth.users where id = '88888888-0000-0000-0000-000000000008';
+
 -- Удаление аккаунта чистит всё
 set role authenticated;
 set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';

@@ -346,3 +346,42 @@ export function estimateHistory(rows: PortfolioRow[], coins: Coin[], nowMs: numb
   }
   return out
 }
+
+/** Монета портфеля по ссылке (0022): без количества; value — только если владелец разрешил суммы */
+export type SharedCoinLike = { symbol: string; name?: string; icon?: string; color?: string; share: number; change_24h?: number; change_7d?: number; spark?: number[]; value?: number }
+
+/**
+ * Монеты по ссылке → строки как у своего портфеля (для кольца долей и «лучше / хуже всех»).
+ * Суммы скрыты — стоимость условная (доля × 1 000 000): на экран она не выводится, нужна только для пропорций.
+ */
+export function sharedRows(coins: SharedCoinLike[]): PortfolioRow[] {
+  return coins.map((c) => ({
+    symbol: c.symbol,
+    coin: { id: c.symbol.toLowerCase(), symbol: c.symbol, name: c.name ?? c.symbol, rank: null, price: null, change_24h: c.change_24h ?? null, change_7d: c.change_7d ?? null, spark: c.spark ?? null, icon: c.icon ?? null, color: c.color ?? null },
+    amount: 0,
+    value: c.value ?? c.share * 1e6,
+    price: null,
+    change24: c.change_24h ?? null,
+    change24Usd: null,
+    avgPrice: null,
+    avgManual: false,
+    avgSource: null,
+    covered: null,
+    realized: 0,
+    invested: null,
+    pnl: null,
+    pnlPct: null,
+    share: c.share,
+    sources: [],
+    holdings: [],
+  }))
+}
+
+/** Изменение портфеля за сутки по долям: Σ доля × изменение монеты (монеты без изменения — как 0 %) */
+export function sharedChange24(coins: SharedCoinLike[]): number | null {
+  const known = coins.filter((c) => typeof c.change_24h === 'number')
+  if (!known.length) return null
+  // доля сейчас = старая доля × (1 + r); портфель вчера = Σ доля / (1 + r)
+  const before = coins.reduce((a, c) => a + c.share / (1 + (c.change_24h ?? 0) / 100), 0)
+  return before > 0 ? 1 / before - 1 : null
+}

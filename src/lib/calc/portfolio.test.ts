@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { allocation, coinsBySymbol, costBasis, estimateHistory, movers, portfolioRows, portfolioSeries, portfolioTotals, realizedTotal, thinOut, type Coin, type Holding } from './portfolio'
+import { allocation, coinsBySymbol, costBasis, estimateHistory, sharedChange24, sharedRows, movers, portfolioRows, portfolioSeries, portfolioTotals, realizedTotal, thinOut, type Coin, type Holding } from './portfolio'
 
 const coin = (symbol: string, price: number | null, rank: number, change_24h: number | null = null, id = symbol.toLowerCase()): Coin => ({
   id, symbol, name: symbol, rank, price, change_24h, change_7d: null, spark: null, icon: null,
@@ -152,5 +152,23 @@ describe('портфель: средняя цена из истории поку
     expect(rows.find((r) => r.symbol === 'BTC')).toMatchObject({ avgPrice: 80000, avgSource: 'trades', covered: 0.5, invested: 40000 })
     expect(rows.find((r) => r.symbol === 'ETH')).toMatchObject({ avgPrice: 2000, avgSource: 'manual', realized: 500 })
     expect(realizedTotal(basis)).toBeCloseTo(500, 6)
+  })
+})
+
+describe('портфель по ссылке', () => {
+  const coins = [
+    { symbol: 'BTC', share: 0.6, change_24h: 10, color: '#f7931a' },
+    { symbol: 'USDT', share: 0.4, change_24h: 0 },
+  ]
+  it('доли — как в своём портфеле: кольцо и цвета; суммы скрыты — стоимость только для пропорций', () => {
+    const rows = sharedRows(coins)
+    expect(allocation(rows).map((a) => [a.symbol, a.share, a.color])).toEqual([['BTC', 0.6, '#f7931a'], ['USDT', 0.4, null]])
+    expect(movers(rows).best!.symbol).toBe('BTC')
+    expect(sharedRows([{ symbol: 'ETH', share: 1, value: 3000 }])[0].value).toBe(3000)
+  })
+  it('изменение портфеля за сутки по долям: BTC +10 % при доле 60 % → портфель ≈ +5,77 %', () => {
+    // вчера: 0,6 / 1,1 + 0,4 = 0,94545… → сегодня 1 / 0,94545 − 1
+    expect(sharedChange24(coins)!).toBeCloseTo(1 / (0.6 / 1.1 + 0.4) - 1, 9)
+    expect(sharedChange24([{ symbol: 'X', share: 1 }])).toBeNull()
   })
 })

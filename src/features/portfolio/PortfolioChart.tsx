@@ -6,7 +6,9 @@
 import { useId, useMemo } from 'react'
 import { Area, AreaChart, CartesianGrid, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useT } from '@/i18n'
-import { formatDateTime, formatUsd, formatUsdShort } from '@/lib/format'
+import { formatDateTime, formatPercent, formatUsd, formatUsdShort } from '@/lib/format'
+
+const signedPct = (v: number, digits = 1) => (v > 0 ? '+' : v < 0 ? '−' : '') + formatPercent(Math.abs(v), digits)
 import { intlLocale } from '@/lib/locale'
 import type { SeriesPoint } from '@/lib/calc/portfolio'
 
@@ -14,7 +16,10 @@ const axisProps = { tick: { fill: 'var(--color-muted)', fontSize: 11 }, tickLine
 
 type TipProps = { active?: boolean; payload?: ReadonlyArray<{ payload?: SeriesPoint }> }
 
-export function PortfolioChart({ points, short }: { points: SeriesPoint[]; short: boolean }) {
+/** pct — значения в процентах к первой точке (100 = начало): портфель по ссылке со скрытыми суммами */
+export function PortfolioChart({ points, short, pct = false }: { points: SeriesPoint[]; short: boolean; pct?: boolean }) {
+  const money = (v: number) => (pct ? signedPct((v - 100) / 100) : formatUsd(v))
+  const moneyShort = (v: number) => (pct ? signedPct((v - 100) / 100, 0) : formatUsdShort(v))
   const t = useT()
   const p = t.portfolio.chart
   const id = useId().replace(/:/g, '')
@@ -54,7 +59,7 @@ export function PortfolioChart({ points, short }: { points: SeriesPoint[]; short
         </defs>
         <CartesianGrid stroke="var(--color-border)" vertical={false} />
         <XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} {...axisProps} tickFormatter={fmtTick} ticks={ticks} minTickGap={48} />
-        <YAxis {...axisProps} width={64} orientation="right" domain={[axis.lo, axis.hi]} tickFormatter={(v: number) => formatUsdShort(v)} allowDataOverflow />
+        <YAxis {...axisProps} width={64} orientation="right" domain={[axis.lo, axis.hi]} tickFormatter={(v: number) => moneyShort(v)} allowDataOverflow />
         <Tooltip
           cursor={{ stroke: 'var(--color-muted)', strokeOpacity: 0.4 }}
           content={(props) => {
@@ -63,7 +68,7 @@ export function PortfolioChart({ points, short }: { points: SeriesPoint[]; short
             return (
               <div className="num rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs shadow-lg">
                 <div className="text-muted">{formatDateTime(new Date(pt.t).toISOString())}</div>
-                <div className="mt-0.5 text-sm font-semibold">{formatUsd(pt.value ?? pt.est ?? 0)}</div>
+                <div className="mt-0.5 text-sm font-semibold">{money(pt.value ?? pt.est ?? 0)}</div>
                 {pt.value === null && <div className="text-muted">{p.estimate}</div>}
                 {pt.btc !== null && (
                   <div className="mt-1 flex justify-between gap-4 text-muted">

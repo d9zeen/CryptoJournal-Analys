@@ -42,6 +42,7 @@ const SettingsPage = lazyPage(() => import('@/features/settings/SettingsPage'), 
 const PlansPage = lazyPage(() => import('@/features/plans/PlansPage'), 'PlansPage')
 const CalendarPage = lazyPage(() => import('@/features/calendar/CalendarPage'), 'CalendarPage')
 const PortfolioPage = lazyPage(() => import('@/features/portfolio/PortfolioPage'), 'PortfolioPage')
+const SharedPortfolioPage = lazyPage(() => import('@/features/portfolio/SharedPortfolioPage'), 'SharedPortfolioPage')
 const LandingPage = lazyPage(() => import('@/features/landing/LandingPage'), 'LandingPage')
 const PrivacyPage = lazyPage(() => import('@/features/privacy/PrivacyPage'), 'PrivacyPage')
 
@@ -61,6 +62,8 @@ const router = createBrowserRouter(
     { path: '/welcome', element: <LandingPage /> },
     // «Данные и безопасность» — без входа
     { path: '/privacy', element: <PrivacyPage /> },
+    // портфель по ссылке (0022) — для всех, без входа
+    { path: '/p/:token', element: <SharedPortfolioPage /> },
     // Только для незалогиненных
     {
       element: <GuestOnly />,

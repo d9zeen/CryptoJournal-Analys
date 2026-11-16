@@ -51,6 +51,7 @@ import {
   useSpotFills,
 } from './api'
 import { CoinIcon } from './CoinIcon'
+import { ShareDialog } from './ShareDialog'
 
 const PortfolioChart = lazy(() => import('./PortfolioChart').then((m) => ({ default: m.PortfolioChart })))
 
@@ -83,6 +84,7 @@ export function PortfolioPage() {
   const [range, setRange] = useState<PortfolioRange>('1m')
   const [hideDust, setHideDust] = useState(true)
   const [adding, setAdding] = useState(false)
+  const [sharing, setSharing] = useState(false)
 
   const list = holdings ?? []
   const rows = useMemo(() => portfolioRows(list, coins, costs, source, basis), [list, coins, costs, source, basis])
@@ -152,9 +154,13 @@ export function PortfolioPage() {
               {p.refresh}
             </Button>
           )}
+          <Button variant="secondary" onClick={() => setSharing(true)}>
+            {p.share.button}
+          </Button>
           <Button onClick={() => setAdding(true)}>{p.add}</Button>
         </div>
       </div>
+      {sharing && <ShareDialog onClose={() => setSharing(false)} />}
 
       {failed.length > 0 && (
         <p data-portfolio-failed className="rounded-lg border border-border bg-surface px-4 py-2.5 text-sm text-muted">
@@ -281,7 +287,7 @@ function Kpis({ totals, realized }: { totals: ReturnType<typeof portfolioTotals>
 const signedPct = (v: number) => (v > 0 ? '+' : v < 0 ? '−' : '') + formatPercent(Math.abs(v), 2)
 
 /** Кольцо долей + легенда + лучшая / худшая монета за 24 ч (образец — 21st.dev sectors-donut) */
-function Allocation({ rows }: { rows: PortfolioRow[] }) {
+export function Allocation({ rows }: { rows: PortfolioRow[] }) {
   const t = useT()
   const a = t.portfolio.alloc
   const parts = allocation(rows, 5)
@@ -352,7 +358,7 @@ function Allocation({ rows }: { rows: PortfolioRow[] }) {
 }
 
 /** Мини-график цены за 7 дней (из coins.spark), цвет — по итогу недели */
-function Spark({ coin }: { coin: Coin | null }) {
+export function Spark({ coin }: { coin: Coin | null }) {
   const pts = coin?.spark ?? []
   if (pts.length < 2) return <span className="text-muted">—</span>
   const lo = Math.min(...pts)
