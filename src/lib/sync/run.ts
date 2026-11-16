@@ -111,6 +111,10 @@ export async function runSync(conn: SyncConnection, deps: SyncDeps): Promise<Syn
       const res = hlFillsToTrades(await fetchHlFills(conn.api_key, from, deps.fetchFn))
       trades = res.trades
       nextCursor = res.cursor
+    } else if (conn.exchange === 'evm' || conn.exchange === 'solana') {
+      // кошелёк — только монеты для «Портфеля» (lib/portfolio/wallets.ts), сделок нет
+      trades = []
+      nextCursor = now
     } else if (conn.exchange === 'polymarket') {
       // закрытые позиции целиком (их немного); повторы отсекаются по id
       const positions = await fetchPmClosed(deps.polymarketGet ?? pmDirectGet(deps.fetchFn), conn.api_key)

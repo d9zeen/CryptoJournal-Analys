@@ -13,11 +13,15 @@
  *     Нет логотипа у TradingView — картинка CoinGecko (PNG / JPEG / WebP). Браузер иконки берёт только с нашего Supabase:
  *     CSP не трогаем, сторонние сайты не узнают, у кого какие монеты.
  *
+ *  4. Адреса контрактов монет по сетям (0021, coins.platforms) — раз в сутки или когда появились новые монеты:
+ *     по ним «Портфель» читает балансы кошельков EVM / Solana только у настоящих монет (platforms.ts).
+ *
  * Ключ CoinGecko необязателен: если в Vault есть cj_coingecko_key (Demo), он уходит в заголовке x-cg-demo-api-key.
- * Выкладка: Supabase → Edge Functions → prices-worker (index.ts + svg.ts), verify_jwt = false.
+ * Выкладка: Supabase → Edge Functions → prices-worker (index.ts + svg.ts + platforms.ts), verify_jwt = false.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { parseTvScan, pickLogoId, safeSvg, svgColor, tradingViewLogo, type TvCoin } from './svg.ts'
+import { pickPlatforms } from './platforms.ts'
 
 const CG = 'https://api.coingecko.com/api/v3'
 const PAGES = 2
@@ -108,7 +112,7 @@ Deno.serve(async (req) => {
     for (const r of rows) known.add(r.id)
   }
 
-  const report = { coins: 0, held: 0, found: 0, missed: 0, icons: 0, errors: [] as string[] }
+  const report = { coins: 0, held: 0, found: 0, missed: 0, icons: 0, platforms: 0, errors: [] as string[] }
 
   // 1. Топ-500
   const seen = new Set<string>()
@@ -213,6 +217,26 @@ Deno.serve(async (req) => {
     } catch {
       /* одна иконка не скачалась — возьмём в следующий раз */
     }
+  }
+
+  // 4. Адреса контрактов: раз в сутки (около 03:00 UTC) или если у монет их ещё нет. Один большой запрос (~3 МБ)
+  try {
+    const { data: rows } = await admin.from('coins').select('id, symbol, name, platforms')
+    const list = (rows ?? []) as { id: string; symbol: string; name: string; platforms: unknown }[]
+    const hour = new Date()
+    const daily = hour.getUTCHours() === 3 && hour.getUTCMinutes() < 10
+    if (list.length && (daily || list.some((r) => r.platforms === null))) {
+      const all = await cg('/coins/list', { include_platform: 'true' })
+      const picked = pickPlatforms(all, list.map((r) => r.id))
+      const upd = list.map((r) => ({ id: r.id, symbol: r.symbol, name: r.name, platforms: picked.get(r.id) ?? {} }))
+      for (let i = 0; i < upd.length; i += 500) {
+        const { error } = await admin.from('coins').upsert(upd.slice(i, i + 500), { onConflict: 'id' })
+        if (error) throw new Error(`DB ${error.message}`)
+      }
+      report.platforms = upd.length
+    }
+  } catch (e) {
+    report.errors.push(String(e))
   }
 
   return json(report, report.errors.length && !report.coins ? 502 : 200)

@@ -2297,6 +2297,9 @@ async function runSync(conn, deps) {
 			const res = hlFillsToTrades(await fetchHlFills(conn.api_key, from, deps.fetchFn));
 			trades = res.trades;
 			nextCursor = res.cursor;
+		} else if (conn.exchange === "evm" || conn.exchange === "solana") {
+			trades = [];
+			nextCursor = now;
 		} else if (conn.exchange === "polymarket") {
 			trades = (await fetchPmClosed(deps.polymarketGet ?? pmDirectGet(deps.fetchFn), conn.api_key)).flatMap((p) => {
 				const t = pmPositionToTrade(p);
@@ -2617,6 +2620,179 @@ async function callExchange(exchange, cred, path, params, fetchFn = fetch) {
 	return reply;
 }
 
+// src/lib/portfolio/wallets.ts
+const EVM_CHAINS = [
+	{
+		id: "ethereum",
+		rpc: "https://ethereum-rpc.publicnode.com",
+		native: "ETH"
+	},
+	{
+		id: "arbitrum-one",
+		rpc: "https://arbitrum-one-rpc.publicnode.com",
+		native: "ETH"
+	},
+	{
+		id: "base",
+		rpc: "https://base-rpc.publicnode.com",
+		native: "ETH"
+	},
+	{
+		id: "optimistic-ethereum",
+		rpc: "https://optimism-rpc.publicnode.com",
+		native: "ETH"
+	},
+	{
+		id: "binance-smart-chain",
+		rpc: "https://bsc-rpc.publicnode.com",
+		native: "BNB"
+	},
+	{
+		id: "polygon-pos",
+		rpc: "https://polygon-bor-rpc.publicnode.com",
+		native: "POL"
+	}
+];
+const SOLANA_RPC = "https://solana-rpc.publicnode.com";
+const TOKEN_PROGRAMS = ["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"];
+/** Запросов в одной пачке JSON-RPC (публичные узлы режут большие пачки) */
+const BATCH = 40;
+const isEvmAddress = (a) => /^0x[0-9a-f]{40}$/.test(a);
+const isSolanaAddress = (a) => /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a);
+/**
+* Пачка JSON-RPC → ответы по порядку. Ошибка сети / узла — исключение; ошибка одного запроса — тоже,
+* а с soft = true — null на его месте (контракт монеты отказал — не повод терять весь кошелёк).
+*/
+async function rpcBatch(url, reqs, fetchFn = fetch, soft = false) {
+	const out = [];
+	for (let i = 0; i < reqs.length; i += BATCH) {
+		const part = reqs.slice(i, i + BATCH);
+		const res = await fetchFn(url, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(part.map((r, k) => ({
+				jsonrpc: "2.0",
+				id: k,
+				method: r.method,
+				params: r.params
+			})))
+		});
+		if (!res.ok) throw new Error(`RPC_HTTP_${res.status} network`);
+		const body = await res.json();
+		const byId = new Map((Array.isArray(body) ? body : [body]).map((x) => [x.id, x]));
+		for (let k = 0; k < part.length; k++) {
+			const r = byId.get(k);
+			if (r && !r.error) out.push(r.result);
+			else if (soft && r) out.push(null);
+			else throw new Error(`RPC_ERROR ${r?.error?.message ?? "no answer"} network`);
+		}
+	}
+	return out;
+}
+const hexToBig = (v) => typeof v === "string" && /^0x[0-9a-f]*$/i.test(v) && v.length > 2 ? BigInt(v.slice(0, 66)) : 0n;
+/** Целое число в мельчайших единицах → обычное (10^decimals) */
+function units(raw, decimals) {
+	if (raw <= 0n) return 0;
+	const d = BigInt(10) ** BigInt(Math.min(Math.max(decimals, 0), 36));
+	return Number(raw / d) + Number(raw % d) / Number(d);
+}
+const pad = (addr) => addr.slice(2).padStart(64, "0");
+/** Монеты одной сети: адрес контракта → символ (у одного контракта — монета с большей капитализацией, она в списке раньше) */
+function tokensOn(chain, coins) {
+	const out = /* @__PURE__ */ new Map();
+	for (const c of coins) {
+		const addr = c.platforms?.[chain];
+		if (addr && !out.has(addr)) out.set(addr, c.symbol);
+	}
+	return out;
+}
+/** Одна сеть EVM: родная монета + токены из нашего списка */
+async function evmChainBalances(chain, address, coins, fetchFn = fetch) {
+	const tokens = [...tokensOn(chain.id, coins)];
+	const first = await rpcBatch(chain.rpc, [{
+		method: "eth_getBalance",
+		params: [address, "latest"]
+	}, ...tokens.map(([contract]) => ({
+		method: "eth_call",
+		params: [{
+			to: contract,
+			data: `0x70a08231${pad(address)}`
+		}, "latest"]
+	}))], fetchFn, true);
+	if (first[0] === null) throw new Error(`RPC_ERROR ${chain.id} balance network`);
+	const out = [];
+	const native = units(hexToBig(first[0]), 18);
+	if (native > 0) out.push({
+		account: "wallet",
+		symbol: chain.native,
+		amount: native
+	});
+	const held = tokens.map(([contract, symbol], i) => ({
+		contract,
+		symbol,
+		raw: hexToBig(first[i + 1])
+	})).filter((x) => x.raw > 0n);
+	if (!held.length) return out;
+	const decs = await rpcBatch(chain.rpc, held.map((x) => ({
+		method: "eth_call",
+		params: [{
+			to: x.contract,
+			data: "0x313ce567"
+		}, "latest"]
+	})), fetchFn, true);
+	held.forEach((x, i) => {
+		if (decs[i] === null) return;
+		const d = Number(hexToBig(decs[i]));
+		const amount = units(x.raw, d <= 36 ? d : 18);
+		if (amount > 0) out.push({
+			account: "wallet",
+			symbol: x.symbol,
+			amount
+		});
+	});
+	return out;
+}
+/** Все сети EVM одним адресом (сети спрашиваем одновременно) */
+async function evmBalances(address, coins, fetchFn = fetch) {
+	const addr = address.toLowerCase();
+	if (!isEvmAddress(addr)) throw new Error("BAD_WALLET");
+	return (await Promise.all(EVM_CHAINS.map((c) => evmChainBalances(c, addr, coins, fetchFn)))).flat();
+}
+/** Solana: SOL + токены из нашего списка (по адресу mint) */
+async function solanaBalances(address, coins, fetchFn = fetch) {
+	if (!isSolanaAddress(address)) throw new Error("BAD_WALLET");
+	const [bal, ...programs] = await rpcBatch(SOLANA_RPC, [{
+		method: "getBalance",
+		params: [address]
+	}, ...TOKEN_PROGRAMS.map((programId) => ({
+		method: "getTokenAccountsByOwner",
+		params: [
+			address,
+			{ programId },
+			{ encoding: "jsonParsed" }
+		]
+	}))], fetchFn);
+	const out = [];
+	const lamports = Number(bal?.value ?? 0);
+	if (Number.isFinite(lamports) && lamports > 0) out.push({
+		account: "wallet",
+		symbol: "SOL",
+		amount: lamports / 1e9
+	});
+	const mints = tokensOn("solana", coins);
+	for (const p of programs) for (const a of p?.value ?? []) {
+		const info = a.account?.data?.parsed?.info;
+		const symbol = typeof info?.mint === "string" ? mints.get(info.mint) : void 0;
+		const amount = units(typeof info?.tokenAmount?.amount === "string" && /^\d{1,40}$/.test(info.tokenAmount.amount) ? BigInt(info.tokenAmount.amount) : 0n, Number(info?.tokenAmount?.decimals ?? 0));
+		if (symbol && amount > 0) out.push({
+			account: "wallet",
+			symbol,
+			amount
+		});
+	}
+	return out;
+}
+
 // src/lib/portfolio/balances.ts
 /**
 * Портфель: балансы подключённой биржи / кошелька → строки holdings (0019).
@@ -2853,6 +3029,8 @@ async function fetchBalances(conn, deps) {
 		case "bingx": return bingxBalances(deps.cexCall);
 		case "hyperliquid": return hyperliquidBalances(conn.api_key, deps.fetchFn);
 		case "polymarket": return polymarketBalances(deps.polymarketGet ?? pmDirectGet(deps.fetchFn), conn.api_key);
+		case "evm": return mergeBalances(await evmBalances(conn.api_key, deps.coins ?? [], deps.fetchFn));
+		case "solana": return mergeBalances(await solanaBalances(conn.api_key, deps.coins ?? [], deps.fetchFn));
 		default: return [];
 	}
 }

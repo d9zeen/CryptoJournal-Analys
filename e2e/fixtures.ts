@@ -168,7 +168,7 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
       const conns = (db.connections ??= [])
       if (fn === 'add_exchange_connection') {
         const id = `c${conns.length + 1}`
-        conns.push({ id, exchange: b.p_exchange, label: b.p_label, api_key: String(b.p_api_key).toLowerCase(), last_sync_at: null, cursor_at: null, last_error: null, created_at: '2026-11-05T10:00:00Z' })
+        conns.push({ id, exchange: b.p_exchange, label: b.p_label, api_key: b.p_exchange === 'solana' ? String(b.p_api_key).trim() : String(b.p_api_key).toLowerCase(), last_sync_at: null, cursor_at: null, last_error: null, created_at: '2026-11-05T10:00:00Z' })
         return json(id)
       }
       if (fn === 'delete_exchange_connection') {

@@ -47,7 +47,15 @@ export const CONNECTABLE = [
   { id: 'bitget', kind: 'cex' },
   { id: 'hyperliquid', kind: 'wallet' },
   { id: 'polymarket', kind: 'wallet' },
+  { id: 'evm', kind: 'wallet' },
+  { id: 'solana', kind: 'wallet' },
 ] as const
+
+/** Кошельки только для «Портфеля» (0021): сделок нет, после подключения — монеты кошелька */
+export const PORTFOLIO_ONLY: ReadonlySet<string> = new Set(['evm', 'solana'])
+
+/** Адрес кошелька как его хранит база: EVM — в нижнем регистре, Solana — как есть */
+export const walletKey = (exchange: string, address: string) => (exchange === 'solana' ? address.trim() : address.trim().toLowerCase())
 export type ConnectableId = (typeof CONNECTABLE)[number]['id']
 
 /** Биржи, у ключа которых есть кодовая фраза (Passphrase) — как и в базе (add_exchange_connection, 0018) */

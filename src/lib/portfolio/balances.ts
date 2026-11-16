@@ -17,14 +17,17 @@ import { bitgetGet } from '@/lib/sync/bitget'
 import { HL_API } from '@/lib/sync/hyperliquid'
 import { pmDirectGet, type PmGet } from '@/lib/sync/polymarket'
 import type { CexCall } from '@/lib/sync/cex'
+import { evmBalances, solanaBalances, type CoinPlatforms } from './wallets'
 
-export type HoldingAccount = 'spot' | 'fund' | 'futures' | 'earn' | 'perp' | 'prediction'
+export type HoldingAccount = 'spot' | 'fund' | 'futures' | 'earn' | 'perp' | 'prediction' | 'wallet'
 export type Balance = { account: HoldingAccount; symbol: string; amount: number; value_usd?: number | null }
 
 export type BalanceDeps = {
   cexCall: CexCall
   fetchFn?: typeof fetch
   polymarketGet?: PmGet
+  /** монеты с адресами контрактов (coins.platforms) — для кошельков EVM / Solana */
+  coins?: CoinPlatforms[]
 }
 
 type Obj = Record<string, unknown>
@@ -242,6 +245,10 @@ export async function fetchBalances(conn: { exchange: string; api_key: string },
       return hyperliquidBalances(conn.api_key, deps.fetchFn)
     case 'polymarket':
       return polymarketBalances(deps.polymarketGet ?? pmDirectGet(deps.fetchFn), conn.api_key)
+    case 'evm':
+      return mergeBalances(await evmBalances(conn.api_key, deps.coins ?? [], deps.fetchFn))
+    case 'solana':
+      return mergeBalances(await solanaBalances(conn.api_key, deps.coins ?? [], deps.fetchFn))
     default:
       return []
   }

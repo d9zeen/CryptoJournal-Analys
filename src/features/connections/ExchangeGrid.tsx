@@ -23,6 +23,8 @@ export const EXCHANGE_CARDS: { id: string; methods: Method[]; mono: string; soon
   { id: 'bitget', methods: ['api', 'file'], mono: 'BG' },
   { id: 'hyperliquid', methods: ['wallet', 'file'], mono: 'HL' },
   { id: 'polymarket', methods: ['wallet'], mono: 'PM' },
+  { id: 'evm', methods: ['wallet'], mono: 'EV' },
+  { id: 'solana', methods: ['wallet'], mono: 'SO' },
   { id: 'mexc', methods: ['file'], mono: 'MX' },
   { id: 'lighter', methods: [], soon: true, name: 'Lighter', mono: 'LT' },
   { id: 'other', methods: ['file'], mono: '…' },

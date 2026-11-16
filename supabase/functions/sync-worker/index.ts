@@ -7,6 +7,7 @@
  * Лимиты и проверки данных по-прежнему делает база (триггеры на trades).
  *
  * После сделок — балансы подключения для «Портфеля» (replace_holdings_for) и снимок стоимости (portfolio_snapshot_for, 0019).
+ * Кошельки EVM / Solana (0021) — сделок нет, только балансы по публичным узлам сетей (lib/portfolio/wallets.ts).
  * Режим { mode: 'balances' } (cron cj-balances каждый час) — только балансы, история спотовых покупок (0020) и снимок, без сделок.
  * Логика синхронизации — общая с браузером: engine.js собирается из src/lib/sync (npm run build:functions).
  * Выкладка: Supabase → Edge Functions → sync-worker (файлы index.ts + engine.js), verify_jwt = false.
@@ -85,7 +86,12 @@ Deno.serve(async (req) => {
   }
   const syncBalances = async (): Promise<number | null> => {
     try {
-      const items = await fetchBalances({ exchange: conn.exchange as string, api_key: conn.api_key as string }, { cexCall })
+      // кошельки (0021): монеты — только из нашего списка, по адресам контрактов
+      const wallet = conn.exchange === 'evm' || conn.exchange === 'solana'
+      const coins = wallet
+        ? ((await admin.from('coins').select('symbol, platforms').not('platforms', 'is', null).order('rank', { ascending: true, nullsFirst: false }).limit(2000)).data ?? [])
+        : undefined
+      const items = await fetchBalances({ exchange: conn.exchange as string, api_key: conn.api_key as string }, { cexCall, coins })
       const { data, error } = await admin.rpc('replace_holdings_for', { p_user: userId, p_connection: conn.id, p_items: items })
       if (error) return null
       await syncFills(items.map((b) => b.symbol))

@@ -768,6 +768,40 @@ reset role;
 select pg_temp.check((select count(*) from spot_fills where connection_id = :'f_conn') = 0 and (select count(*) from spot_sync where connection_id = :'f_conn') = 0, 'отключение биржи удаляет её историю покупок');
 delete from auth.users where id = 'ffffffff-0000-0000-0000-000000000006';
 
+-- Кошельки (0021): EVM и Solana по адресу, монеты кошелька, адреса контрактов монет
+insert into auth.users (id, email) values ('99999999-0000-0000-0000-000000000009', 'w@test');
+update profiles set plan = 'pro_plus', plan_until = null, plan_trial = false where id = '99999999-0000-0000-0000-000000000009';
+set role authenticated;
+set request.jwt.claim.sub = '99999999-0000-0000-0000-000000000009';
+select pg_temp.check(add_exchange_connection('evm', '0xAbCdEf0000000000000000000000000000000001') is not null, 'кошелёк EVM подключается по адресу');
+select pg_temp.check((select api_key from exchange_connections where exchange = 'evm') = '0xabcdef0000000000000000000000000000000001', 'адрес EVM — в нижнем регистре');
+select pg_temp.check(add_exchange_connection('solana', 'DRpbCBMxVnDK7maPM5tGv6MvB3v1sRMC86PZ8okm21hy') is not null, 'кошелёк Solana подключается по адресу');
+select pg_temp.check((select api_key from exchange_connections where exchange = 'solana') = 'DRpbCBMxVnDK7maPM5tGv6MvB3v1sRMC86PZ8okm21hy', 'адрес Solana — регистр не меняется');
+select pg_temp.expect_error($$select add_exchange_connection('solana', '0xabcdef0000000000000000000000000000000001')$$, 'BAD_WALLET');
+select pg_temp.expect_error($$select add_exchange_connection('solana', 'DRpbCBMxVnDK7maPM5tGv6MvB3v1sRMC86PZ8okm21h0')$$, 'BAD_WALLET');
+select pg_temp.expect_error($$select add_exchange_connection('evm', 'DRpbCBMxVnDK7maPM5tGv6MvB3v1sRMC86PZ8okm21hy')$$, 'BAD_WALLET');
+select pg_temp.check(true, 'чужой формат адреса не проходит (0 и O не бывают в адресе Solana)');
+reset role;
+select pg_temp.check((select secret_id is null from exchange_connections where exchange = 'evm'), 'у кошелька нет секрета в Vault');
+set role authenticated;
+set request.jwt.claim.sub = '99999999-0000-0000-0000-000000000009';
+select pg_temp.check(replace_holdings((select id from exchange_connections where exchange = 'solana'), '[{"account":"wallet","symbol":"SOL","amount":12.5}]') = 1, 'монеты кошелька записываются (account = wallet)');
+select pg_temp.expect_error($$select replace_holdings((select id from exchange_connections where exchange = 'evm'), '[{"account":"vault","symbol":"ETH","amount":1}]')$$, 'holdings_account_check');
+select pg_temp.check(true, 'неизвестный счёт не записать');
+select pg_temp.check((select count(*) from coins where platforms is null or platforms is not null) >= 0, 'адреса контрактов монет видны вошедшим');
+select pg_temp.expect_error($$update coins set platforms = '{"ethereum": "0x0"}'$$, 'permission denied');
+select pg_temp.check(true, 'адреса контрактов не подменить из браузера');
+reset role;
+update profiles set plan = 'free', plan_until = null, plan_trial = false where id = '99999999-0000-0000-0000-000000000009';
+set role authenticated;
+set request.jwt.claim.sub = '99999999-0000-0000-0000-000000000009';
+select pg_temp.expect_error($$select add_exchange_connection('evm', '0xabcdef0000000000000000000000000000000002')$$, 'PLAN_REQUIRED');
+select pg_temp.check(true, 'Basic: кошелёк не подключить (как и биржи — с Pro)');
+reset role;
+select pg_temp.expect_error($$update coins set platforms = '"x"'$$, 'coins_platforms_check');
+select pg_temp.check(true, 'адреса контрактов — только объект');
+delete from auth.users where id = '99999999-0000-0000-0000-000000000009';
+
 -- Удаление аккаунта чистит всё
 set role authenticated;
 set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';

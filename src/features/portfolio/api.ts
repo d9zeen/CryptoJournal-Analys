@@ -9,13 +9,14 @@ import { useEffect, useRef, useSyncExternalStore } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/features/auth/AuthProvider'
-import { cexCall, polymarketGet, useConnections, type Connection } from '@/features/connections/api'
+import { PORTFOLIO_ONLY, cexCall, polymarketGet, useConnections, type Connection } from '@/features/connections/api'
 import { useUsage } from '@/features/settings/api'
 import { useIsAdmin } from '@/features/admin/api'
 import { activeConnections } from '@/lib/plans'
 import { errorCodeOf, toSyncError } from '@/lib/sync/run'
 import { fetchBalances } from '@/lib/portfolio/balances'
 import { fetchSpotFills } from '@/lib/portfolio/fills'
+import type { CoinPlatforms } from '@/lib/portfolio/wallets'
 import type { Coin, Holding, Snapshot, SpotFillLike } from '@/lib/calc/portfolio'
 
 /** Балансы старше — обновить при открытии страницы */
@@ -110,7 +111,14 @@ export function useRefreshing(): boolean {
   )
 }
 
-export type RefreshResult = { ok: number; failed: { id: string; code: string }[] }
+export type RefreshResult = { ok: number; failed: { id: string; code: string }[]; coins: number }
+
+/** Адреса контрактов монет (coins.platforms) — нужны только кошелькам EVM / Solana */
+async function loadPlatforms(): Promise<CoinPlatforms[]> {
+  const { data, error } = await supabase.from('coins').select('symbol, platforms').not('platforms', 'is', null).order('rank', { ascending: true, nullsFirst: false }).limit(2000)
+  if (error) throw error
+  return (data ?? []) as CoinPlatforms[]
+}
 
 /** Подключения, с которых можно тянуть балансы: в пределах тарифа и с рабочим ключом */
 export function portfolioConnections(conns: Connection[], plan: Parameters<typeof activeConnections>[1], admin: boolean): Connection[] {
@@ -122,13 +130,16 @@ export function portfolioConnections(conns: Connection[], plan: Parameters<typeo
 export function refreshPortfolio(conns: Connection[]): Promise<RefreshResult> {
   if (refreshing) return refreshing
   refreshing = (async () => {
-    const res: RefreshResult = { ok: 0, failed: [] }
+    const res: RefreshResult = { ok: 0, failed: [], coins: 0 }
+    let platforms: Promise<CoinPlatforms[]> | null = null
     for (const c of conns) {
       try {
-        const items = await fetchBalances(c, { cexCall: cexCall(c.id), polymarketGet: polymarketGet(c.id) })
-        const { error } = await supabase.rpc('replace_holdings', { p_connection: c.id, p_items: items })
+        const coins = PORTFOLIO_ONLY.has(c.exchange) ? await (platforms ??= loadPlatforms()) : undefined
+        const items = await fetchBalances(c, { cexCall: cexCall(c.id), polymarketGet: polymarketGet(c.id), coins })
+        const { data: written, error } = await supabase.rpc('replace_holdings', { p_connection: c.id, p_items: items })
         if (error) throw error
         res.ok++
+        res.coins += typeof written === 'number' ? written : items.length
         await syncSpotFills(c, items.map((b) => b.symbol))
       } catch (e) {
         // старые балансы остаются — график не «падает»; код ошибки покажем у подключения
