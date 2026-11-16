@@ -740,6 +740,11 @@ export const en: Dict = {
     tooltipTrades: 'trades: {n}',
   },
   import: {
+    fileLine: 'Drop a file from any exchange anywhere on the page or',
+    dropHere: 'Drop the file — we will detect the exchange and columns',
+    fileLineTouch: 'Choose a file from your exchange',
+    scan: { title: 'File recognized: {name}', hint: 'No column setup needed — we labelled them for you.' },
+    landing: { month: 'Total for {month}', otherMonths: '{n} more in other months.', openCalendar: 'Open calendar', daysUp: 'Green days: {n}', daysDown: 'Red days: {n}', bestDay: 'Best day — {day}: {pnl}' },
     title: 'Exchanges and import',
     exchange: 'Exchange',
     howTo: {
@@ -765,13 +770,9 @@ export const en: Dict = {
     lines: 'rows {from}–{to}',
     allFailed: 'None of the {n} rows could be read',
     allFailedHint: 'The most reliable option is to connect the exchange via API (the “Connected exchanges” block above) so trades sync by themselves. Or export “Closed P&L” (Bybit → Orders → Derivatives → Closed P&L → Export).',
-    drop: 'Drag a file here or',
     formats: 'CSV or Excel (.xlsx), up to 5 MB',
-    supported: 'Bybit, Binance, OKX, BingX, Bitget, MEXC and more — we detect the exchange and format.',
     rowsInFile: 'rows in file: {n}',
     exchangeAuto: 'Auto: {name}',
-    howToTitle: 'Where do I get the file?',
-    previewEmpty: 'Upload a file and your trades appear here, with new ones and duplicates marked.',
     pick: 'browse',
     another: 'Choose another file',
     progressTitle: 'Saving trades…',
@@ -967,6 +968,7 @@ export const en: Dict = {
       pickTitle: 'Connect an exchange',
       pickFile: 'Choose a file',
       fileHint: 'You can also just drop the file on the page. Then a preview shows the trades before upload.',
+      week: 'PnL, last 7 days',
     },
     bridge: {
       readKey: 'read-only key',

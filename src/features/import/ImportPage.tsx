@@ -1,6 +1,6 @@
 import { SideBadge } from '@/components/SideBadge'
 import { UpgradeLine } from '@/components/UpgradeLine'
-import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { fmt, plural, useT } from '@/i18n'
@@ -23,8 +23,11 @@ import { stableHash } from '@/lib/import/values'
 import { fetchExistingIds, useDeleteImport, useImports, useRunImport, type RunImportResult } from './api'
 import { ConnectionsCard } from '@/features/connections/ConnectionsCard'
 import { finishActivity, progressActivity, startActivity } from '@/lib/activity'
-import { CheckMark } from '@/components/CheckMark'
 import type { ImportedTrade } from '@/lib/import/types'
+import { useProfile } from '@/features/settings/api'
+import { browserTimeZone } from '@/lib/tz'
+import { ScanStrip } from './ScanStrip'
+import { CalendarLanding } from './CalendarLanding'
 
 const MAX_BYTES = 5 * 1024 * 1024
 const PREVIEW_ROWS = 100
@@ -58,6 +61,11 @@ export function ImportPage() {
   const inputRef = useRef<HTMLInputElement>(null)
   // биржа, выбранная в панели («Файлом» → «Выбрать файл»): подставим её вместо автоопределения
   const presetExchange = useRef<string | null>(null)
+  // загруженные сделки — для итога «В календарь» (анимация E)
+  const [landedTrades, setLandedTrades] = useState<ImportedTrade[]>([])
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const { data: profile } = useProfile()
+  const timeZone = profile?.timezone || browserTimeZone()
   // со стартового экрана «Подключить биржу» ведёт сюда с #connections — сразу показываем подключения
   const { hash } = useLocation()
   useEffect(() => {
@@ -129,21 +137,37 @@ export function ImportPage() {
     }
   }
 
-  // файл можно бросить в любое место страницы
-  const dropProps = {
-    onDragOver: (e: DragEvent) => {
+  // файл можно бросить в любое место окна (и на шапку): слушаем всё окно. Рамка гаснет, когда файл унесли из окна
+  const loadRef = useRef(loadFile)
+  loadRef.current = loadFile
+  useEffect(() => {
+    const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes('Files')
+    const over = (e: DragEvent) => {
+      if (!hasFiles(e)) return
       e.preventDefault()
       setDragging(true)
-    },
-    onDragLeave: (e: DragEvent) => {
-      if (e.currentTarget === e.target) setDragging(false)
-    },
-    onDrop: (e: DragEvent) => {
+    }
+    const leave = (e: DragEvent) => {
+      if (!e.relatedTarget) setDragging(false)
+    }
+    const drop = (e: DragEvent) => {
+      if (!hasFiles(e)) return
       e.preventDefault()
       setDragging(false)
-      void loadFile(e.dataTransfer.files[0])
-    },
-  }
+      void loadRef.current(e.dataTransfer?.files[0])
+    }
+    const end = () => setDragging(false)
+    window.addEventListener('dragover', over)
+    window.addEventListener('dragleave', leave)
+    window.addEventListener('drop', drop)
+    window.addEventListener('dragend', end)
+    return () => {
+      window.removeEventListener('dragover', over)
+      window.removeEventListener('dragleave', leave)
+      window.removeEventListener('drop', drop)
+      window.removeEventListener('dragend', end)
+    }
+  }, [])
 
   async function submit() {
     if (!plan || !file || !prepared) return
@@ -170,6 +194,7 @@ export function ImportPage() {
       setProgress(null)
     }
     finishActivity(activityId, { inserted: res.inserted, duplicates: res.duplicates + plan.counts.duplicate, error: res.error !== null })
+    setLandedTrades(plan.toInsert)
     setResult(res)
     setFile(null)
     if (inputRef.current) inputRef.current.value = ''
@@ -180,7 +205,7 @@ export function ImportPage() {
   const mappingOpen = showMapping || (prepared?.missing.length ?? 0) > 0
 
   return (
-    <div className="flex flex-col gap-4" {...dropProps}>
+    <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h1 className="text-xl font-semibold">{t.import.title}</h1>
         {usage && usage.trade_limit !== null && (
@@ -189,10 +214,10 @@ export function ImportPage() {
       </div>
 
       {remaining === 0 && <UpgradeLine text={t.plans.upgrade.trades} />}
-      {result && <ResultAlert result={result} />}
+      {result && <ResultAlert result={result} trades={landedTrades} timeZone={timeZone} />}
       {run.error && <Alert tone="error">{dbErrorMessage(run.error, t)}</Alert>}
 
-      {/* Сверху во всю ширину — подключённые биржи; ниже — загрузка файла и история */}
+      {/* Сверху — подключённые биржи и сетка всех бирж; ниже — одна строка для файла (вариант 1, 16.11.2026) */}
       <div id="connections" className="scroll-mt-20">
         <ConnectionsCard
           onPickFile={(ex) => {
@@ -202,255 +227,229 @@ export function ImportPage() {
         />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[400px_minmax(0,1fr)] xl:items-start">
-        {/* Слева: файл, где его взять, история */}
-        <div className="flex flex-col gap-4">
-          <Card className="flex flex-col gap-4 !p-4">
-            {/* зона загрузки — образец 21st.dev file-upload: крупная иконка, «Перетащи файл или выбери» одной строкой, под ней форматы */}
-            <label
-              data-shot="dropzone"
-              className={`group flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-9 text-center transition-colors ${dragging ? 'border-primary bg-primary/10' : 'border-border bg-surface-2/40 hover:border-muted'}`}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                className={`mb-2 size-12 transition-colors ${dragging ? 'text-primary' : 'text-muted group-hover:text-text'}`}
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.7}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden
-              >
-                <path d="M12 13v8M8 17l4-4 4 4" />
-                <path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.24" />
-              </svg>
-              {file ? (
-                <>
-                  <span className="font-semibold break-all">{file.name}</span>
-                  <span className="text-xs text-muted">{fmt(t.import.rowsInFile, { n: table?.rows.length ?? 0 })}</span>
-                  <span className="mt-1 text-sm font-medium text-primary group-hover:underline">{t.import.another}</span>
-                </>
-              ) : (
-                <>
-                  <span className="text-base font-semibold">
-                    {t.import.drop} <span className="text-primary underline-offset-2 group-hover:underline">{t.import.pick}</span>
-                  </span>
-                  <span className="text-sm text-muted">{t.import.formats}</span>
-                  <span className="mt-1 text-xs text-muted">{t.import.supported}</span>
-                </>
-              )}
-              <input
-                ref={inputRef}
-                type="file"
-                accept=".csv,.xlsx,.txt,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                className="sr-only"
-                onChange={(e) => void loadFile(e.target.files?.[0])}
-              />
-            </label>
-            {fileError && <Alert tone="error">{fileError}</Alert>}
+      {/* Файл: одна строка. Сам файл можно бросить в любое место страницы — рамка на весь экран */}
+      <div data-file-line className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-dashed border-border px-4 py-3">
+        <label className="group flex min-w-0 cursor-pointer items-center gap-3 text-sm">
+          <svg viewBox="0 0 24 24" className="size-6 shrink-0 text-muted transition-colors group-hover:text-primary" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M12 13v8M8 17l4-4 4 4" />
+            <path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.24" />
+          </svg>
+          {file ? (
+            <span className="min-w-0">
+              <span className="font-semibold break-all">{file.name}</span>
+              <span className="text-muted"> · {fmt(t.import.rowsInFile, { n: table?.rows.length ?? 0 })} · </span>
+              <span className="font-medium text-primary group-hover:underline">{t.import.another}</span>
+            </span>
+          ) : (
+            <span className="min-w-0">
+              {/* на телефоне файл не перетаскивают — только «Выбери файл» */}
+              <span className="hidden sm:inline">
+                {t.import.fileLine} <span className="font-semibold text-primary underline-offset-2 group-hover:underline">{t.import.pick}</span>
+              </span>
+              <span className="font-semibold text-primary sm:hidden">{t.import.fileLineTouch}</span>
+              <span className="text-muted"> · {t.import.formats}</span>
+            </span>
+          )}
+          <input
+            ref={inputRef}
+            type="file"
+            accept=".csv,.xlsx,.txt,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            className="sr-only"
+            onChange={(e) => void loadFile(e.target.files?.[0])}
+          />
+        </label>
+        <HistoryButton onClick={() => setHistoryOpen(true)} />
+      </div>
+      {historyOpen && <HistoryPanel onClose={() => setHistoryOpen(false)} />}
 
-            {file && (
-              <div className="grid grid-cols-2 gap-3">
+      {/* файл тащат над страницей — рамка на весь экран (pointer-events: none — бросить можно куда угодно) */}
+      {dragging && (
+        <div data-drop-overlay aria-hidden className="drop-overlay pointer-events-none fixed inset-3 z-40 grid place-items-center rounded-2xl border-2 border-dashed border-primary bg-bg/80 backdrop-blur-sm">
+          <p className="text-lg font-semibold">{t.import.dropHere}</p>
+        </div>
+      )}
+
+      {fileError && <Alert tone="error">{fileError}</Alert>}
+
+      {file && (
+        <div className="grid grid-cols-2 gap-3 sm:max-w-xl">
+          <SelectField
+            label={t.import.exchange}
+            value={exchangeChoice}
+            onChange={(e) => {
+              setExchangeChoice(e.target.value)
+              setMappingOverride(null)
+            }}
+          >
+            <option value="">{fmt(t.import.exchangeAuto, { name: exchangeName(detected, t.exchange.other) })}</option>
+            {IMPORT_PARSERS.map((p) => (
+              <option key={p.exchange} value={p.exchange}>
+                {exchangeName(p.exchange, t.exchange.other)}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField label={t.import.market} value={market} onChange={(e) => setMarket(e.target.value as MarketChoice)}>
+            <option value="auto">{t.import.marketAuto}</option>
+            <option value="linear">{t.market.linear}</option>
+            <option value="inverse">{t.market.inverse}</option>
+            <option value="spot">{t.market.spot}</option>
+          </SelectField>
+        </div>
+      )}
+
+      {prepared && prepared.table.rows.length === 0 && <Alert tone="error">{t.import.emptyFile}</Alert>}
+
+      {prepared && prepared.table.rows.length > 0 && prepared.missing.length > 0 && (
+        <Alert tone="error">{prepared.mode === null ? t.import.formatUnknown : fmt(t.import.missing, { fields: prepared.missing.map(fieldLabel).join(', ') })}</Alert>
+      )}
+
+      {/* B «Сканер»: сайт сам понял колонки файла (key — заново для каждого файла и биржи) */}
+      {file && prepared && prepared.table.rows.length > 0 && prepared.missing.length === 0 && (
+        <ScanStrip
+          key={`${file.name}:${exchange}`}
+          table={prepared.table}
+          mapping={prepared.mapping}
+          fieldLabel={fieldLabel}
+          title={fmt(t.import.scan.title, { name: exchangeName(exchange, t.exchange.other) })}
+        />
+      )}
+
+      {prepared && prepared.missing.length === 0 && prepared.table.rows.length > 0 && (
+        <>
+          {existing.isLoading && <p className="text-sm text-muted">{t.import.checking}</p>}
+          {existing.error && <Alert tone="error">{dbErrorMessage(existing.error, t)}</Alert>}
+
+          {sameError && (
+            <Alert tone="error">
+              <p>
+                {fmt(t.import.allFailed, { n: prepared.rows.length })}: {t.import.rowError[sameError.error]}
+                {sameError.detail ? ` «${sameError.detail}»` : ''}.
+              </p>
+              <p className="mt-1">{t.import.allFailedHint}</p>
+            </Alert>
+          )}
+
+          {plan && (
+            <Card className="flex flex-col gap-3 !p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap gap-2 text-sm">
+                  <Badge status="new">{fmt(t.import.summary.new, { n: plan.counts.new })}</Badge>
+                  {plan.counts.duplicate > 0 && <Badge status="duplicate">{fmt(t.import.summary.duplicate, { n: plan.counts.duplicate })}</Badge>}
+                  {plan.counts.error > 0 && <Badge status="error">{fmt(t.import.summary.error, { n: plan.counts.error })}</Badge>}
+                  {plan.counts.overLimit > 0 && <Badge status="overLimit">{fmt(t.import.summary.overLimit, { n: plan.counts.overLimit })}</Badge>}
+                </div>
+                {plan.toInsert.length === 0 && plan.counts.duplicate > 0 ? (
+                  <p className="text-sm text-muted">{t.import.nothing}</p>
+                ) : (
+                  <Button onClick={() => void submit()} loading={run.isPending} disabled={plan.toInsert.length === 0}>
+                    {run.isPending ? t.import.submitting : fmt(t.import.submit, { n: plan.toInsert.length })}
+                  </Button>
+                )}
+              </div>
+
+              {run.isPending && progress && <ImportProgress {...progress} />}
+
+              <p className="text-xs text-muted">{prepared.mode === 'fills' ? fmt(t.import.formatFills, { rows: prepared.table.rows.length }) : t.import.formatPositions}</p>
+              {prepared.sideFallback && <p className="text-xs text-warning">{t.import.sideFallback[prepared.sideFallback]}</p>}
+              {plan.counts.overLimit > 0 && remaining !== null && <p className="text-sm text-warning">{fmt(t.import.overLimitNote, { n: remaining })}</p>}
+              {warnings.has('noEntryTime') && <p className="text-xs text-muted">{t.import.warnings.noEntryTime}</p>}
+              {warnings.has('feeDerived') && <p className="text-xs text-muted">{fmt(t.import.warnings.feeDerived, { n: warnings.get('feeDerived')! })}</p>}
+              {warnings.has('pnlFromFile') && <p className="text-xs text-muted">{fmt(t.import.warnings.pnlFromFile, { n: warnings.get('pnlFromFile')! })}</p>}
+              {warnings.has('feeNotUsd') && <p className="text-xs text-warning">{fmt(t.import.warnings.feeNotUsd, { n: warnings.get('feeNotUsd')! })}</p>}
+              {warnings.has('sideGuessed') && <p className="text-xs text-warning">{fmt(t.import.warnings.sideGuessed, { n: warnings.get('sideGuessed')! })}</p>}
+
+              <div className="-mx-4 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-left text-xs text-muted">
+                    <tr>
+                      <th className="hidden px-4 py-2 font-normal sm:table-cell">{t.import.col.line}</th>
+                      <th className="px-4 py-2 font-normal">{t.import.col.status}</th>
+                      <th className="px-2 py-2 font-normal">{t.import.col.trade}</th>
+                      <th className="hidden px-2 py-2 font-normal md:table-cell">{t.import.col.exitAt}</th>
+                      <th className="hidden px-2 py-2 text-right font-normal sm:table-cell">{t.import.col.size}</th>
+                      <th className="px-4 py-2 text-right font-normal">{t.import.col.pnl}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {prepared.rows.slice(0, PREVIEW_ROWS).map((r, idx) => {
+                      const status = plan.status.get(idx)!
+                      return (
+                        <tr key={idx} className="border-t border-border">
+                          <td className="hidden whitespace-nowrap px-4 py-2 text-muted sm:table-cell">{r.lineTo && r.lineTo !== r.line ? `${r.line}–${r.lineTo}` : r.line}</td>
+                          <td className="px-4 py-2">
+                            <Badge status={status}>{t.import.status[status]}</Badge>
+                          </td>
+                          <td className="px-2 py-2">
+                            {r.trade ? (
+                              <>
+                                <span className="font-medium">{r.trade.title ?? r.trade.symbol}</span> <SideBadge side={r.trade.side} />
+                                <div className="text-xs text-muted md:hidden">{formatDateTime(r.trade.exit_at)}</div>
+                              </>
+                            ) : (
+                              <span className="text-loss">
+                                {r.lineTo && r.lineTo !== r.line ? fmt(t.import.lines, { from: r.line, to: r.lineTo }) : `${t.import.col.line} ${r.line}`}: {t.import.rowError[r.error!]}
+                                {r.detail ? `: «${r.detail}»` : ''}
+                              </span>
+                            )}
+                          </td>
+                          <td className="hidden whitespace-nowrap px-2 py-2 text-muted md:table-cell">{r.trade ? formatDateTime(r.trade.exit_at) : ''}</td>
+                          <td className="hidden whitespace-nowrap px-2 py-2 text-right sm:table-cell">{r.trade ? formatUsd(r.trade.size_usd) : ''}</td>
+                          <td className={`whitespace-nowrap px-4 py-2 text-right font-medium ${pnlClass(r.trade?.pnl)}`}>{r.trade ? formatPnl(r.trade.pnl) : ''}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {prepared.rows.length > PREVIEW_ROWS && <p className="text-xs text-muted">{fmt(t.import.previewMore, { shown: PREVIEW_ROWS, n: prepared.rows.length })}</p>}
+            </Card>
+          )}
+        </>
+      )}
+
+      {/* Ручная настройка колонок — нужна, только если файл не распознался */}
+      {prepared && prepared.table.rows.length > 0 && (
+        <div className="rounded-xl border border-border bg-surface p-4">
+          <button type="button" className="text-sm text-muted hover:text-text" onClick={() => setShowMapping((v) => !v)} aria-expanded={mappingOpen}>
+            {mappingOpen ? '▾ ' : '▸ '}
+            {t.import.mapping}
+          </button>
+          {mappingOpen && (
+            <div className="mt-3 flex flex-col gap-3">
+              <p className="text-xs text-muted">{t.import.mappingHint}</p>
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-5">
+                {Object.keys(parser.fields).map((f) => (
+                  <SelectField
+                    key={f}
+                    label={`${fieldLabel(f)}${requiredFields.has(f) ? ' *' : ''}`}
+                    value={prepared.mapping[f]}
+                    onChange={(e) => setMappingOverride({ ...prepared.mapping, [f]: Number(e.target.value) })}
+                  >
+                    <option value={-1}>{t.import.notInFile}</option>
+                    {prepared.table.headers.map((h, i) => (
+                      <option key={i} value={i}>
+                        {h || `#${i + 1}`}
+                      </option>
+                    ))}
+                  </SelectField>
+                ))}
                 <SelectField
-                  label={t.import.exchange}
-                  value={exchangeChoice}
-                  onChange={(e) => {
-                    setExchangeChoice(e.target.value)
-                    setMappingOverride(null)
-                  }}
+                  label={t.import.timezone}
+                  hint={prepared.offsetDetected && offsetOverride === null ? t.import.timezoneDetected : t.import.timezoneGuess}
+                  value={prepared.utcOffsetMinutes}
+                  onChange={(e) => setOffsetOverride(Number(e.target.value))}
                 >
-                  <option value="">{fmt(t.import.exchangeAuto, { name: exchangeName(detected, t.exchange.other) })}</option>
-                  {IMPORT_PARSERS.map((p) => (
-                    <option key={p.exchange} value={p.exchange}>
-                      {exchangeName(p.exchange, t.exchange.other)}
+                  {OFFSETS.map((m) => (
+                    <option key={m} value={m}>
+                      {offsetLabel(m)}
                     </option>
                   ))}
                 </SelectField>
-                <SelectField label={t.import.market} value={market} onChange={(e) => setMarket(e.target.value as MarketChoice)}>
-                  <option value="auto">{t.import.marketAuto}</option>
-                  <option value="linear">{t.market.linear}</option>
-                  <option value="inverse">{t.market.inverse}</option>
-                  <option value="spot">{t.market.spot}</option>
-                </SelectField>
               </div>
-            )}
-          </Card>
-
-          {/* телефон и планшет: «Где взять файл» сразу под зоной загрузки (пока файл не выбран) */}
-          {!file && (
-            <div className="xl:hidden">
-              <HowToCard />
             </div>
           )}
-
-          <div className="hidden xl:block">
-            <ImportHistory />
-          </div>
         </div>
-
-        {/* Справа: результат разбора */}
-        <div className="flex min-w-0 flex-col gap-4">
-          {/* пока файл не выбран — справа «Где взять файл» с переключателем бирж; после выбора на этом месте предпросмотр */}
-          {!file && (
-            <div className="hidden xl:block">
-              <HowToCard />
-            </div>
-          )}
-
-          {prepared && prepared.table.rows.length === 0 && <Alert tone="error">{t.import.emptyFile}</Alert>}
-
-          {prepared && prepared.table.rows.length > 0 && prepared.missing.length > 0 && (
-            <Alert tone="error">{prepared.mode === null ? t.import.formatUnknown : fmt(t.import.missing, { fields: prepared.missing.map(fieldLabel).join(', ') })}</Alert>
-          )}
-
-          {prepared && prepared.missing.length === 0 && prepared.table.rows.length > 0 && (
-            <>
-              {existing.isLoading && <p className="text-sm text-muted">{t.import.checking}</p>}
-              {existing.error && <Alert tone="error">{dbErrorMessage(existing.error, t)}</Alert>}
-
-              {sameError && (
-                <Alert tone="error">
-                  <p>
-                    {fmt(t.import.allFailed, { n: prepared.rows.length })}: {t.import.rowError[sameError.error]}
-                    {sameError.detail ? ` «${sameError.detail}»` : ''}.
-                  </p>
-                  <p className="mt-1">{t.import.allFailedHint}</p>
-                </Alert>
-              )}
-
-              {plan && (
-                <Card className="flex flex-col gap-3 !p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex flex-wrap gap-2 text-sm">
-                      <Badge status="new">{fmt(t.import.summary.new, { n: plan.counts.new })}</Badge>
-                      {plan.counts.duplicate > 0 && <Badge status="duplicate">{fmt(t.import.summary.duplicate, { n: plan.counts.duplicate })}</Badge>}
-                      {plan.counts.error > 0 && <Badge status="error">{fmt(t.import.summary.error, { n: plan.counts.error })}</Badge>}
-                      {plan.counts.overLimit > 0 && <Badge status="overLimit">{fmt(t.import.summary.overLimit, { n: plan.counts.overLimit })}</Badge>}
-                    </div>
-                    {plan.toInsert.length === 0 && plan.counts.duplicate > 0 ? (
-                      <p className="text-sm text-muted">{t.import.nothing}</p>
-                    ) : (
-                      <Button onClick={() => void submit()} loading={run.isPending} disabled={plan.toInsert.length === 0}>
-                        {run.isPending ? t.import.submitting : fmt(t.import.submit, { n: plan.toInsert.length })}
-                      </Button>
-                    )}
-                  </div>
-
-                  {run.isPending && progress && (
-                    <>
-                      <ImportProgress {...progress} />
-                      <ImportFlow trades={plan.toInsert} done={progress.done} />
-                    </>
-                  )}
-
-                  <p className="text-xs text-muted">{prepared.mode === 'fills' ? fmt(t.import.formatFills, { rows: prepared.table.rows.length }) : t.import.formatPositions}</p>
-                  {prepared.sideFallback && <p className="text-xs text-warning">{t.import.sideFallback[prepared.sideFallback]}</p>}
-                  {plan.counts.overLimit > 0 && remaining !== null && <p className="text-sm text-warning">{fmt(t.import.overLimitNote, { n: remaining })}</p>}
-                  {warnings.has('noEntryTime') && <p className="text-xs text-muted">{t.import.warnings.noEntryTime}</p>}
-                  {warnings.has('feeDerived') && <p className="text-xs text-muted">{fmt(t.import.warnings.feeDerived, { n: warnings.get('feeDerived')! })}</p>}
-                  {warnings.has('pnlFromFile') && <p className="text-xs text-muted">{fmt(t.import.warnings.pnlFromFile, { n: warnings.get('pnlFromFile')! })}</p>}
-                  {warnings.has('feeNotUsd') && <p className="text-xs text-warning">{fmt(t.import.warnings.feeNotUsd, { n: warnings.get('feeNotUsd')! })}</p>}
-                  {warnings.has('sideGuessed') && <p className="text-xs text-warning">{fmt(t.import.warnings.sideGuessed, { n: warnings.get('sideGuessed')! })}</p>}
-
-                  <div className="-mx-4 overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="text-left text-xs text-muted">
-                        <tr>
-                          <th className="hidden px-4 py-2 font-normal sm:table-cell">{t.import.col.line}</th>
-                          <th className="px-4 py-2 font-normal">{t.import.col.status}</th>
-                          <th className="px-2 py-2 font-normal">{t.import.col.trade}</th>
-                          <th className="hidden px-2 py-2 font-normal md:table-cell">{t.import.col.exitAt}</th>
-                          <th className="hidden px-2 py-2 text-right font-normal sm:table-cell">{t.import.col.size}</th>
-                          <th className="px-4 py-2 text-right font-normal">{t.import.col.pnl}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {prepared.rows.slice(0, PREVIEW_ROWS).map((r, idx) => {
-                          const status = plan.status.get(idx)!
-                          return (
-                            <tr key={idx} className="border-t border-border">
-                              <td className="hidden whitespace-nowrap px-4 py-2 text-muted sm:table-cell">{r.lineTo && r.lineTo !== r.line ? `${r.line}–${r.lineTo}` : r.line}</td>
-                              <td className="px-4 py-2">
-                                <Badge status={status}>{t.import.status[status]}</Badge>
-                              </td>
-                              <td className="px-2 py-2">
-                                {r.trade ? (
-                                  <>
-                                    <span className="font-medium">{r.trade.title ?? r.trade.symbol}</span>{' '}
-                                    <SideBadge side={r.trade.side} />
-                                    <div className="text-xs text-muted md:hidden">{formatDateTime(r.trade.exit_at)}</div>
-                                  </>
-                                ) : (
-                                  <span className="text-loss">
-                                    {r.lineTo && r.lineTo !== r.line ? fmt(t.import.lines, { from: r.line, to: r.lineTo }) : `${t.import.col.line} ${r.line}`}: {t.import.rowError[r.error!]}
-                                    {r.detail ? `: «${r.detail}»` : ''}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="hidden whitespace-nowrap px-2 py-2 text-muted md:table-cell">{r.trade ? formatDateTime(r.trade.exit_at) : ''}</td>
-                              <td className="hidden whitespace-nowrap px-2 py-2 text-right sm:table-cell">{r.trade ? formatUsd(r.trade.size_usd) : ''}</td>
-                              <td className={`whitespace-nowrap px-4 py-2 text-right font-medium ${pnlClass(r.trade?.pnl)}`}>{r.trade ? formatPnl(r.trade.pnl) : ''}</td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                  {prepared.rows.length > PREVIEW_ROWS && <p className="text-xs text-muted">{fmt(t.import.previewMore, { shown: PREVIEW_ROWS, n: prepared.rows.length })}</p>}
-                </Card>
-              )}
-            </>
-          )}
-
-          {/* Ручная настройка колонок — нужна, только если файл не распознался */}
-          {prepared && prepared.table.rows.length > 0 && (
-            <div className="rounded-xl border border-border bg-surface p-4">
-              <button type="button" className="text-sm text-muted hover:text-text" onClick={() => setShowMapping((v) => !v)} aria-expanded={mappingOpen}>
-                {mappingOpen ? '▾ ' : '▸ '}
-                {t.import.mapping}
-              </button>
-              {mappingOpen && (
-                <div className="mt-3 flex flex-col gap-3">
-                  <p className="text-xs text-muted">{t.import.mappingHint}</p>
-                  <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-5">
-                    {Object.keys(parser.fields).map((f) => (
-                      <SelectField
-                        key={f}
-                        label={`${fieldLabel(f)}${requiredFields.has(f) ? ' *' : ''}`}
-                        value={prepared.mapping[f]}
-                        onChange={(e) => setMappingOverride({ ...prepared.mapping, [f]: Number(e.target.value) })}
-                      >
-                        <option value={-1}>{t.import.notInFile}</option>
-                        {prepared.table.headers.map((h, i) => (
-                          <option key={i} value={i}>
-                            {h || `#${i + 1}`}
-                          </option>
-                        ))}
-                      </SelectField>
-                    ))}
-                    <SelectField
-                      label={t.import.timezone}
-                      hint={prepared.offsetDetected && offsetOverride === null ? t.import.timezoneDetected : t.import.timezoneGuess}
-                      value={prepared.utcOffsetMinutes}
-                      onChange={(e) => setOffsetOverride(Number(e.target.value))}
-                    >
-                      {OFFSETS.map((m) => (
-                        <option key={m} value={m}>
-                          {offsetLabel(m)}
-                        </option>
-                      ))}
-                    </SelectField>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="xl:hidden">
-            <ImportHistory />
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   )
 }
@@ -460,37 +459,6 @@ const badgeStyles: Record<RowStatus, string> = {
   duplicate: 'bg-surface-2 text-muted',
   error: 'bg-loss/15 text-loss',
   overLimit: 'bg-warning/15 text-warning',
-}
-
-/** «Где взять файл»: пилюли бирж, видна инструкция одной (по умолчанию — Bybit) */
-function HowToCard() {
-  const t = useT()
-  const [ex, setEx] = useState(IMPORT_PARSERS[0].exchange)
-  const howTo = t.import.howTo as Record<string, string>
-  return (
-    <Card data-shot="howto" className="flex flex-col gap-3 !p-4 sm:!p-5">
-      <h2 className="font-semibold">{t.import.howToTitle}</h2>
-      <div role="radiogroup" aria-label={t.import.howToTitle} className="flex flex-wrap gap-1.5">
-        {IMPORT_PARSERS.map((p) => {
-          const on = p.exchange === ex
-          return (
-            <button
-              key={p.exchange}
-              type="button"
-              role="radio"
-              aria-checked={on}
-              onClick={() => setEx(p.exchange)}
-              className={`rounded-full border px-3 py-1 text-sm transition-colors ${on ? 'border-primary bg-primary/10 font-medium text-text' : 'border-border bg-surface text-muted hover:text-text'}`}
-            >
-              {exchangeName(p.exchange, t.exchange.other)}
-            </button>
-          )
-        })}
-      </div>
-      <p className="text-sm leading-relaxed">{howTo[ex]}</p>
-      <p className="text-xs text-muted">{t.import.previewEmpty}</p>
-    </Card>
-  )
 }
 
 /** Полоса прогресса записи в базу: «312 из 1 040 сделок»; анимируется только scaleX */
@@ -510,46 +478,13 @@ function ImportProgress({ done, total }: { done: number; total: number }) {
   )
 }
 
-/**
- * Анимация A «Поток сделок» (образец — 21st.dev animated-file-upload): записанные сделки въезжают по одной.
- * База пишет пачками, поэтому показ догоняет число записанных плавно — но только среди уже записанных (индекс < done).
- */
-function ImportFlow({ trades, done }: { trades: ImportedTrade[]; done: number }) {
-  const [shown, setShown] = useState(0)
-  useEffect(() => {
-    if (shown >= done) return
-    const id = window.setTimeout(() => setShown((s) => Math.min(done, s + Math.max(1, Math.ceil((done - s) / 12)))), 70)
-    return () => window.clearTimeout(id)
-  }, [shown, done])
-  const last = trades.slice(Math.max(0, shown - 4), shown).map((tr, k) => ({ tr, i: Math.max(0, shown - 4) + k })).reverse()
-  if (!last.length) return null
-  return (
-    <ul data-import-flow aria-hidden className="flex flex-col gap-1.5">
-      {last.map(({ tr, i }, k) => (
-        <li
-          key={i}
-          className="import-flow-row flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-2/40 px-3 py-1.5 text-sm"
-          style={{ opacity: 1 - k * 0.22 }}
-        >
-          <span className="flex min-w-0 items-center gap-2">
-            <span className="truncate font-medium">{tr.title ?? tr.symbol}</span>
-            <SideBadge side={tr.side} />
-          </span>
-          <span className={`num shrink-0 font-medium ${pnlClass(tr.pnl)}`}>{formatPnl(tr.pnl)}</span>
-        </li>
-      ))}
-    </ul>
-  )
-}
-
 function Badge({ status, children }: { status: RowStatus; children: string }) {
   return <span className={`inline-block whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-medium ${badgeStyles[status]}`}>{children}</span>
 }
 
-function ResultAlert({ result }: { result: RunImportResult }) {
+function ResultAlert({ result, trades, timeZone }: { result: RunImportResult; trades: ImportedTrade[]; timeZone: string }) {
   const t = useT()
-  const stopped = result.error !== null
-  if (stopped)
+  if (result.error !== null)
     return (
       <Alert tone="error">
         <p>{fmt(t.import.stopped, { n: result.inserted })}</p>
@@ -561,22 +496,52 @@ function ResultAlert({ result }: { result: RunImportResult }) {
         )}
       </Alert>
     )
-  // итог анимации A: галочка рисуется линией, рядом — сколько новых и сколько уже было
+  // E «В календарь»: сделки разлетаются по дням месяца
+  return <CalendarLanding trades={trades} inserted={result.inserted} duplicates={result.duplicates} timeZone={timeZone} />
+}
+
+/** «История загрузок (3) ▾» — справа в строке файла; открывает панель с историей */
+function HistoryButton({ onClick }: { onClick: () => void }) {
+  const t = useT()
+  const { data: imports = [] } = useImports()
   return (
-    <div role="status" data-import-done className="rise flex items-center gap-3 rounded-xl border border-up/40 bg-up/10 px-4 py-3">
-      <CheckMark circle className="size-9 shrink-0 text-up" />
-      <div className="min-w-0 text-sm">
-        <p className="font-medium">
-          {fmt(t.import.done, { n: result.inserted })}
-          {result.duplicates > 0 && ` ${fmt(t.import.doneDuplicates, { n: result.duplicates })}`}
-        </p>
-        {result.inserted > 0 && (
-          <Link to="/trades" className="mt-0.5 inline-block text-primary hover:underline">
-            {t.import.toTrades} →
-          </Link>
-        )}
+    <button type="button" onClick={onClick} className="inline-flex shrink-0 items-center gap-2 rounded-lg px-2 py-1 text-sm text-muted transition-colors hover:bg-surface-2 hover:text-text">
+      {t.import.history}
+      <span className="num rounded-md bg-surface-2 px-1.5 py-0.5 text-xs font-semibold text-text">{imports.length}</span>
+    </button>
+  )
+}
+
+/** Панель «История загрузок» (<dialog> как панель биржи: справа / лист снизу); «Отменить» удаляет сделки этой загрузки */
+function HistoryPanel({ onClose }: { onClose: () => void }) {
+  const t = useT()
+  const ref = useRef<HTMLDialogElement>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (el && !el.open) el.showModal()
+  }, [])
+  return (
+    <dialog
+      ref={ref}
+      aria-labelledby="history-title"
+      onClose={onClose}
+      onClick={(e) => e.target === ref.current && onClose()}
+      className="day-sheet mx-0 mt-auto mb-0 max-h-[88dvh] w-full max-w-none rounded-t-2xl border border-border bg-surface p-0 text-text shadow-2xl backdrop:bg-bg/60 md:my-0 md:mr-0 md:ml-auto md:h-dvh md:max-h-none md:w-[460px] md:rounded-none md:rounded-l-2xl"
+    >
+      <div className="flex h-full flex-col gap-3 overflow-y-auto p-4 sm:p-5">
+        <div className="flex items-start justify-between gap-3">
+          <h2 id="history-title" className="text-lg font-semibold">
+            {t.import.history}
+          </h2>
+          <button type="button" onClick={() => ref.current?.close()} aria-label={t.connections.bridge.close} className="grid size-8 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-text">
+            <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth={2.2} aria-hidden>
+              <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+        <ImportHistory />
       </div>
-    </div>
+    </dialog>
   )
 }
 
@@ -586,8 +551,7 @@ function ImportHistory() {
   const del = useDeleteImport()
 
   return (
-    <Card className="!p-4">
-      <h2 className="font-medium">{t.import.history}</h2>
+    <div data-history>
       {del.error && (
         <div className="mt-2">
           <Alert tone="error">{dbErrorMessage(del.error, t)}</Alert>
@@ -622,6 +586,6 @@ function ImportHistory() {
           ))}
         </ul>
       )}
-    </Card>
+    </div>
   )
 }
