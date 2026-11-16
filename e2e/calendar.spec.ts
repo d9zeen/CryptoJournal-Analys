@@ -105,9 +105,12 @@ for (const [width, height] of [
       return Math.abs(g.y + g.height - (l.y + l.height))
     }
     await expect.poll(gap, { message: 'низ календаря и правой колонки' }).toBeLessThanOrEqual(2)
+    // последняя карточка — «Пары месяца» + серия
+    expect(await last.getAttribute('data-shot')).toBe('month-pairs')
+    await expect(last.locator('[data-shot="month-streak"] li')).toHaveCount(10)
     const p = (await panel.boundingBox())!
     expect(p.width).toBeLessThanOrEqual(320)
-    expect(Math.round((await cal.locator('[data-shot="weekday-chart"]').boundingBox())!.height)).toBeGreaterThanOrEqual(176)
+    expect(Math.round((await cal.locator('[data-shot="weekday-chart"]').boundingBox())!.height)).toBe(176)
   })
 
 test('календарь на телефоне: «Итог месяца» — сразу под сеткой', async ({ page, db }) => {

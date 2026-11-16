@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compactPnl, monthSummary, monthWeeks, profitCalendar } from './calendar'
+import { compactPnl, monthPairs, monthSummary, monthWeeks, profitCalendar } from './calendar'
 
 describe('profitCalendar', () => {
   // сентябрь 2026: 1-е — вторник, сетка с понедельника 31 августа
@@ -122,5 +122,33 @@ describe('monthWeeks', () => {
   it('days — по числам месяца', () => {
     expect(span(monthWeeks(nov, 'days'))).toEqual(['1–7', '8–14', '15–21', '22–28', '29–30'])
     expect(span(monthWeeks(profitCalendar([], 2021, 1, 'UTC'), 'days'))).toEqual(['1–7', '8–14', '15–21', '22–28'])
+  })
+})
+
+describe('monthPairs', () => {
+  const tz = 'UTC'
+  const tr = (d: string, pnl: number, symbol = 'BTCUSDT') => ({ exit_at: `2026-11-${d}T12:00:00Z`, pnl, symbol })
+  it('пары по сумме, только сделки месяца', () => {
+    const r = monthPairs([tr('02', 100), tr('03', -40, 'ETHUSDT'), tr('04', 50), { exit_at: '2026-10-31T12:00:00Z', pnl: 999, symbol: 'SOLUSDT' }], 2026, 10, tz)
+    expect(r.pairs).toEqual([
+      { symbol: 'BTCUSDT', pnl: 150, count: 2 },
+      { symbol: 'ETHUSDT', pnl: -40, count: 1 },
+    ])
+  })
+  it('серии: текущая, самые длинные; ноль обрывает', () => {
+    const r = monthPairs([tr('01', 1), tr('02', 2), tr('03', 3), tr('04', -1), tr('05', 0), tr('06', -2), tr('07', -3)], 2026, 10, tz)
+    expect(r.current).toEqual({ n: 2, win: false })
+    expect(r.bestWin).toBe(3)
+    expect(r.worstLoss).toBe(2)
+    expect(r.recent).toEqual([1, 2, 3, -1, 0, -2, -3])
+  })
+  it('последние N сделок, пустой месяц', () => {
+    const many = Array.from({ length: 14 }, (_, i) => tr(String(i + 1).padStart(2, '0'), i % 2 ? 1 : -1))
+    expect(monthPairs(many, 2026, 10, tz).recent).toHaveLength(10)
+    expect(monthPairs([], 2026, 10, tz)).toEqual({ pairs: [], recent: [], current: null, bestWin: 0, worstLoss: 0 })
+  })
+  it('у Polymarket — название рынка вместо символа', () => {
+    const r = monthPairs([{ ...tr('02', 5, '0xabc'), title: 'Will BTC hit 100k?' }], 2026, 10, tz)
+    expect(r.pairs[0].symbol).toBe('Will BTC hit 100k?')
   })
 })

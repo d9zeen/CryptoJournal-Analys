@@ -162,3 +162,51 @@ export function monthWeeks(cal: ProfitCalendar, mode: WeekMode): WeekRow[] {
   }
   return groups.map(row)
 }
+
+export type PairRow = { symbol: string; pnl: number; count: number }
+export type Streak = { n: number; win: boolean }
+/** Пары месяца и серии: pairs — от самой прибыльной к самой убыточной; recent — PnL последних сделок месяца (старые → новые) */
+export type MonthPairs = { pairs: PairRow[]; recent: number[]; current: Streak | null; bestWin: number; worstLoss: number }
+
+/**
+ * «Пары месяца» и «Серия» для правой колонки календаря: сделки месяца (день — дата закрытия в часовом поясе пользователя),
+ * PnL по парам; серия — подряд в плюс / в минус по порядку закрытия (сделка в ноль серию обрывает).
+ * current — серия на конце месяца, bestWin / worstLoss — самые длинные серии плюсов / минусов за месяц.
+ */
+export function monthPairs(
+  closed: { exit_at: string; pnl: number; symbol: string; title?: string | null }[],
+  year: number,
+  month: number,
+  timeZone: string,
+  recentN = 10,
+): MonthPairs {
+  const ym = `${year}-${String(month + 1).padStart(2, '0')}`
+  const list = closed.filter((t) => zonedParts(t.exit_at, timeZone).date.startsWith(ym)).sort((a, b) => a.exit_at.localeCompare(b.exit_at))
+  const by = new Map<string, PairRow>()
+  for (const t of list) {
+    const key = t.title || t.symbol
+    const r = by.get(key) ?? { symbol: key, pnl: 0, count: 0 }
+    r.pnl += t.pnl
+    r.count++
+    by.set(key, r)
+  }
+  let bestWin = 0
+  let worstLoss = 0
+  let current: Streak | null = null
+  for (const t of list) {
+    if (t.pnl === 0) current = null
+    else {
+      const win = t.pnl > 0
+      current = current && current.win === win ? { n: current.n + 1, win } : { n: 1, win }
+      if (win) bestWin = Math.max(bestWin, current.n)
+      else worstLoss = Math.max(worstLoss, current.n)
+    }
+  }
+  return {
+    pairs: [...by.values()].sort((a, b) => b.pnl - a.pnl || b.count - a.count),
+    recent: list.slice(-recentN).map((t) => t.pnl),
+    current,
+    bestWin,
+    worstLoss,
+  }
+}
