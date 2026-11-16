@@ -287,6 +287,10 @@ test.describe('импорт', () => {
     await page.goto('import')
     await page.locator('input[type=file]').setInputFiles({ name: 'binance-futures.csv', mimeType: 'text/csv', buffer: Buffer.from(BINANCE_CSV) })
     await expect(page.getByLabel('Биржа').locator('option').first()).toHaveText('Авто: Binance')
+    // B «Сканер»: сайт сам подписал колонки файла
+    const scan = page.locator('[data-scan]')
+    await expect(scan).toContainText('Узнали файл: Binance')
+    await expect(scan.locator('[data-scan-label="symbol"]')).toHaveText('Пара')
     await expect(page.getByText('Новых: 2')).toBeVisible()
     await page.getByRole('button', { name: 'Импортировать 2' }).click()
     await expect(page.getByText('Готово: импортировано сделок — 2.')).toBeVisible()
@@ -319,11 +323,14 @@ test.describe('импорт', () => {
     const bar = page.getByRole('progressbar', { name: 'Записываю сделки…' })
     await expect(bar).toContainText(/500 из 1\s040 сделок/)
     await expect(bar).toHaveAttribute('aria-valuenow', '500')
-    // анимация A: записанные сделки въезжают; окошко в углу показывает тот же прогресс
-    await expect(page.locator('[data-import-flow] li').first()).toBeVisible()
+    // окошко в углу показывает тот же прогресс
     await expect(page.locator('[data-activity-item="file"]')).toContainText(/500 из 1\s040 сделок/)
     await expect(page.getByText(/Готово: импортировано сделок — 1\s?040/)).toBeVisible()
-    await expect(page.locator('[data-import-done]')).toBeVisible()
+    // E «В календарь»: дни месяца последней сделки окрашиваются
+    const done = page.locator('[data-import-done]')
+    await expect(done).toHaveAttribute('data-landed', 'all', { timeout: 15_000 })
+    expect(await done.locator('[data-cal-day][data-lit]').count()).toBeGreaterThan(5)
+    await expect(done.getByRole('link', { name: /Открыть календарь/ })).toHaveAttribute('href', /calendar\?day=2026-/)
     await expect(bar).toHaveCount(0)
     // окошко остаётся и на другой странице, со ссылкой «К сделкам»
     await expect(page.locator('[data-activity-item="file"]')).toHaveAttribute('data-status', 'done')
@@ -808,25 +815,30 @@ test('тарифы на главной: карточки не заезжают �
   }
 })
 
-test('«Биржи»: пока файла нет — «Где взять файл?» с переключателем бирж, видна инструкция одной', async ({ page, db }) => {
+test('«Биржи»: файл — одной строкой под сеткой, история — в панели, файл можно бросить в любое место', async ({ page, db }) => {
+  db.imports = [{ id: 'i1', exchange: 'bybit', filename: 'Bybit-UTA-Perp-TradeHistory.csv', rows_total: 103, rows_imported: 95, rows_skipped: 8, created_at: '2026-11-05T19:14:00Z' }]
   await fakeSupabase(page, db)
   await page.goto('import')
-  const howto = page.locator('[data-shot="howto"]').filter({ visible: true })
-  await expect(howto).toHaveCount(1)
-  await expect(howto.getByRole('heading', { name: 'Где взять файл на бирже?' })).toBeVisible()
-  const pills = howto.getByRole('radio')
-  await expect(pills).toHaveCount(8)
-  await expect(howto.getByRole('radio', { name: 'Bybit' })).toHaveAttribute('aria-checked', 'true')
-  await expect(howto).toContainText('Закрытые P&L')
-  await howto.getByRole('radio', { name: 'Binance' }).click()
-  await expect(howto).toContainText('Фьючерсы USDⓈ-M')
-  await expect(howto).not.toContainText('Закрытые P&L')
-  // на широком экране — справа от зоны загрузки
-  if ((page.viewportSize()?.width ?? 0) >= 1280) {
-    const drop = (await page.locator('[data-shot="dropzone"]').boundingBox())!
-    const box = (await howto.boundingBox())!
-    expect(box.x).toBeGreaterThan(drop.x + drop.width)
-  }
+  const line = page.locator('[data-file-line]')
+  await expect(line).toContainText('Перетащи файл с любой биржи в любое место страницы или выбери')
+  // старых блоков нет: «Где взять файл» — в панели биржи, история — по кнопке
+  await expect(page.getByText('Где взять файл на бирже?')).toHaveCount(0)
+  await expect(page.locator('[data-history]')).toHaveCount(0)
+  await line.getByRole('button', { name: /История импортов/ }).click()
+  const panel = page.getByRole('dialog', { name: 'История импортов' })
+  await expect(panel).toContainText('Bybit-UTA-Perp-TradeHistory.csv')
+  await expect(panel.getByRole('button', { name: 'Отменить' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  // файл тащат над страницей — рамка на весь экран
+  const dt = await page.evaluateHandle(() => {
+    const d = new DataTransfer()
+    d.items.add(new File(['a'], 'x.csv', { type: 'text/csv' }))
+    return d
+  })
+  await page.locator('[data-exchanges]').dispatchEvent('dragover', { dataTransfer: dt })
+  await expect(page.locator('[data-drop-overlay]')).toBeVisible()
+  await expect(page.locator('[data-drop-overlay]')).toContainText('Отпусти файл — биржу и колонки определим сами')
 })
 
 test('«Разбор»: сводка Long / Short наверху, строка-вывод, полоска PnL от середины', async ({ page, db }) => {

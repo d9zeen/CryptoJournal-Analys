@@ -5,7 +5,10 @@
  * Сделки подтягиваются сами (useAutoSync в AppLayout).
  */
 import { intlLocale } from '@/lib/locale'
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useTrades } from '@/features/trades/api'
+import { useProfile } from '@/features/settings/api'
+import { browserTimeZone, zonedParts } from '@/lib/tz'
 import { fmt, useT } from '@/i18n'
 import type { Dict } from '@/i18n/ru'
 import { Button } from '@/components/ui/Button'
@@ -76,6 +79,7 @@ export function ConnectionsCard({ onPickFile }: { onPickFile?: (exchange: string
   const [panel, setPanel] = useState<string | null>(null)
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
   const now = useNow()
+  const recent = useRecentPnl(conns.length > 0)
 
   const onSynced = (r: SyncResult) =>
     setNotice({
@@ -136,9 +140,38 @@ export function ConnectionsCard({ onPickFile }: { onPickFile?: (exchange: string
 
       {/* «Сначала биржа, потом способ»: все биржи карточками; клик — панель этой биржи (API / адрес / файл) */}
       <h3 className="mt-2 text-sm font-semibold">{c.grid.title}</h3>
-      <ExchangeGrid conns={conns} onOpen={setPanel} />
+      <ExchangeGrid conns={conns} onOpen={setPanel} recent={recent} />
     </section>
   )
+}
+
+/**
+ * PnL по биржам за последние 7 дней (по дате закрытия, в часовом поясе пользователя): { bybit: [d-6 … сегодня] }.
+ * Для столбиков на карточках подключённых бирж; грузим, только если что-то подключено.
+ */
+function useRecentPnl(enabled: boolean): Record<string, number[]> | undefined {
+  const { data: profile } = useProfile()
+  const tz = profile?.timezone || browserTimeZone()
+  // начало окна считаем один раз — ключ запроса не меняется при каждой перерисовке
+  const [range] = useState(() => {
+    const d = new Date()
+    d.setHours(0, 0, 0, 0)
+    d.setDate(d.getDate() - 7)
+    return { from: d.toISOString(), to: null }
+  })
+  const { data: trades } = useTrades(range, enabled)
+  return useMemo(() => {
+    if (!trades) return undefined
+    const days = Array.from({ length: 7 }, (_, i) => zonedParts(new Date(Date.now() - (6 - i) * 86_400_000).toISOString(), tz).date)
+    const out: Record<string, number[]> = {}
+    for (const tr of trades) {
+      if (!tr.exit_at || tr.pnl === null) continue
+      const k = days.indexOf(zonedParts(tr.exit_at, tz).date)
+      if (k < 0) continue
+      ;(out[tr.exchange] ??= Array(7).fill(0))[k] += Number(tr.pnl)
+    }
+    return out
+  }, [trades, tz])
 }
 
 /** Текущее время, обновляется раз в минуту — для «обновлено 20 мин назад» */
