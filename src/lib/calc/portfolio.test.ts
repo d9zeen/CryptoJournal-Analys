@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { allocation, coinsBySymbol, movers, portfolioRows, portfolioSeries, portfolioTotals, thinOut, type Coin, type Holding } from './portfolio'
+import { allocation, coinsBySymbol, costBasis, movers, portfolioRows, portfolioSeries, portfolioTotals, realizedTotal, thinOut, type Coin, type Holding } from './portfolio'
 
 const coin = (symbol: string, price: number | null, rank: number, change_24h: number | null = null, id = symbol.toLowerCase()): Coin => ({
   id, symbol, name: symbol, rank, price, change_24h, change_7d: null, spark: null, icon: null,
@@ -91,5 +91,42 @@ describe('портфель: доли, лучшие / худшие, график'
     const snaps = Array.from({ length: 24 * 30 }, (_, i) => ({ at: new Date(now - (24 * 30 - i) * H).toISOString(), total_usd: 1000 + (i % 2) * 50, btc_price: 100000 }))
     expect(portfolioSeries(snaps, '3m', now).length).toBeLessThanOrEqual(31)
     expect(portfolioSeries(snaps, '24h', now).length).toBe(24)
+  })
+})
+
+describe('портфель: средняя цена из истории покупок', () => {
+  const f = (side: 'buy' | 'sell', qty: number, price: number, at: string, fee = 0, fee_asset: string | null = null, asset = 'BTC', quote = 'USDT') => ({ asset, quote, side, qty, price, fee, fee_asset, at })
+  it('средневзвешенная: 0,1 по 60 000 + 0,1 по 80 000 → 70 000', () => {
+    const b = costBasis([f('buy', 0.1, 60000, '2026-01-01'), f('buy', 0.1, 80000, '2026-02-01')])
+    expect(b.BTC.qty).toBeCloseTo(0.2, 12)
+    expect(b.BTC.avg).toBeCloseTo(70000, 6)
+    expect(b.BTC.realized).toBe(0)
+  })
+  it('продажа фиксирует прибыль, средняя не меняется; порядок — по времени', () => {
+    const b = costBasis([f('sell', 0.1, 90000, '2026-03-01'), f('buy', 0.2, 70000, '2026-01-01')])
+    expect(b.BTC.qty).toBeCloseTo(0.1, 12)
+    expect(b.BTC.avg).toBeCloseTo(70000, 6)
+    expect(b.BTC.realized).toBeCloseTo(2000, 6)
+  })
+  it('комиссии: в монете — меньше монет, в котировке — дороже покупка и меньше выручка', () => {
+    const b = costBasis([f('buy', 1, 100, '2026-01-01', 0.01, 'BTC'), f('sell', 0.5, 120, '2026-02-01', 0.6, 'USDT')])
+    // куплено 0,99 за 100 $ → средняя 101,0101…; продано 0,5 по 120 минус 0,6 $
+    expect(b.BTC.avg).toBeCloseTo(100 / 0.99, 6)
+    expect(b.BTC.realized).toBeCloseTo(0.5 * 120 - 0.6 - 0.5 * (100 / 0.99), 6)
+  })
+  it('продали больше купленного (монеты пришли переводом) — лишнее не считаем; всё продано — средняя заново', () => {
+    const b = costBasis([f('buy', 1, 100, '2026-01-01'), f('sell', 3, 150, '2026-02-01'), f('buy', 1, 200, '2026-03-01')])
+    expect(b.BTC.realized).toBeCloseTo((150 - 100) * 1, 6)
+    expect(b.BTC.avg).toBeCloseTo(200, 6)
+  })
+  it('котировка не в долларах (ETHBTC) — в цену входа не идёт', () => {
+    expect(costBasis([f('buy', 1, 0.05, '2026-01-01', 0, null, 'ETH', 'BTC')])).toEqual({})
+  })
+  it('в портфеле: руками важнее истории, история важнее «стейблкоин = 1 $»; сколько куплено на биржах', () => {
+    const basis = costBasis([f('buy', 0.25, 80000, '2026-01-01'), f('buy', 2, 2500, '2026-01-02', 0, null, 'ETH'), f('sell', 1, 3000, '2026-02-01', 0, null, 'ETH')])
+    const rows = portfolioRows([h('BTC', 0.5), h('ETH', 1)], coins, { ETH: 2000 }, null, basis)
+    expect(rows.find((r) => r.symbol === 'BTC')).toMatchObject({ avgPrice: 80000, avgSource: 'trades', covered: 0.5, invested: 40000 })
+    expect(rows.find((r) => r.symbol === 'ETH')).toMatchObject({ avgPrice: 2000, avgSource: 'manual', realized: 500 })
+    expect(realizedTotal(basis)).toBeCloseTo(500, 6)
   })
 })

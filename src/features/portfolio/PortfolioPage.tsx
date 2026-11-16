@@ -23,8 +23,9 @@ import { parseDecimal } from '@/lib/parse'
 import { dbErrorMessage } from '@/lib/errors'
 import {
   DUST_USD,
-  STABLES,
   allocation,
+  costBasis,
+  realizedTotal,
   movers,
   portfolioRows,
   portfolioSeries,
@@ -46,6 +47,7 @@ import {
   useRefreshing,
   useSetCost,
   useSnapshots,
+  useSpotFills,
 } from './api'
 import { CoinIcon } from './CoinIcon'
 
@@ -65,6 +67,10 @@ export function PortfolioPage() {
   const { data: coins = [], isLoading: coinsLoading } = useCoins()
   const { data: holdings, isLoading } = useHoldings()
   const { data: costs = {} } = useCosts()
+  // этап 2: средняя цена входа и зафиксированная прибыль — из истории спотовых покупок / продаж на биржах
+  const { data: fills = [] } = useSpotFills()
+  const basis = useMemo(() => costBasis(fills), [fills])
+  const realized = useMemo(() => realizedTotal(basis), [basis])
   const { data: snaps = [] } = useSnapshots()
   const { conns, all } = usePortfolioConnections()
   const { data: usage } = useUsage()
@@ -78,10 +84,10 @@ export function PortfolioPage() {
   const [adding, setAdding] = useState(false)
 
   const list = holdings ?? []
-  const rows = useMemo(() => portfolioRows(list, coins, costs, source), [list, coins, costs, source])
+  const rows = useMemo(() => portfolioRows(list, coins, costs, source, basis), [list, coins, costs, source, basis])
   const totals = useMemo(() => portfolioTotals(rows), [rows])
   // график — по всему портфелю (снимки пишутся целиком), фильтр источника влияет на таблицу и цифры
-  const allTotals = useMemo(() => portfolioTotals(portfolioRows(list, coins, costs, null)), [list, coins, costs])
+  const allTotals = useMemo(() => portfolioTotals(portfolioRows(list, coins, costs, null, basis)), [list, coins, costs, basis])
   const btcPrice = useMemo(() => coins.find((c) => c.symbol === 'BTC')?.price ?? null, [coins])
   const series = useMemo(() => portfolioSeries(snaps, range, Date.now(), { value: allTotals.value, btcPrice }), [snaps, range, allTotals.value, btcPrice])
   const shown = hideDust ? rows.filter((r) => r.value !== null && r.value >= DUST_USD) : rows
@@ -153,7 +159,7 @@ export function PortfolioPage() {
       )}
       {coins.length === 0 && <p className="text-sm text-muted">{p.pricesPending}</p>}
 
-      <Kpis totals={totals} />
+      <Kpis totals={totals} realized={fills.length ? realized : null} />
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <section style={{ '--i': 4 } as CSSProperties} className="rise flex min-w-0 flex-col rounded-lg border border-border bg-surface p-4 sm:p-5">
@@ -219,7 +225,7 @@ export function PortfolioPage() {
   )
 }
 
-function Kpis({ totals }: { totals: ReturnType<typeof portfolioTotals> }) {
+function Kpis({ totals, realized }: { totals: ReturnType<typeof portfolioTotals>; realized: number | null }) {
   const t = useT()
   const k = t.portfolio.kpi
   const card = 'rise flex min-w-0 flex-col gap-1 rounded-lg border bg-surface p-4'
@@ -245,17 +251,18 @@ function Kpis({ totals }: { totals: ReturnType<typeof portfolioTotals> }) {
           {totals.withCost ? (
             <>
               <span className={`num ${pnlClass(totals.pnlPct)}`}>{totals.pnlPct === null ? '' : `${signedPct(totals.pnlPct)} · `}</span>
-              {fmt(k.pnlHint, { n: totals.withCost, total: totals.priced })}
+              {fmt(k.investedShort, { v: formatUsd(totals.invested) })} · {fmt(k.pnlHint, { n: totals.withCost, total: totals.priced })}
             </>
           ) : (
             k.pnlNone
           )}
         </span>
       </div>
-      <div style={{ '--i': 3 } as CSSProperties} className={`${card} border-border`}>
-        <span className="text-xs text-muted">{k.invested}</span>
-        <span className="num text-2xl font-semibold">{totals.withCost ? formatUsd(totals.invested) : '—'}</span>
-        <span className="text-xs text-muted">{k.investedHint}</span>
+      {/* этап 2: прибыль, зафиксированная продажами (из истории спотовых сделок на биржах) */}
+      <div data-kpi-realized style={{ '--i': 3 } as CSSProperties} className={`${card} border-border`}>
+        <span className="text-xs text-muted">{k.realized}</span>
+        <span className={`num text-2xl font-semibold ${realized === null ? 'text-muted' : pnlClass(realized)}`}>{realized === null ? '—' : formatPnl(realized)}</span>
+        <span className="text-xs text-muted">{realized === null ? k.realizedNone : k.realizedHint}</span>
       </div>
     </div>
   )
@@ -389,6 +396,14 @@ function CoinTable({ rows, conns, costs }: { rows: PortfolioRow[]; conns: Connec
   const [removing, setRemoving] = useState<PortfolioRow | null>(null)
   const del = useDeleteManual()
 
+  const avgTitle = (r: PortfolioRow) =>
+    r.avgSource === 'trades' && r.covered !== null && r.covered < 0.995
+      ? fmt(c.covered, { p: formatPercent(r.covered, 0) })
+      : r.avgSource === 'stable'
+        ? c.stable
+        : r.avgSource
+          ? c.avgFrom[r.avgSource]
+          : undefined
   const avgCell = (r: PortfolioRow) =>
     editing === r.symbol ? (
       <CostEditor symbol={r.symbol} initial={costs[r.symbol] ?? null} onDone={() => setEditing(null)} />
@@ -397,11 +412,14 @@ function CoinTable({ rows, conns, costs }: { rows: PortfolioRow[]; conns: Connec
     ) : (
       <button
         type="button"
+        data-avg-source={r.avgSource ?? 'none'}
         onClick={() => setEditing(r.symbol)}
-        title={!r.avgManual && STABLES.has(r.symbol) ? c.stable : undefined}
-        className={`num rounded-md px-1.5 py-0.5 transition-colors hover:bg-surface-2 ${r.avgPrice === null ? 'text-primary' : r.avgManual ? '' : 'text-muted'}`}
+        title={avgTitle(r)}
+        className={`inline-flex flex-col items-end rounded-md px-1.5 py-0.5 transition-colors hover:bg-surface-2 ${r.avgPrice === null ? 'text-primary' : r.avgSource === 'stable' ? 'text-muted' : ''}`}
       >
-        {r.avgPrice === null ? c.setAvg : formatUsdPrice(r.avgPrice)}
+        <span className="num">{r.avgPrice === null ? c.setAvg : formatUsdPrice(r.avgPrice)}</span>
+        {/* откуда цена: «по сделкам» (история покупок на биржах) / «вручную» */}
+        {(r.avgSource === 'trades' || r.avgSource === 'manual') && <span className="text-xs text-muted">{c.avgFrom[r.avgSource]}</span>}
       </button>
     )
 

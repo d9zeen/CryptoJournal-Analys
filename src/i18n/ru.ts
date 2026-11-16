@@ -954,6 +954,10 @@ export const ru = {
       investedHint: 'по средним ценам входа',
       coins: { one: '{n} монета', few: '{n} монеты', many: '{n} монет' },
       noPrice: 'без цены: {n}',
+      investedShort: 'вложено {v}',
+      realized: 'Зафиксировано',
+      realizedHint: 'прибыль от продаж на биржах',
+      realizedNone: 'появится из истории сделок на биржах',
     },
     chart: {
       title: 'Стоимость портфеля',
@@ -993,6 +997,8 @@ export const ru = {
       removeTitle: 'Удалить {symbol} из портфеля?',
       removeText: 'Удалится только монета, добавленная вручную. Балансы бирж не трогаем.',
       share: 'доля',
+      avgFrom: { manual: 'вручную', trades: 'по сделкам', stable: 'стейблкоин — 1 $' },
+      covered: 'По сделкам на биржах куплено {p} от нынешнего количества — остальное пришло переводом, для него взята та же цена',
     },
     accounts: { spot: 'спот', fund: 'фандинг', futures: 'фьючерсы', earn: 'Earn', perp: 'перпы', prediction: 'позиции', manual: 'вручную' },
     empty: {

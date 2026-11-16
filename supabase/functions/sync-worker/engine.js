@@ -2369,7 +2369,8 @@ const READ_PATHS = {
 		"/api/v5/public/instruments",
 		"/api/v5/account/balance",
 		"/api/v5/asset/balances",
-		"/api/v5/finance/savings/balance"
+		"/api/v5/finance/savings/balance",
+		"/api/v5/trade/fills-history"
 	]),
 	bitget: /* @__PURE__ */ new Set([
 		"/api/v2/mix/position/history-position",
@@ -2389,7 +2390,8 @@ const READ_PATHS = {
 		"/sapi/v1/asset/get-funding-asset",
 		"/fapi/v2/balance",
 		"/sapi/v1/simple-earn/flexible/position",
-		"/sapi/v1/simple-earn/locked/position"
+		"/sapi/v1/simple-earn/locked/position",
+		"/api/v3/myTrades"
 	])
 };
 /**
@@ -2624,7 +2626,7 @@ async function callExchange(exchange, cred, path, params, fetchFn = fetch) {
 *    просто без него;
 *  - символы — заглавными, только буквы / цифры; нули и отрицательные (заём) отбрасываем.
 */
-const n = (v) => {
+const n$1 = (v) => {
 	const x = typeof v === "number" ? v : typeof v === "string" && v !== "" ? Number(v) : NaN;
 	return Number.isFinite(x) ? x : 0;
 };
@@ -2680,14 +2682,14 @@ async function bybitBalances(call) {
 	const out = arr(unified.list?.[0]?.coin).map((x) => ({
 		account: "spot",
 		symbol: String(x.coin),
-		amount: n(x.equity ?? x.walletBalance)
+		amount: n$1(x.equity ?? x.walletBalance)
 	}));
 	out.push(...await optional(async () => {
 		const fund = await bybitResult(c, "/v5/asset/transfer/query-account-coins-balance", { accountType: "FUND" });
 		return arr(fund.balance).map((x) => ({
 			account: "fund",
 			symbol: String(x.coin),
-			amount: n(x.walletBalance)
+			amount: n$1(x.walletBalance)
 		}));
 	}));
 	for (const category of ["FlexibleSaving", "OnChain"]) out.push(...await optional(async () => {
@@ -2695,7 +2697,7 @@ async function bybitBalances(call) {
 		return arr(earn.list).map((x) => ({
 			account: "earn",
 			symbol: String(x.coin),
-			amount: n(x.amount)
+			amount: n$1(x.amount)
 		}));
 	}));
 	return mergeBalances(out);
@@ -2705,24 +2707,24 @@ async function binanceBalances(call) {
 	const out = arr(spot.balances).filter((x) => !/^LD[A-Z0-9]{2,}$/.test(String(x.asset))).map((x) => ({
 		account: "spot",
 		symbol: String(x.asset),
-		amount: n(x.free) + n(x.locked)
+		amount: n$1(x.free) + n$1(x.locked)
 	}));
 	out.push(...await optional(async () => arr(await binanceGet(call, "/sapi/v1/asset/get-funding-asset", {})).map((x) => ({
 		account: "fund",
 		symbol: String(x.asset),
-		amount: n(x.free) + n(x.locked) + n(x.freeze) + n(x.withdrawing)
+		amount: n$1(x.free) + n$1(x.locked) + n$1(x.freeze) + n$1(x.withdrawing)
 	}))), ...await optional(async () => arr(await binanceGet(call, "/fapi/v2/balance", {})).map((x) => ({
 		account: "futures",
 		symbol: String(x.asset),
-		amount: n(x.balance) + n(x.crossUnPnl)
+		amount: n$1(x.balance) + n$1(x.crossUnPnl)
 	}))), ...await optional(async () => arr((await binanceGet(call, "/sapi/v1/simple-earn/flexible/position", { size: 100 })).rows).map((x) => ({
 		account: "earn",
 		symbol: String(x.asset),
-		amount: n(x.totalAmount)
+		amount: n$1(x.totalAmount)
 	}))), ...await optional(async () => arr((await binanceGet(call, "/sapi/v1/simple-earn/locked/position", { size: 100 })).rows).map((x) => ({
 		account: "earn",
 		symbol: String(x.asset),
-		amount: n(x.amount)
+		amount: n$1(x.amount)
 	}))));
 	return mergeBalances(out);
 }
@@ -2731,16 +2733,16 @@ async function okxBalances(call) {
 	const out = arr(trading[0]?.details).map((x) => ({
 		account: "spot",
 		symbol: String(x.ccy),
-		amount: n(x.eq)
+		amount: n$1(x.eq)
 	}));
 	out.push(...await optional(async () => (await okxGet(call, "/api/v5/asset/balances", {})).map((x) => ({
 		account: "fund",
 		symbol: String(x.ccy),
-		amount: n(x.bal)
+		amount: n$1(x.bal)
 	}))), ...await optional(async () => (await okxGet(call, "/api/v5/finance/savings/balance", {})).map((x) => ({
 		account: "earn",
 		symbol: String(x.ccy),
-		amount: n(x.amt)
+		amount: n$1(x.amt)
 	}))));
 	return mergeBalances(out);
 }
@@ -2749,18 +2751,18 @@ async function bitgetBalances(call) {
 	if (uta?.code === "00000") return mergeBalances(arr(uta.data?.assets).map((x) => ({
 		account: "spot",
 		symbol: String(x.coin),
-		amount: n(x.equity ?? x.balance)
+		amount: n$1(x.equity ?? x.balance)
 	})));
 	const spot = await bitgetGet(call, "/api/v2/spot/account/assets", {});
 	const out = arr(spot).map((x) => ({
 		account: "spot",
 		symbol: String(x.coin),
-		amount: n(x.available) + n(x.frozen) + n(x.locked)
+		amount: n$1(x.available) + n$1(x.frozen) + n$1(x.locked)
 	}));
 	for (const productType of ["USDT-FUTURES", "USDC-FUTURES"]) out.push(...await optional(async () => arr(await bitgetGet(call, "/api/v2/mix/account/accounts", { productType })).map((x) => ({
 		account: "futures",
 		symbol: String(x.marginCoin),
-		amount: n(x.accountEquity ?? x.usdtEquity)
+		amount: n$1(x.accountEquity ?? x.usdtEquity)
 	}))));
 	return mergeBalances(out);
 }
@@ -2769,14 +2771,14 @@ async function bingxBalances(call) {
 	const out = arr(spot.balances).map((x) => ({
 		account: "spot",
 		symbol: String(x.asset),
-		amount: n(x.free) + n(x.locked)
+		amount: n$1(x.free) + n$1(x.locked)
 	}));
 	out.push(...await optional(async () => {
 		const d = await bingxGet(call, "/openApi/swap/v2/user/balance", {});
 		return (Array.isArray(d) ? d : Array.isArray(d.balance) ? d.balance : d.balance ? [d.balance] : []).map((x) => ({
 			account: "futures",
 			symbol: String(x.asset),
-			amount: n(x.equity ?? x.balance)
+			amount: n$1(x.equity ?? x.balance)
 		}));
 	}));
 	return mergeBalances(out);
@@ -2798,10 +2800,10 @@ async function hyperliquidBalances(address, fetchFn = fetch) {
 	const out = arr(spot.balances).map((x) => ({
 		account: "spot",
 		symbol: String(x.coin),
-		amount: n(x.total)
+		amount: n$1(x.total)
 	}));
 	const perp = await post("clearinghouseState");
-	const value = n(perp.marginSummary?.accountValue);
+	const value = n$1(perp.marginSummary?.accountValue);
 	if (value > 0) out.push({
 		account: "perp",
 		symbol: "USDC",
@@ -2823,8 +2825,8 @@ async function polymarketBalances(get, address) {
 		const r = res ?? {};
 		const items = Array.isArray(res) ? res : arr(r.data ?? r.positions);
 		for (const p of items) {
-			const value = n(p.current_value ?? p.currentValue);
-			total += value > 0 ? value : n(p.total_size ?? p.size) * n(p.cur_price ?? p.curPrice);
+			const value = n$1(p.current_value ?? p.currentValue);
+			total += value > 0 ? value : n$1(p.total_size ?? p.size) * n$1(p.cur_price ?? p.curPrice);
 		}
 		const pag = r.pagination ?? {};
 		const next = typeof pag.next_cursor === "string" ? pag.next_cursor : "";
@@ -2852,4 +2854,209 @@ async function fetchBalances(conn, deps) {
 	}
 }
 
-export { READ_PATHS, SyncError, buildQuery, bybitSignature, callExchange, fetchBalances, isCex, parseSecret, runSync, toSyncError };
+// src/lib/portfolio/fills.ts
+/**
+* Портфель, этап 2 (0020): история спотовых покупок / продаж с бирж → исполнения spot_fills.
+* Из них считается средняя цена входа и зафиксированная прибыль (lib/calc/portfolio.ts → costBasis).
+* Общий код для браузера (через exchange-proxy) и сервера (sync-worker): запросы приходят снаружи (CexCall), только чтение.
+*
+*  - Bybit: /v5/execution/list?category=spot — окна по 7 дней, первый раз за 2 года;
+*  - Binance: /api/v3/myTrades — по парам монет, которые сейчас на балансе (к USDT / USDC / FDUSD), с первой сделки по номерам;
+*  - OKX: /api/v5/trade/fills-history?instType=SPOT — последние 3 месяца (больше OKX не хранит).
+* Повторы безопасны: в базе unique (подключение, external_id), поэтому следующая загрузка берёт с запасом в сутки.
+*/
+/** Валюты котировки, по которым узнаём пару BTCUSDT → BTC / USDT (длинные — первыми) */
+const QUOTES = [
+	"FDUSD",
+	"USDT",
+	"USDC",
+	"USDE",
+	"TUSD",
+	"BUSD",
+	"USD1",
+	"DAI",
+	"EUR",
+	"TRY",
+	"BTC",
+	"ETH",
+	"BNB",
+	"USD"
+];
+/** Котировки, которые считаем равными доллару — только по ним считается цена входа */
+const USD_QUOTES = /* @__PURE__ */ new Set([
+	"USDT",
+	"USDC",
+	"FDUSD",
+	"USDE",
+	"TUSD",
+	"BUSD",
+	"USD1",
+	"DAI",
+	"USD"
+]);
+const n = (v) => {
+	const x = typeof v === "number" ? v : typeof v === "string" && v !== "" ? Number(v) : NaN;
+	return Number.isFinite(x) ? x : 0;
+};
+const clean = (s) => typeof s === "string" ? s.trim().toUpperCase() : "";
+const okSym = (s) => /^[A-Z0-9._-]{1,24}$/.test(s);
+/** BTCUSDT / BTC-USDT / BTC_USDT → { asset: BTC, quote: USDT } */
+function splitPair(symbol) {
+	const s = clean(symbol);
+	const parts = s.split(/[-_/]/);
+	if (parts.length === 2 && okSym(parts[0]) && okSym(parts[1])) return {
+		asset: parts[0],
+		quote: parts[1]
+	};
+	for (const q of QUOTES) if (s.endsWith(q) && s.length > q.length && okSym(s.slice(0, -q.length))) return {
+		asset: s.slice(0, -q.length),
+		quote: q
+	};
+	return null;
+}
+function fill(id, pair, side, qty, price, fee, feeAsset, ts) {
+	const q = n(qty);
+	const p = n(price);
+	const t = n(ts);
+	const sd = String(side).toLowerCase();
+	if (!pair || q <= 0 || p <= 0 || t <= 0 || sd !== "buy" && sd !== "sell") return null;
+	const fa = clean(feeAsset);
+	return {
+		external_id: id.slice(0, 120),
+		asset: pair.asset,
+		quote: pair.quote,
+		side: sd,
+		qty: q,
+		price: p,
+		fee: Math.abs(n(fee)),
+		fee_asset: okSym(fa) ? fa : null,
+		at: new Date(t < 0xe8d4a51000 ? t * 1e3 : t).toISOString()
+	};
+}
+const only = (xs) => xs.filter((x) => x !== null);
+const BYBIT_SPOT_DAYS = 730;
+async function bybitSpotFills(call, from, to) {
+	const c = call;
+	const out = [];
+	await inBatches(windows(from, to, 7 * DAY), 4, async ([start, end]) => {
+		let cursor = "";
+		for (let page = 0; page < 50; page++) {
+			const r = await c("/v5/execution/list", {
+				category: "spot",
+				startTime: start,
+				endTime: end,
+				limit: 100,
+				...cursor ? { cursor } : {}
+			});
+			if (!r || r.retCode !== 0) throw new BybitError(r?.retCode ?? -1, r?.retMsg ?? "no response");
+			const res = r.result;
+			for (const x of res.list ?? []) {
+				const pair = splitPair(String(x.symbol));
+				const buy = String(x.side) === "Buy";
+				out.push(...only([fill(`bb:${x.execId}`, pair, buy ? "buy" : "sell", x.execQty, x.execPrice, x.execFee, x.feeCurrency || (buy ? pair?.asset : pair?.quote), x.execTime)]));
+			}
+			cursor = res.nextPageCursor ?? "";
+			if (!cursor || !(res.list ?? []).length) break;
+		}
+	});
+	return out;
+}
+const BINANCE_QUOTES = [
+	"USDT",
+	"USDC",
+	"FDUSD"
+];
+/**
+* assets — монеты на балансе (у Binance история сделок — только по конкретной паре, поэтому собираем пары к USDT / USDC / FDUSD).
+* from = null — вся история (по номерам сделок с нуля); иначе — последние 1000 сделок пары, а если и они все новее from —
+* всё равно вся история (у Binance «с такого-то времени» ограничено сутками).
+*/
+async function binanceSpotFills(call, assets, from) {
+	const out = [];
+	const symbols = [...new Set(assets.map(clean))].filter((a) => okSym(a) && !USD_QUOTES.has(a)).flatMap((a) => BINANCE_QUOTES.map((q) => ({
+		symbol: a + q,
+		pair: {
+			asset: a,
+			quote: q
+		}
+	})));
+	const get = async (symbol, extra) => {
+		try {
+			const rows = await binanceGet(call, "/api/v3/myTrades", {
+				symbol,
+				limit: 1e3,
+				...extra
+			});
+			return Array.isArray(rows) ? rows : [];
+		} catch (e) {
+			if (e instanceof ExchangeError && e.kind === "EXCHANGE") return null;
+			throw e;
+		}
+	};
+	const add = (symbol, pair, rows) => {
+		for (const x of rows) out.push(...only([fill(`bn:${symbol}:${x.id}`, pair, x.isBuyer ? "buy" : "sell", x.qty, x.price, x.commission, x.commissionAsset, x.time)]));
+	};
+	await inBatches(symbols, 3, async ({ symbol, pair }) => {
+		if (from !== null) {
+			const latest = await get(symbol, {});
+			if (latest === null) return;
+			if (latest.length < 1e3 || Math.min(...latest.map((x) => n(x.time))) <= from) {
+				add(symbol, pair, latest.filter((x) => n(x.time) >= from));
+				return;
+			}
+		}
+		let fromId = 0;
+		for (let page = 0; page < 100; page++) {
+			const rows = await get(symbol, { fromId });
+			if (!rows || !rows.length) return;
+			add(symbol, pair, rows);
+			if (rows.length < 1e3) return;
+			fromId = Math.max(...rows.map((x) => n(x.id))) + 1;
+		}
+	});
+	return out;
+}
+async function okxSpotFills(call, from) {
+	const out = [];
+	let after = "";
+	for (let page = 0; page < 200; page++) {
+		const rows = await okxGet(call, "/api/v5/trade/fills-history", {
+			instType: "SPOT",
+			limit: 100,
+			...after ? { after } : {}
+		});
+		if (!rows.length) break;
+		for (const x of rows) out.push(...only([fill(`ok:${x.tradeId}:${x.billId}`, splitPair(String(x.instId)), x.side, x.fillSz, x.fillPx, x.fee, x.feeCcy, x.ts)]));
+		const oldest = Math.min(...rows.map((x) => n(x.ts)));
+		after = String(rows[rows.length - 1].billId ?? "");
+		if (rows.length < 100 || oldest < from || !after) break;
+	}
+	return out.filter((f) => Date.parse(f.at) >= from);
+}
+/**
+* Новые исполнения подключения с прошлого раза (cursor — ISO или null: первый раз — вся доступная история).
+* Возвращает исполнения и новый курсор (сейчас) или null, если биржа историю спота не отдаёт.
+*/
+async function fetchSpotFills(conn, call, opts) {
+	const now = opts.now ?? Date.now();
+	const since = opts.cursor ? Date.parse(opts.cursor) - DAY : null;
+	let fills;
+	switch (conn.exchange) {
+		case "bybit":
+			fills = await bybitSpotFills(call, Math.max(since ?? 0, now - 730 * DAY), now);
+			break;
+		case "binance":
+			fills = await binanceSpotFills(call, opts.assets, since);
+			break;
+		case "okx":
+			fills = await okxSpotFills(call, Math.max(since ?? 0, now - 90 * DAY));
+			break;
+		default: return null;
+	}
+	return {
+		fills: [...new Map(fills.map((f) => [f.external_id, f])).values()],
+		cursor: new Date(now).toISOString()
+	};
+}
+
+export { READ_PATHS, SyncError, buildQuery, bybitSignature, callExchange, fetchBalances, fetchSpotFills, isCex, parseSecret, runSync, toSyncError };

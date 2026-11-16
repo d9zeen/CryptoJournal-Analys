@@ -40,6 +40,10 @@ describe('прокси бирж: только чтение у всех', () => {
     for (const set of Object.values(READ_PATHS)) for (const p of transfers) expect(set.has(p)).toBe(false)
     expect(READ_PATHS.bybit.has('/v5/account/wallet-balance')).toBe(true)
     expect(READ_PATHS.binance.has('/api/v3/account')).toBe(true)
+    // история спотовых сделок (средняя цена входа) — да; спотовые ордера — нет
+    expect(READ_PATHS.binance.has('/api/v3/myTrades')).toBe(true)
+    expect(READ_PATHS.okx.has('/api/v5/trade/fills-history')).toBe(true)
+    for (const p of ['/api/v3/order', '/api/v3/order/test', '/api/v5/trade/order', '/api/v5/trade/batch-orders', '/v5/order/create']) for (const set of Object.values(READ_PATHS)) expect(set.has(p)).toBe(false)
     // POST — только баланс фандинга Binance (это чтение)
     expect([...POST_PATHS]).toEqual(['/sapi/v1/asset/get-funding-asset'])
     expect(hostsFor('binance', '/api/v3/account')).toEqual(['https://api.binance.com'])

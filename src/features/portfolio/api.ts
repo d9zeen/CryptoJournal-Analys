@@ -2,7 +2,8 @@
  * Портфель (0019): цены монет, балансы, цены входа, снимки стоимости + обновление балансов с бирж.
  * Балансы бирж тянет браузер через exchange-proxy (тот же ключ «только чтение», что для сделок) и пишет функцией
  * replace_holdings — база сама проверяет, что подключение своё и в пределах тарифа. Снимок — portfolio_snapshot (не чаще раза в час).
- * На Pro Plus то же самое делает сервер каждые 3 часа (sync-worker), даже когда сайт закрыт.
+ * На Pro Plus то же самое делает сервер каждый час (sync-worker, mode = balances), даже когда сайт закрыт.
+ * Этап 2 (0020): заодно — история спотовых покупок / продаж (spot_fills) → средняя цена входа и зафиксированная прибыль.
  */
 import { useEffect, useRef, useSyncExternalStore } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -14,7 +15,8 @@ import { useIsAdmin } from '@/features/admin/api'
 import { activeConnections } from '@/lib/plans'
 import { errorCodeOf, toSyncError } from '@/lib/sync/run'
 import { fetchBalances } from '@/lib/portfolio/balances'
-import type { Coin, Holding, Snapshot } from '@/lib/calc/portfolio'
+import { fetchSpotFills } from '@/lib/portfolio/fills'
+import type { Coin, Holding, Snapshot, SpotFillLike } from '@/lib/calc/portfolio'
 
 /** Балансы старше — обновить при открытии страницы */
 export const PORTFOLIO_STALE_MS = 15 * 60_000
@@ -127,6 +129,7 @@ export function refreshPortfolio(conns: Connection[]): Promise<RefreshResult> {
         const { error } = await supabase.rpc('replace_holdings', { p_connection: c.id, p_items: items })
         if (error) throw error
         res.ok++
+        await syncSpotFills(c, items.map((b) => b.symbol))
       } catch (e) {
         // старые балансы остаются — график не «падает»; код ошибки покажем у подключения
         res.failed.push({ id: c.id, code: toSyncError(e).code })
@@ -145,6 +148,53 @@ export function refreshPortfolio(conns: Connection[]): Promise<RefreshResult> {
 function invalidatePortfolio(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ['holdings'] })
   qc.invalidateQueries({ queryKey: ['portfolio_snapshots'] })
+  qc.invalidateQueries({ queryKey: ['spot_fills'] })
+}
+
+/**
+ * Этап 2 (0020): новые спотовые покупки / продажи подключения с прошлого раза → add_spot_fills (повторы база отбрасывает).
+ * Первый раз — вся история, которую отдаёт биржа (Bybit — 2 года, Binance — с первой сделки, OKX — 3 месяца).
+ * Ошибка здесь балансы не портит — в следующий раз догрузится.
+ */
+async function syncSpotFills(c: Connection, assets: string[]) {
+  try {
+    const { data: st } = await supabase.from('spot_sync').select('cursor_at').eq('connection_id', c.id).maybeSingle()
+    const r = await fetchSpotFills(c, cexCall(c.id), { cursor: (st as { cursor_at: string } | null)?.cursor_at ?? null, assets })
+    if (!r) return
+    const parts: typeof r.fills[] = []
+    for (let i = 0; i < r.fills.length; i += 1000) parts.push(r.fills.slice(i, i + 1000))
+    if (!parts.length) parts.push([])
+    for (let i = 0; i < parts.length; i++) {
+      const { error } = await supabase.rpc('add_spot_fills', { p_connection: c.id, p_items: parts[i], p_cursor: i === parts.length - 1 ? r.cursor : null })
+      if (error) return
+    }
+  } catch {
+    /* биржа не отдала историю — в следующий раз */
+  }
+}
+
+/** Вся история спотовых покупок / продаж пачками по 1000 — из неё средняя цена входа (costBasis) */
+export function useSpotFills() {
+  const { user } = useAuth()
+  return useQuery({
+    queryKey: ['spot_fills', user?.id],
+    enabled: Boolean(user),
+    queryFn: async () => {
+      const out: SpotFillLike[] = []
+      for (let from = 0; from < 200_000; from += 1000) {
+        const { data, error } = await supabase
+          .from('spot_fills')
+          .select('asset, quote, side, qty, price, fee, fee_asset, at')
+          .order('id')
+          .range(from, from + 999)
+        if (error) throw error
+        const rows = (data ?? []) as SpotFillLike[]
+        out.push(...rows.map((f) => ({ ...f, qty: Number(f.qty), price: Number(f.price), fee: Number(f.fee) })))
+        if (rows.length < 1000) break
+      }
+      return out
+    },
+  })
 }
 
 /** Подключения для портфеля с учётом тарифа */
