@@ -7,12 +7,13 @@
  * Лимиты и проверки данных по-прежнему делает база (триггеры на trades).
  *
  * После сделок — балансы подключения для «Портфеля» (replace_holdings_for) и снимок стоимости (portfolio_snapshot_for, 0019).
+ * Кошельки EVM / Solana (0021) — сделок нет, только балансы по публичным узлам сетей (lib/portfolio/wallets.ts).
  * Режим { mode: 'balances' } (cron cj-balances каждый час) — только балансы, история спотовых покупок (0020) и снимок, без сделок.
  * Логика синхронизации — общая с браузером: engine.js собирается из src/lib/sync (npm run build:functions).
  * Выкладка: Supabase → Edge Functions → sync-worker (файлы index.ts + engine.js), verify_jwt = false.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { READ_PATHS, callExchange, fetchBalances, fetchSpotFills, isCex, parseSecret, runSync } from './engine.js'
+import { READ_PATHS, callExchange, fetchBalances, fetchSpotFills, findTwins, isCex, parseSecret, runSync, twinRange } from './engine.js'
 
 const ID_CHUNK = 150
 const CHUNK = 500
@@ -69,10 +70,10 @@ Deno.serve(async (req) => {
   // старые балансы остаются (график не «падает»), следующий запуск попробует снова
   // этап 2 (0020): новые спотовые покупки / продажи с прошлого раза → spot_fills (средняя цена входа). Ошибка — не страшно, в следующий раз
   const syncFills = async (assets: string[]) => {
-    if (!cred) return
+    if (!cred && conn.exchange !== 'hyperliquid') return
     try {
       const { data: st } = await admin.from('spot_sync').select('cursor_at').eq('connection_id', conn.id).maybeSingle()
-      const r = await fetchSpotFills({ exchange: conn.exchange as string }, cexCall, { cursor: (st?.cursor_at as string | undefined) ?? null, assets })
+      const r = await fetchSpotFills({ exchange: conn.exchange as string, api_key: conn.api_key as string }, cexCall, { cursor: (st?.cursor_at as string | undefined) ?? null, assets })
       if (!r) return
       const parts = r.fills.length ? chunks(r.fills, 5000) : [[]]
       for (let i = 0; i < parts.length; i++) {
@@ -85,7 +86,12 @@ Deno.serve(async (req) => {
   }
   const syncBalances = async (): Promise<number | null> => {
     try {
-      const items = await fetchBalances({ exchange: conn.exchange as string, api_key: conn.api_key as string }, { cexCall })
+      // кошельки (0021): монеты — только из нашего списка, по адресам контрактов
+      const wallet = conn.exchange === 'evm' || conn.exchange === 'solana'
+      const coins = wallet
+        ? ((await admin.from('coins').select('symbol, platforms').not('platforms', 'is', null).order('rank', { ascending: true, nullsFirst: false }).limit(2000)).data ?? [])
+        : undefined
+      const items = await fetchBalances({ exchange: conn.exchange as string, api_key: conn.api_key as string }, { cexCall, coins })
       const { data, error } = await admin.rpc('replace_holdings_for', { p_user: userId, p_connection: conn.id, p_items: items })
       if (error) return null
       await syncFills(items.map((b) => b.symbol))
@@ -112,6 +118,27 @@ Deno.serve(async (req) => {
             for (const r of data as { external_id: string }[]) found.add(r.external_id)
           }
           return found
+        },
+        // та же сделка с другим номером (файлом — а теперь по API): пара, сторона, время закрытия ±3 мин, PnL
+        twins: async (exchange, list) => {
+          const range = twinRange(list)
+          if (!range) return new Set<string>()
+          const rows: Row[] = []
+          for (let from = 0; from < 200_000; from += 1000) {
+            const { data, error } = await admin
+              .from('trades')
+              .select('external_id, symbol, side, exit_at, pnl')
+              .eq('user_id', userId)
+              .eq('exchange', exchange)
+              .gte('exit_at', range.from)
+              .lte('exit_at', range.to)
+              .order('exit_at')
+              .range(from, from + 999)
+            if (error) throw error
+            rows.push(...((data ?? []) as Row[]))
+            if (!data || data.length < 1000) break
+          }
+          return findTwins(list, rows as never)
         },
         remaining: async () => null, // Pro Plus — без лимита (лимит всё равно проверяет триггер в базе)
         insert: async ({ exchange, filename, trades }) => {

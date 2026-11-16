@@ -15,7 +15,7 @@ import { checkBybitKey, type BybitCall } from '@/lib/sync/bybit'
 import type { CexCall } from '@/lib/sync/cex'
 import { pmPositionToTrade, type PmGet } from '@/lib/sync/polymarket'
 import { CEX_MODULES, SyncError, errorCodeOf, runSync, toSyncError, type SyncResult } from '@/lib/sync/run'
-import { fetchExistingIds, runImport } from '@/features/import/api'
+import { fetchExistingIds, fetchTwinIds, runImport } from '@/features/import/api'
 import { useUsage } from '@/features/settings/api'
 import { activeConnections } from '@/lib/plans'
 import { useIsAdmin } from '@/features/admin/api'
@@ -47,7 +47,15 @@ export const CONNECTABLE = [
   { id: 'bitget', kind: 'cex' },
   { id: 'hyperliquid', kind: 'wallet' },
   { id: 'polymarket', kind: 'wallet' },
+  { id: 'evm', kind: 'wallet' },
+  { id: 'solana', kind: 'wallet' },
 ] as const
+
+/** Кошельки только для «Портфеля» (0021): сделок нет, после подключения — монеты кошелька */
+export const PORTFOLIO_ONLY: ReadonlySet<string> = new Set(['evm', 'solana'])
+
+/** Адрес кошелька как его хранит база: EVM — в нижнем регистре, Solana — как есть */
+export const walletKey = (exchange: string, address: string) => (exchange === 'solana' ? address.trim() : address.trim().toLowerCase())
 export type ConnectableId = (typeof CONNECTABLE)[number]['id']
 
 /** Биржи, у ключа которых есть кодовая фраза (Passphrase) — как и в базе (add_exchange_connection, 0018) */
@@ -165,6 +173,7 @@ export function syncConnection(conn: Connection, remaining: () => Promise<number
     cexCall: cexCall(conn.id),
     polymarketGet: polymarketGet(conn.id),
     existingIds: fetchExistingIds,
+    twins: fetchTwinIds,
     remaining,
     insert: ({ exchange, filename, trades }) => runImport({ exchange, filename, rowsTotal: trades.length, trades, source: 'api' }),
     touch: async (cursor, error) => {

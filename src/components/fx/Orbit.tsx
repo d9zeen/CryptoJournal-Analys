@@ -3,8 +3,10 @@
  * Кольцо вращается (transform rotate), значки — в обратную сторону, поэтому всегда стоят ровно. Без мигания.
  * Для пустых состояний: «Биржи» без подключений, первый вход.
  */
-const OUTER = ['BY', 'BN', 'OK', 'BX', 'BG']
-const INNER = ['HL', 'PM', 'MX']
+import { ExchangeLogo } from '@/components/ExchangeLogo'
+
+const OUTER = ['bybit', 'binance', 'okx', 'bingx', 'bitget']
+const INNER = ['hyperliquid', 'polymarket', 'mexc']
 
 function Ring({ items, radius, reverse }: { items: string[]; radius: number; reverse?: boolean }) {
   return (
@@ -17,7 +19,9 @@ function Ring({ items, radius, reverse }: { items: string[]; radius: number; rev
             className="absolute top-1/2 left-1/2 -mt-5 -ml-5 size-10"
             style={{ transform: `translate(${Math.cos(a) * radius}px, ${Math.sin(a) * radius}px)` }}
           >
-            <div className="orbit-sat num grid size-10 place-items-center rounded-xl border border-border bg-surface-2 text-xs font-bold text-muted">{m}</div>
+            <div className="orbit-sat size-10 overflow-hidden rounded-xl border border-border">
+              <ExchangeLogo id={m} className="size-full" />
+            </div>
           </div>
         )
       })}

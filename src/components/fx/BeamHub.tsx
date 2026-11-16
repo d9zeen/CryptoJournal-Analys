@@ -4,6 +4,7 @@
  * fast — биржа сейчас синхронизируется: огонёк бежит быстрее. Значки — HTML поверх SVG (в процентах), поэтому подписи не тянутся.
  * При «уменьшить движение» огоньки стоят (видна часть линии).
  */
+import { ExchangeLogo } from '@/components/ExchangeLogo'
 import { useId } from 'react'
 
 export type HubNode = { id: string; mono: string; name: string; on: boolean; fast?: boolean; note?: string }
@@ -74,10 +75,8 @@ export function BeamHub({ nodes, caption, className = '' }: { nodes: HubNode[]; 
               className="absolute flex -translate-1/2 flex-col items-center gap-1"
               style={{ left: `${(x / W) * 100}%`, top: `${(y / H) * 100}%` }}
             >
-              <span
-                className={`num grid size-11 place-items-center rounded-xl border text-xs font-bold sm:size-13 ${n.on ? 'border-primary/50 bg-surface-2 text-text' : 'border-border bg-surface-2/60 text-muted'}`}
-              >
-                {n.mono}
+              <span className={`grid size-11 place-items-center overflow-hidden rounded-xl border sm:size-13 ${n.on ? 'border-primary/50' : 'border-border opacity-70'}`}>
+                <ExchangeLogo id={n.id} mono={n.mono} className="size-full" />
               </span>
               <span className="hidden text-xs whitespace-nowrap text-muted sm:block">{n.name}</span>
             </div>

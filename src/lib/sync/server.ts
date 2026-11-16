@@ -6,3 +6,4 @@ export { runSync, SyncError, toSyncError, type SyncConnection, type SyncDeps, ty
 export { buildQuery, bybitSignature, callExchange, isCex, parseSecret, READ_PATHS } from '../../../supabase/functions/exchange-proxy/sign'
 export { fetchBalances, type Balance } from '../portfolio/balances'
 export { fetchSpotFills, type SpotFill } from '../portfolio/fills'
+export { findTwins, twinRange, type TwinCandidate } from '../import/twins'

@@ -11,6 +11,9 @@ export const EXCHANGES = [
   { id: 'other', name: null },
 ] as const
 
+/** Кошельки (0021): только для «Портфеля», сделок у них нет — в списки бирж сделок не входят */
+export const WALLET_NAMES: Record<string, string> = { evm: 'EVM', solana: 'Solana' }
+
 export function exchangeName(id: string, otherLabel: string): string {
-  return EXCHANGES.find((e) => e.id === id)?.name ?? (id === 'other' ? otherLabel : id)
+  return EXCHANGES.find((e) => e.id === id)?.name ?? WALLET_NAMES[id] ?? (id === 'other' ? otherLabel : id)
 }

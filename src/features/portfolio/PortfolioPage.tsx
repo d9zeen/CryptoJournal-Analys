@@ -29,6 +29,7 @@ import {
   movers,
   portfolioRows,
   portfolioSeries,
+  estimateHistory,
   portfolioTotals,
   type Coin,
   type PortfolioRange,
@@ -50,6 +51,7 @@ import {
   useSpotFills,
 } from './api'
 import { CoinIcon } from './CoinIcon'
+import { ShareDialog } from './ShareDialog'
 
 const PortfolioChart = lazy(() => import('./PortfolioChart').then((m) => ({ default: m.PortfolioChart })))
 
@@ -82,6 +84,7 @@ export function PortfolioPage() {
   const [range, setRange] = useState<PortfolioRange>('1m')
   const [hideDust, setHideDust] = useState(true)
   const [adding, setAdding] = useState(false)
+  const [sharing, setSharing] = useState(false)
 
   const list = holdings ?? []
   const rows = useMemo(() => portfolioRows(list, coins, costs, source, basis), [list, coins, costs, source, basis])
@@ -89,7 +92,10 @@ export function PortfolioPage() {
   // график — по всему портфелю (снимки пишутся целиком), фильтр источника влияет на таблицу и цифры
   const allTotals = useMemo(() => portfolioTotals(portfolioRows(list, coins, costs, null, basis)), [list, coins, costs, basis])
   const btcPrice = useMemo(() => coins.find((c) => c.symbol === 'BTC')?.price ?? null, [coins])
-  const series = useMemo(() => portfolioSeries(snaps, range, Date.now(), { value: allTotals.value, btcPrice }), [snaps, range, allTotals.value, btcPrice])
+  // до первых снимков — оценка по нынешнему составу (все монеты, без фильтра по источнику — как и снимки)
+  const estimate = useMemo(() => estimateHistory(portfolioRows(list, coins, costs, null, basis), coins, Date.now()), [list, coins, costs, basis])
+  const series = useMemo(() => portfolioSeries(snaps, range, Date.now(), { value: allTotals.value, btcPrice }, estimate), [snaps, range, allTotals.value, btcPrice, estimate])
+  const hasEstimate = series.some((x) => x.value === null)
   const shown = hideDust ? rows.filter((r) => r.value !== null && r.value >= DUST_USD) : rows
   const dust = rows.length - shown.length
   const failed = refresh.data?.failed ?? []
@@ -148,9 +154,13 @@ export function PortfolioPage() {
               {p.refresh}
             </Button>
           )}
+          <Button variant="secondary" onClick={() => setSharing(true)}>
+            {p.share.button}
+          </Button>
           <Button onClick={() => setAdding(true)}>{p.add}</Button>
         </div>
       </div>
+      {sharing && <ShareDialog onClose={() => setSharing(false)} />}
 
       {failed.length > 0 && (
         <p data-portfolio-failed className="rounded-lg border border-border bg-surface px-4 py-2.5 text-sm text-muted">
@@ -180,22 +190,18 @@ export function PortfolioPage() {
               ))}
             </div>
           </div>
-          <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted">
-            <span className="flex items-center gap-1.5">
-              <i aria-hidden className="block h-0.5 w-3.5 rounded bg-primary" />
-              {p.chart.portfolio}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <i aria-hidden className="block w-3.5 border-t-2 border-dashed border-muted" />
-              {p.chart.btc}
-            </span>
-          </div>
+          {/* одна сплошная линия, как кривая капитала в «Статистике»; оценка до первого снимка — подписью, без пунктира */}
+          {hasEstimate && (
+            <p data-chart-estimate className="mt-2 text-xs text-muted">
+              {p.chart.estimateNote}
+            </p>
+          )}
           {/* график занимает всю высоту карточки (на xl — вровень с «Из чего состоит»), не ниже 260px */}
           <div data-portfolio-chart className="relative mt-2 min-h-[260px] flex-1">
             <div className="absolute inset-0">
               {series.length >= 2 ? (
                 <Suspense fallback={<Skeleton className="h-full" />}>
-                  <PortfolioChart points={series} short={range === '24h'} />
+                  <PortfolioChart points={series} short={range === '24h'} drawKey={range} />
                 </Suspense>
               ) : (
                 <p className="grid h-full place-items-center px-6 text-center text-sm text-muted">{p.chart.empty}</p>
@@ -271,7 +277,7 @@ function Kpis({ totals, realized }: { totals: ReturnType<typeof portfolioTotals>
 const signedPct = (v: number) => (v > 0 ? '+' : v < 0 ? '−' : '') + formatPercent(Math.abs(v), 2)
 
 /** Кольцо долей + легенда + лучшая / худшая монета за 24 ч (образец — 21st.dev sectors-donut) */
-function Allocation({ rows }: { rows: PortfolioRow[] }) {
+export function Allocation({ rows }: { rows: PortfolioRow[] }) {
   const t = useT()
   const a = t.portfolio.alloc
   const parts = allocation(rows, 5)
@@ -342,7 +348,7 @@ function Allocation({ rows }: { rows: PortfolioRow[] }) {
 }
 
 /** Мини-график цены за 7 дней (из coins.spark), цвет — по итогу недели */
-function Spark({ coin }: { coin: Coin | null }) {
+export function Spark({ coin }: { coin: Coin | null }) {
   const pts = coin?.spark ?? []
   if (pts.length < 2) return <span className="text-muted">—</span>
   const lo = Math.min(...pts)

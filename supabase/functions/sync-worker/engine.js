@@ -2224,11 +2224,6 @@ const binanceModule = {
 };
 
 // src/lib/sync/run.ts
-/**
-* Синхронизация одного подключения — общий движок для браузера и сервера (sync-worker по расписанию).
-* Всё внешнее (запросы к бирже, база) передаётся снаружи в deps: в браузере — с правами пользователя,
-* на сервере — с правами service_role. Так логика одна и покрыта одними тестами.
-*/
 /** Биржи с ключом API, кроме Bybit (у него свой путь — с датой окончания ключа) */
 const CEX_MODULES = {
 	bingx: bingxModule,
@@ -2297,6 +2292,9 @@ async function runSync(conn, deps) {
 			const res = hlFillsToTrades(await fetchHlFills(conn.api_key, from, deps.fetchFn));
 			trades = res.trades;
 			nextCursor = res.cursor;
+		} else if (conn.exchange === "evm" || conn.exchange === "solana") {
+			trades = [];
+			nextCursor = now;
 		} else if (conn.exchange === "polymarket") {
 			trades = (await fetchPmClosed(deps.polymarketGet ?? pmDirectGet(deps.fetchFn), conn.api_key)).flatMap((p) => {
 				const t = pmPositionToTrade(p);
@@ -2306,6 +2304,7 @@ async function runSync(conn, deps) {
 		} else throw new SyncError("UNSUPPORTED");
 		trades = [...new Map(trades.map((t) => [t.external_id, t])).values()];
 		const existing = await deps.existingIds(conn.exchange, trades.map((t) => t.external_id));
+		if (deps.twins) for (const id of await deps.twins(conn.exchange, trades.filter((t) => !existing.has(t.external_id)))) existing.add(id);
 		const rows = trades.map((trade, i) => ({
 			line: i + 2,
 			trade,
@@ -2361,7 +2360,8 @@ const READ_PATHS = {
 		"/openApi/swap/v2/user/income",
 		"/openApi/v1/account/apiPermissions",
 		"/openApi/spot/v1/account/balance",
-		"/openApi/swap/v2/user/balance"
+		"/openApi/swap/v2/user/balance",
+		"/openApi/spot/v1/trade/myTrades"
 	]),
 	okx: /* @__PURE__ */ new Set([
 		"/api/v5/account/positions-history",
@@ -2380,7 +2380,9 @@ const READ_PATHS = {
 		"/api/v2/spot/account/info",
 		"/api/v3/account/assets",
 		"/api/v2/spot/account/assets",
-		"/api/v2/mix/account/accounts"
+		"/api/v2/mix/account/accounts",
+		"/api/v3/trade/fills",
+		"/api/v2/spot/trade/fills"
 	]),
 	binance: /* @__PURE__ */ new Set([
 		"/fapi/v1/income",
@@ -2612,6 +2614,179 @@ async function callExchange(exchange, cred, path, params, fetchFn = fetch) {
 		}
 	}
 	return reply;
+}
+
+// src/lib/portfolio/wallets.ts
+const EVM_CHAINS = [
+	{
+		id: "ethereum",
+		rpc: "https://ethereum-rpc.publicnode.com",
+		native: "ETH"
+	},
+	{
+		id: "arbitrum-one",
+		rpc: "https://arbitrum-one-rpc.publicnode.com",
+		native: "ETH"
+	},
+	{
+		id: "base",
+		rpc: "https://base-rpc.publicnode.com",
+		native: "ETH"
+	},
+	{
+		id: "optimistic-ethereum",
+		rpc: "https://optimism-rpc.publicnode.com",
+		native: "ETH"
+	},
+	{
+		id: "binance-smart-chain",
+		rpc: "https://bsc-rpc.publicnode.com",
+		native: "BNB"
+	},
+	{
+		id: "polygon-pos",
+		rpc: "https://polygon-bor-rpc.publicnode.com",
+		native: "POL"
+	}
+];
+const SOLANA_RPC = "https://solana-rpc.publicnode.com";
+const TOKEN_PROGRAMS = ["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"];
+/** Запросов в одной пачке JSON-RPC (публичные узлы режут большие пачки) */
+const BATCH = 40;
+const isEvmAddress = (a) => /^0x[0-9a-f]{40}$/.test(a);
+const isSolanaAddress = (a) => /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a);
+/**
+* Пачка JSON-RPC → ответы по порядку. Ошибка сети / узла — исключение; ошибка одного запроса — тоже,
+* а с soft = true — null на его месте (контракт монеты отказал — не повод терять весь кошелёк).
+*/
+async function rpcBatch(url, reqs, fetchFn = fetch, soft = false) {
+	const out = [];
+	for (let i = 0; i < reqs.length; i += BATCH) {
+		const part = reqs.slice(i, i + BATCH);
+		const res = await fetchFn(url, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(part.map((r, k) => ({
+				jsonrpc: "2.0",
+				id: k,
+				method: r.method,
+				params: r.params
+			})))
+		});
+		if (!res.ok) throw new Error(`RPC_HTTP_${res.status} network`);
+		const body = await res.json();
+		const byId = new Map((Array.isArray(body) ? body : [body]).map((x) => [x.id, x]));
+		for (let k = 0; k < part.length; k++) {
+			const r = byId.get(k);
+			if (r && !r.error) out.push(r.result);
+			else if (soft && r) out.push(null);
+			else throw new Error(`RPC_ERROR ${r?.error?.message ?? "no answer"} network`);
+		}
+	}
+	return out;
+}
+const hexToBig = (v) => typeof v === "string" && /^0x[0-9a-f]*$/i.test(v) && v.length > 2 ? BigInt(v.slice(0, 66)) : 0n;
+/** Целое число в мельчайших единицах → обычное (10^decimals) */
+function units(raw, decimals) {
+	if (raw <= 0n) return 0;
+	const d = BigInt(10) ** BigInt(Math.min(Math.max(decimals, 0), 36));
+	return Number(raw / d) + Number(raw % d) / Number(d);
+}
+const pad = (addr) => addr.slice(2).padStart(64, "0");
+/** Монеты одной сети: адрес контракта → символ (у одного контракта — монета с большей капитализацией, она в списке раньше) */
+function tokensOn(chain, coins) {
+	const out = /* @__PURE__ */ new Map();
+	for (const c of coins) {
+		const addr = c.platforms?.[chain];
+		if (addr && !out.has(addr)) out.set(addr, c.symbol);
+	}
+	return out;
+}
+/** Одна сеть EVM: родная монета + токены из нашего списка */
+async function evmChainBalances(chain, address, coins, fetchFn = fetch) {
+	const tokens = [...tokensOn(chain.id, coins)];
+	const first = await rpcBatch(chain.rpc, [{
+		method: "eth_getBalance",
+		params: [address, "latest"]
+	}, ...tokens.map(([contract]) => ({
+		method: "eth_call",
+		params: [{
+			to: contract,
+			data: `0x70a08231${pad(address)}`
+		}, "latest"]
+	}))], fetchFn, true);
+	if (first[0] === null) throw new Error(`RPC_ERROR ${chain.id} balance network`);
+	const out = [];
+	const native = units(hexToBig(first[0]), 18);
+	if (native > 0) out.push({
+		account: "wallet",
+		symbol: chain.native,
+		amount: native
+	});
+	const held = tokens.map(([contract, symbol], i) => ({
+		contract,
+		symbol,
+		raw: hexToBig(first[i + 1])
+	})).filter((x) => x.raw > 0n);
+	if (!held.length) return out;
+	const decs = await rpcBatch(chain.rpc, held.map((x) => ({
+		method: "eth_call",
+		params: [{
+			to: x.contract,
+			data: "0x313ce567"
+		}, "latest"]
+	})), fetchFn, true);
+	held.forEach((x, i) => {
+		if (decs[i] === null) return;
+		const d = Number(hexToBig(decs[i]));
+		const amount = units(x.raw, d <= 36 ? d : 18);
+		if (amount > 0) out.push({
+			account: "wallet",
+			symbol: x.symbol,
+			amount
+		});
+	});
+	return out;
+}
+/** Все сети EVM одним адресом (сети спрашиваем одновременно) */
+async function evmBalances(address, coins, fetchFn = fetch) {
+	const addr = address.toLowerCase();
+	if (!isEvmAddress(addr)) throw new Error("BAD_WALLET");
+	return (await Promise.all(EVM_CHAINS.map((c) => evmChainBalances(c, addr, coins, fetchFn)))).flat();
+}
+/** Solana: SOL + токены из нашего списка (по адресу mint) */
+async function solanaBalances(address, coins, fetchFn = fetch) {
+	if (!isSolanaAddress(address)) throw new Error("BAD_WALLET");
+	const [bal, ...programs] = await rpcBatch(SOLANA_RPC, [{
+		method: "getBalance",
+		params: [address]
+	}, ...TOKEN_PROGRAMS.map((programId) => ({
+		method: "getTokenAccountsByOwner",
+		params: [
+			address,
+			{ programId },
+			{ encoding: "jsonParsed" }
+		]
+	}))], fetchFn);
+	const out = [];
+	const lamports = Number(bal?.value ?? 0);
+	if (Number.isFinite(lamports) && lamports > 0) out.push({
+		account: "wallet",
+		symbol: "SOL",
+		amount: lamports / 1e9
+	});
+	const mints = tokensOn("solana", coins);
+	for (const p of programs) for (const a of p?.value ?? []) {
+		const info = a.account?.data?.parsed?.info;
+		const symbol = typeof info?.mint === "string" ? mints.get(info.mint) : void 0;
+		const amount = units(typeof info?.tokenAmount?.amount === "string" && /^\d{1,40}$/.test(info.tokenAmount.amount) ? BigInt(info.tokenAmount.amount) : 0n, Number(info?.tokenAmount?.decimals ?? 0));
+		if (symbol && amount > 0) out.push({
+			account: "wallet",
+			symbol,
+			amount
+		});
+	}
+	return out;
 }
 
 // src/lib/portfolio/balances.ts
@@ -2850,6 +3025,8 @@ async function fetchBalances(conn, deps) {
 		case "bingx": return bingxBalances(deps.cexCall);
 		case "hyperliquid": return hyperliquidBalances(conn.api_key, deps.fetchFn);
 		case "polymarket": return polymarketBalances(deps.polymarketGet ?? pmDirectGet(deps.fetchFn), conn.api_key);
+		case "evm": return mergeBalances(await evmBalances(conn.api_key, deps.coins ?? [], deps.fetchFn));
+		case "solana": return mergeBalances(await solanaBalances(conn.api_key, deps.coins ?? [], deps.fetchFn));
 		default: return [];
 	}
 }
@@ -2862,7 +3039,10 @@ async function fetchBalances(conn, deps) {
 *
 *  - Bybit: /v5/execution/list?category=spot — окна по 7 дней, первый раз за 2 года;
 *  - Binance: /api/v3/myTrades — по парам монет, которые сейчас на балансе (к USDT / USDC / FDUSD), с первой сделки по номерам;
-*  - OKX: /api/v5/trade/fills-history?instType=SPOT — последние 3 месяца (больше OKX не хранит).
+*  - OKX: /api/v5/trade/fills-history?instType=SPOT — последние 3 месяца (больше OKX не хранит);
+*  - Bitget: единый аккаунт — /api/v3/trade/fills?category=SPOT (окна по 30 дней), классический — /api/v2/spot/trade/fills; 90 дней;
+*  - BingX: /openApi/spot/v1/trade/myTrades — по парам монет с баланса, только последние 7 дней (дальше копится с каждой загрузкой);
+*  - Hyperliquid: userFillsByTime по адресу (спот — монеты «@N» и «PURR/USDC», названия из spotMeta), последние 10 000 исполнений.
 * Повторы безопасны: в базе unique (подключение, external_id), поэтому следующая загрузка берёт с запасом в сутки.
 */
 /** Валюты котировки, по которым узнаём пару BTCUSDT → BTC / USDT (длинные — первыми) */
@@ -3033,23 +3213,162 @@ async function okxSpotFills(call, from) {
 	}
 	return out.filter((f) => Date.parse(f.at) >= from);
 }
+const BITGET_DAYS = 90;
+/** Комиссия Bitget: у классического — объект {feeCoin, totalFee}, у единого — массив [{feeCoin, fee}] (знак — минус) */
+function bitgetFee(d) {
+	if (Array.isArray(d)) {
+		const x = d.find((f) => n(f.fee) !== 0) ?? d[0];
+		return {
+			fee: n(x?.fee),
+			coin: x?.feeCoin
+		};
+	}
+	const o = d ?? {};
+	return {
+		fee: n(o.totalFee),
+		coin: o.feeCoin
+	};
+}
+async function bitgetSpotFills(call, from, to) {
+	const out = [];
+	const add = (x, id, price, qty, ts) => {
+		const f = bitgetFee(x.feeDetail);
+		out.push(...only([fill(`bg:${id}`, splitPair(String(x.symbol)), x.side, qty, price, f.fee, f.coin, ts)]));
+	};
+	if ((await call("/api/v3/trade/fills", {
+		category: "SPOT",
+		startTime: Math.max(from, to - 30 * 864e5),
+		endTime: to,
+		limit: 100
+	}))?.code === "00000") {
+		for (const [start, end] of windows(from, to, 30 * DAY)) {
+			let cursor = "";
+			for (let page = 0; page < 100; page++) {
+				const d = await bitgetGet(call, "/api/v3/trade/fills", {
+					category: "SPOT",
+					startTime: start,
+					endTime: end,
+					limit: 100,
+					...cursor ? { cursor } : {}
+				});
+				const list = d?.list ?? [];
+				for (const x of list) add(x, x.execId, x.execPrice, x.execQty, x.createdTime);
+				if (list.length < 100 || !d.cursor || d.cursor === cursor) break;
+				cursor = String(d.cursor);
+			}
+		}
+		return out;
+	}
+	let idLessThan = "";
+	for (let page = 0; page < 200; page++) {
+		const rows = await bitgetGet(call, "/api/v2/spot/trade/fills", {
+			startTime: from,
+			endTime: to,
+			limit: 100,
+			...idLessThan ? { idLessThan } : {}
+		});
+		const list = Array.isArray(rows) ? rows : [];
+		for (const x of list) add(x, x.tradeId, x.priceAvg, x.size, x.cTime);
+		if (list.length < 100) break;
+		const last = String(list[list.length - 1].tradeId ?? "");
+		if (!last || last === idLessThan) break;
+		idLessThan = last;
+	}
+	return out;
+}
+const BINGX_DAYS = 7;
+const BINGX_QUOTES = ["USDT", "USDC"];
+/** История BingX — только по паре (BTC-USDT) и только за 7 дней; пары — из монет на балансе */
+async function bingxSpotFills(call, assets, from, to) {
+	const out = [];
+	const symbols = [...new Set(assets.map(clean))].filter((a) => okSym(a) && !USD_QUOTES.has(a)).flatMap((a) => BINGX_QUOTES.map((q) => ({
+		asset: a,
+		quote: q
+	})));
+	await inBatches(symbols, 3, async (pair) => {
+		const symbol = `${pair.asset}-${pair.quote}`;
+		let start = from;
+		for (let page = 0; page < 20; page++) {
+			let rows;
+			try {
+				const d = await bingxGet(call, "/openApi/spot/v1/trade/myTrades", {
+					symbol,
+					startTime: start,
+					endTime: to,
+					limit: 1e3
+				});
+				rows = Array.isArray(d?.fills) ? d.fills : [];
+			} catch (e) {
+				if (e instanceof ExchangeError && e.kind === "EXCHANGE") return;
+				throw e;
+			}
+			for (const x of rows) out.push(...only([fill(`bx:${symbol}:${x.id}`, pair, x.isBuyer ? "buy" : "sell", x.qty, x.price, x.commission, x.commissionAsset, x.time)]));
+			if (rows.length < 1e3) return;
+			const next = Math.max(...rows.map((x) => n(x.time)));
+			if (next <= start) return;
+			start = next;
+		}
+	});
+	return out;
+}
+/** «@107» / «PURR/USDC» → монета и котировка по spotMeta (обёртки UBTC, UETH → BTC, ETH — как в балансах) */
+function hlSpotPairs(meta) {
+	const tokens = new Map((meta.tokens ?? []).map((t) => [t.index, t.name ?? ""]));
+	const out = /* @__PURE__ */ new Map();
+	for (const u of meta.universe ?? []) {
+		const [b, q] = u.tokens ?? [];
+		const asset = cleanSymbol(tokens.get(b));
+		const quote = cleanSymbol(tokens.get(q));
+		if (!asset || !quote) continue;
+		const pair = {
+			asset,
+			quote
+		};
+		if (u.name) out.set(u.name, pair);
+		if (u.index !== void 0) out.set(`@${u.index}`, pair);
+	}
+	return out;
+}
+async function hyperliquidSpotFills(address, from, fetchFn = fetch) {
+	const res = await fetchFn(HL_API, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ type: "spotMeta" })
+	});
+	if (!res.ok) throw new Error(`HL_HTTP_${res.status} network`);
+	const pairs = hlSpotPairs(await res.json());
+	const fills = await fetchHlFills(address, from, fetchFn);
+	return only(fills.filter((f) => f.coin.startsWith("@") || f.coin.includes("/")).map((f) => fill(`hl:${f.tid}`, pairs.get(f.coin) ?? null, f.side === "B" ? "buy" : "sell", f.sz, f.px, f.fee, cleanSymbol(f.feeToken ?? "USDC"), f.time)));
+}
 /**
 * Новые исполнения подключения с прошлого раза (cursor — ISO или null: первый раз — вся доступная история).
 * Возвращает исполнения и новый курсор (сейчас) или null, если биржа историю спота не отдаёт.
+* call — запросы к бирже с ключом (exchange-proxy / sync-worker); Hyperliquid — по адресу (api_key), напрямую через fetchFn.
 */
 async function fetchSpotFills(conn, call, opts) {
 	const now = opts.now ?? Date.now();
 	const since = opts.cursor ? Date.parse(opts.cursor) - DAY : null;
+	const back = (days) => Math.max(since ?? 0, now - days * DAY);
 	let fills;
 	switch (conn.exchange) {
 		case "bybit":
-			fills = await bybitSpotFills(call, Math.max(since ?? 0, now - 730 * DAY), now);
+			fills = await bybitSpotFills(call, back(730), now);
 			break;
 		case "binance":
 			fills = await binanceSpotFills(call, opts.assets, since);
 			break;
 		case "okx":
-			fills = await okxSpotFills(call, Math.max(since ?? 0, now - 90 * DAY));
+			fills = await okxSpotFills(call, back(90));
+			break;
+		case "bitget":
+			fills = await bitgetSpotFills(call, back(BITGET_DAYS), now);
+			break;
+		case "bingx":
+			fills = await bingxSpotFills(call, opts.assets, back(BINGX_DAYS), now);
+			break;
+		case "hyperliquid":
+			if (!conn.api_key) return null;
+			fills = await hyperliquidSpotFills(conn.api_key, since ?? 0, opts.fetchFn);
 			break;
 		default: return null;
 	}
@@ -3059,4 +3378,38 @@ async function fetchSpotFills(conn, call, opts) {
 	};
 }
 
-export { READ_PATHS, SyncError, buildQuery, bybitSignature, callExchange, fetchBalances, fetchSpotFills, isCex, parseSecret, runSync, toSyncError };
+// src/lib/import/twins.ts
+const TWIN_WINDOW_MS = 18e4;
+const close = (a, b) => a !== null && b !== null && Math.abs(a - b) <= Math.max(.02, Math.abs(a) * .001);
+/** external_id новых сделок, у которых уже есть записанный двойник (с другим номером) */
+function findTwins(trades, existing) {
+	const out = /* @__PURE__ */ new Set();
+	const pool = existing.map((r) => ({
+		...r,
+		t: Date.parse(r.exit_at),
+		sym: r.symbol.toUpperCase(),
+		used: false
+	})).filter((r) => Number.isFinite(r.t)).sort((a, b) => a.t - b.t);
+	for (const tr of trades) {
+		const t = Date.parse(tr.exit_at);
+		if (!Number.isFinite(t)) continue;
+		const sym = tr.symbol.toUpperCase();
+		const hit = pool.find((r) => !r.used && r.external_id !== tr.external_id && r.sym === sym && r.side === tr.side && Math.abs(r.t - t) <= 18e4 && close(r.pnl, tr.pnl));
+		if (hit) {
+			hit.used = true;
+			out.add(tr.external_id);
+		}
+	}
+	return out;
+}
+/** Окно времени, в котором искать двойников у этих сделок (null — сделок нет) */
+function twinRange(trades) {
+	const ts = trades.map((t) => Date.parse(t.exit_at)).filter(Number.isFinite);
+	if (!ts.length) return null;
+	return {
+		from: (/* @__PURE__ */ new Date(Math.min(...ts) - TWIN_WINDOW_MS)).toISOString(),
+		to: new Date(Math.max(...ts) + TWIN_WINDOW_MS).toISOString()
+	};
+}
+
+export { READ_PATHS, SyncError, buildQuery, bybitSignature, callExchange, fetchBalances, fetchSpotFills, findTwins, isCex, parseSecret, runSync, toSyncError, twinRange };

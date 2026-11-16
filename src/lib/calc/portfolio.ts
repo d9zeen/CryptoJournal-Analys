@@ -266,7 +266,8 @@ export function movers(rows: PortfolioRow[]): { best: PortfolioRow | null; worst
 export type PortfolioRange = '24h' | '7d' | '1m' | '3m' | '1y' | 'all'
 const RANGE_MS: Record<PortfolioRange, number> = { '24h': 864e5, '7d': 7 * 864e5, '1m': 30 * 864e5, '3m': 91 * 864e5, '1y': 365 * 864e5, all: Infinity }
 
-export type SeriesPoint = { t: number; value: number; btc: number | null }
+/** value — по снимкам (null — до первого снимка), est — оценка по нынешнему составу (см. estimateHistory), btc — «если бы всё было в BTC» */
+export type SeriesPoint = { t: number; value: number | null; est: number | null; btc: number | null }
 
 /**
  * Шаг точек графика: за длинный период — не каждый снимок (раз в час), а последний в окне (6 ч / сутки),
@@ -290,9 +291,16 @@ export function thinOut<T extends { t: number }>(pts: T[], step: number): T[] {
  * Точки графика за период: стоимость и «если бы всё было в BTC» — сколько стоили бы деньги первой точки,
  * переложенные в BTC по её цене. now — текущая стоимость (последняя точка «сейчас», если снимок старше часа).
  */
-export function portfolioSeries(snaps: Snapshot[], range: PortfolioRange, nowMs: number, now?: { value: number; btcPrice: number | null }): SeriesPoint[] {
+export function portfolioSeries(
+  snaps: Snapshot[],
+  range: PortfolioRange,
+  nowMs: number,
+  now?: { value: number; btcPrice: number | null },
+  estimate: EstimatePoint[] = [],
+): SeriesPoint[] {
   const from = nowMs - RANGE_MS[range]
-  const pts = thinOut(
+  type P = { t: number; value: number; btcPrice: number | null; est?: boolean }
+  const pts: P[] = thinOut(
     snaps
       .map((s) => ({ t: Date.parse(s.at), value: num(s.total_usd) ?? 0, btcPrice: num(s.btc_price) }))
       .filter((p) => Number.isFinite(p.t) && p.t >= from)
@@ -301,7 +309,79 @@ export function portfolioSeries(snaps: Snapshot[], range: PortfolioRange, nowMs:
   )
   if (now && now.value > 0 && (!pts.length || nowMs - pts[pts.length - 1].t > 3_600_000)) pts.push({ t: nowMs, value: now.value, btcPrice: now.btcPrice })
   if (!pts.length) return []
-  const first = pts[0]
+  // до первого снимка (новое подключение) — оценка по нынешнему составу, пунктиром; с историей снимков она сама уходит
+  const firstReal = pts[0].t
+  const est: P[] = thinOut(estimate.filter((e) => e.t >= from && e.t < firstReal - 3_600_000), STEP_MS[range]).map((e) => ({ ...e, est: true }))
+  const all = [...est, ...pts]
+  const first = all[0]
   const coins = first.btcPrice ? first.value / first.btcPrice : null
-  return pts.map((p) => ({ t: p.t, value: Math.round(p.value * 100) / 100, btc: coins !== null && p.btcPrice ? Math.round(coins * p.btcPrice * 100) / 100 : null }))
+  const r2 = (v: number) => Math.round(v * 100) / 100
+  return all.map((p, i) => ({
+    t: p.t,
+    value: p.est ? null : r2(p.value),
+    // стык: первая настоящая точка — и в пунктире, чтобы линии сошлись
+    est: p.est || (est.length > 0 && i === est.length) ? r2(p.value) : null,
+    btc: coins !== null && p.btcPrice ? r2(coins * p.btcPrice) : null,
+  }))
+}
+
+export type EstimatePoint = { t: number; value: number; btcPrice: number | null }
+
+/**
+ * Оценка стоимости за прошлые 7 дней по НЫНЕШНЕМУ составу: сколько монет сейчас × их цены за неделю (coins.spark, ~42 точки).
+ * Нужна, чтобы график не был пустым в первый день; покупки и переводы за эти дни не учитывает — поэтому пунктир с подписью «оценка».
+ * Монеты без недельной цены (Polymarket, редкие) — по нынешней стоимости. Ни у одной монеты нет недельной цены — оценки нет.
+ */
+export function estimateHistory(rows: PortfolioRow[], coins: Coin[], nowMs: number, points = 42): EstimatePoint[] {
+  const priced = rows.filter((r) => r.value !== null && r.value > 0)
+  const at = (spark: number[], k: number) => spark[Math.round((k / (points - 1)) * (spark.length - 1))]
+  const ok = (sp: number[] | null | undefined): sp is number[] => Array.isArray(sp) && sp.length >= 2 && sp.every((x) => Number.isFinite(x) && x > 0)
+  if (!priced.some((r) => ok(r.coin?.spark))) return []
+  const btc = coinsBySymbol(coins).get('BTC')?.spark
+  const out: EstimatePoint[] = []
+  for (let k = 0; k < points - 1; k++) {
+    let value = 0
+    for (const r of priced) value += ok(r.coin?.spark) ? r.amount * at(r.coin!.spark!, k) : r.value!
+    out.push({ t: nowMs - 7 * 864e5 + (k * 7 * 864e5) / (points - 1), value, btcPrice: ok(btc) ? at(btc, k) : null })
+  }
+  return out
+}
+
+/** Монета портфеля по ссылке (0022): без количества; value — только если владелец разрешил суммы */
+export type SharedCoinLike = { symbol: string; name?: string; icon?: string; color?: string; share: number; change_24h?: number; change_7d?: number; spark?: number[]; value?: number }
+
+/**
+ * Монеты по ссылке → строки как у своего портфеля (для кольца долей и «лучше / хуже всех»).
+ * Суммы скрыты — стоимость условная (доля × 1 000 000): на экран она не выводится, нужна только для пропорций.
+ */
+export function sharedRows(coins: SharedCoinLike[]): PortfolioRow[] {
+  return coins.map((c) => ({
+    symbol: c.symbol,
+    coin: { id: c.symbol.toLowerCase(), symbol: c.symbol, name: c.name ?? c.symbol, rank: null, price: null, change_24h: c.change_24h ?? null, change_7d: c.change_7d ?? null, spark: c.spark ?? null, icon: c.icon ?? null, color: c.color ?? null },
+    amount: 0,
+    value: c.value ?? c.share * 1e6,
+    price: null,
+    change24: c.change_24h ?? null,
+    change24Usd: null,
+    avgPrice: null,
+    avgManual: false,
+    avgSource: null,
+    covered: null,
+    realized: 0,
+    invested: null,
+    pnl: null,
+    pnlPct: null,
+    share: c.share,
+    sources: [],
+    holdings: [],
+  }))
+}
+
+/** Изменение портфеля за сутки по долям: Σ доля × изменение монеты (монеты без изменения — как 0 %) */
+export function sharedChange24(coins: SharedCoinLike[]): number | null {
+  const known = coins.filter((c) => typeof c.change_24h === 'number')
+  if (!known.length) return null
+  // доля сейчас = старая доля × (1 + r); портфель вчера = Σ доля / (1 + r)
+  const before = coins.reduce((a, c) => a + c.share / (1 + (c.change_24h ?? 0) / 100), 0)
+  return before > 0 ? 1 / before - 1 : null
 }

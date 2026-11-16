@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { allocation, coinsBySymbol, costBasis, movers, portfolioRows, portfolioSeries, portfolioTotals, realizedTotal, thinOut, type Coin, type Holding } from './portfolio'
+import { allocation, coinsBySymbol, costBasis, estimateHistory, sharedChange24, sharedRows, movers, portfolioRows, portfolioSeries, portfolioTotals, realizedTotal, thinOut, type Coin, type Holding } from './portfolio'
 
 const coin = (symbol: string, price: number | null, rank: number, change_24h: number | null = null, id = symbol.toLowerCase()): Coin => ({
   id, symbol, name: symbol, rank, price, change_24h, change_7d: null, spark: null, icon: null,
@@ -94,6 +94,30 @@ describe('портфель: доли, лучшие / худшие, график'
   })
 })
 
+describe('портфель: оценка до первого снимка', () => {
+  const now = Date.parse('2026-11-16T12:00:00Z')
+  const withSpark = (c: Coin, spark: number[]): Coin => ({ ...c, spark })
+  const cs = [withSpark(coin('BTC', 100000, 1), [80000, 90000, 100000]), coin('USDT', 1, 3), coin('ETH', 3000, 2)]
+  const rows = portfolioRows([h('BTC', 0.5), h('USDT', 1000, null), h('POLYMARKET', 80, 'c3', 80)], cs, {})
+  it('нынешние монеты × цены недели; без недельной цены — по нынешней стоимости', () => {
+    const e = estimateHistory(rows, cs, now, 3)
+    expect(e.map((p) => p.value)).toEqual([0.5 * 80000 + 1000 + 80, 0.5 * 90000 + 1000 + 80])
+    expect(e[0].t).toBe(now - 7 * 864e5)
+    expect(e[1].btcPrice).toBe(90000)
+  })
+  it('ни у одной монеты нет недельной цены — оценки нет', () => {
+    expect(estimateHistory(portfolioRows([h('ETH', 1)], cs, {}), cs, now)).toEqual([])
+  })
+  it('на графике — пунктиром до первого снимка, стык общий; при истории снимков оценки нет', () => {
+    const e = estimateHistory(rows, cs, now, 3)
+    const snaps = [{ at: new Date(now - 3_600_000 * 2).toISOString(), total_usd: 51000, btc_price: 100000 }]
+    const s = portfolioSeries(snaps, '7d', now, { value: 51080, btcPrice: 100000 }, e)
+    expect(s.map((p) => [p.value, p.est])).toEqual([[null, 41080], [null, 46080], [51000, 51000], [51080, null]])
+    const old = [{ at: new Date(now - 8 * 864e5).toISOString(), total_usd: 40000, btc_price: 90000 }, ...snaps]
+    expect(portfolioSeries(old, 'all', now, undefined, e).every((p) => p.est === null)).toBe(true)
+  })
+})
+
 describe('портфель: средняя цена из истории покупок', () => {
   const f = (side: 'buy' | 'sell', qty: number, price: number, at: string, fee = 0, fee_asset: string | null = null, asset = 'BTC', quote = 'USDT') => ({ asset, quote, side, qty, price, fee, fee_asset, at })
   it('средневзвешенная: 0,1 по 60 000 + 0,1 по 80 000 → 70 000', () => {
@@ -128,5 +152,23 @@ describe('портфель: средняя цена из истории поку
     expect(rows.find((r) => r.symbol === 'BTC')).toMatchObject({ avgPrice: 80000, avgSource: 'trades', covered: 0.5, invested: 40000 })
     expect(rows.find((r) => r.symbol === 'ETH')).toMatchObject({ avgPrice: 2000, avgSource: 'manual', realized: 500 })
     expect(realizedTotal(basis)).toBeCloseTo(500, 6)
+  })
+})
+
+describe('портфель по ссылке', () => {
+  const coins = [
+    { symbol: 'BTC', share: 0.6, change_24h: 10, color: '#f7931a' },
+    { symbol: 'USDT', share: 0.4, change_24h: 0 },
+  ]
+  it('доли — как в своём портфеле: кольцо и цвета; суммы скрыты — стоимость только для пропорций', () => {
+    const rows = sharedRows(coins)
+    expect(allocation(rows).map((a) => [a.symbol, a.share, a.color])).toEqual([['BTC', 0.6, '#f7931a'], ['USDT', 0.4, null]])
+    expect(movers(rows).best!.symbol).toBe('BTC')
+    expect(sharedRows([{ symbol: 'ETH', share: 1, value: 3000 }])[0].value).toBe(3000)
+  })
+  it('изменение портфеля за сутки по долям: BTC +10 % при доле 60 % → портфель ≈ +5,77 %', () => {
+    // вчера: 0,6 / 1,1 + 0,4 = 0,94545… → сегодня 1 / 0,94545 − 1
+    expect(sharedChange24(coins)!).toBeCloseTo(1 / (0.6 / 1.1 + 0.4) - 1, 9)
+    expect(sharedChange24([{ symbol: 'X', share: 1 }])).toBeNull()
   })
 })

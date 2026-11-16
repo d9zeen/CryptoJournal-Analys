@@ -50,6 +50,9 @@ export type FakeDb = {
   costs?: Row[]
   snapshots?: Row[]
   portfolioCalls?: { fn: string; body: Record<string, unknown> }[]
+  /** ссылка «поделиться» (0022): своя ссылка и портфель, который отдаёт shared_portfolio */
+  share?: { token: string; show_amounts: boolean } | null
+  shared?: Record<string, unknown> | null
   costWrites?: { method: string; body: unknown }[]
   /** этап 2 (0020): история спотовых покупок / продаж */
   spotFills?: Row[]
@@ -109,6 +112,22 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
     }
     // ---------- портфель (0019) ----------
     if (path.startsWith('/storage/v1/object/public/coin-icons/')) return route.fulfill({ status: 200, contentType: 'image/png', body: PNG })
+    if (path === '/rest/v1/portfolio_shares') return json(db.share ? [db.share] : [])
+    if (path.endsWith('/rpc/share_portfolio')) {
+      const b = (body() ?? {}) as { p_show_amounts?: boolean; p_new_token?: boolean }
+      ;(db.portfolioCalls ??= []).push({ fn: 'share_portfolio', body: b as Record<string, unknown> })
+      const token = !db.share || b.p_new_token ? `${'ab'.repeat(15)}${String((db.portfolioCalls?.length ?? 0) % 100).padStart(2, '0')}` : db.share.token
+      db.share = { token, show_amounts: Boolean(b.p_show_amounts) }
+      return json(token)
+    }
+    if (path.endsWith('/rpc/unshare_portfolio')) {
+      db.share = null
+      return route.fulfill({ status: 204 })
+    }
+    if (path.endsWith('/rpc/shared_portfolio')) {
+      const b = (body() ?? {}) as { p_token?: string }
+      return json(db.share && b.p_token === db.share.token ? (db.shared ?? null) : null)
+    }
     if (path === '/rest/v1/coins') return json(db.coins ?? [])
     if (path === '/rest/v1/portfolio_snapshots') return json(db.snapshots ?? [])
     if (path === '/rest/v1/spot_fills') return json(db.spotFills ?? [])
@@ -168,7 +187,7 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
       const conns = (db.connections ??= [])
       if (fn === 'add_exchange_connection') {
         const id = `c${conns.length + 1}`
-        conns.push({ id, exchange: b.p_exchange, label: b.p_label, api_key: String(b.p_api_key).toLowerCase(), last_sync_at: null, cursor_at: null, last_error: null, created_at: '2026-11-05T10:00:00Z' })
+        conns.push({ id, exchange: b.p_exchange, label: b.p_label, api_key: b.p_exchange === 'solana' ? String(b.p_api_key).trim() : String(b.p_api_key).toLowerCase(), last_sync_at: null, cursor_at: null, last_error: null, created_at: '2026-11-05T10:00:00Z' })
         return json(id)
       }
       if (fn === 'delete_exchange_connection') {

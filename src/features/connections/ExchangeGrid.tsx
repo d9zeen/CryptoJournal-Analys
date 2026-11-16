@@ -9,6 +9,7 @@ import { formatPnl } from '@/lib/format'
 import { useT } from '@/i18n'
 import { Button } from '@/components/ui/Button'
 import { exchangeName } from '@/lib/exchanges'
+import { ExchangeLogo } from '@/components/ExchangeLogo'
 import { CONNECTABLE, errorCodeOf, type ConnectableId, type Connection } from './api'
 import { AddForm } from './ConnectionsCard'
 
@@ -23,6 +24,8 @@ export const EXCHANGE_CARDS: { id: string; methods: Method[]; mono: string; soon
   { id: 'bitget', methods: ['api', 'file'], mono: 'BG' },
   { id: 'hyperliquid', methods: ['wallet', 'file'], mono: 'HL' },
   { id: 'polymarket', methods: ['wallet'], mono: 'PM' },
+  { id: 'evm', methods: ['wallet'], mono: 'EV' },
+  { id: 'solana', methods: ['wallet'], mono: 'SO' },
   { id: 'mexc', methods: ['file'], mono: 'MX' },
   { id: 'lighter', methods: [], soon: true, name: 'Lighter', mono: 'LT' },
   { id: 'other', methods: ['file'], mono: '…' },
@@ -51,9 +54,7 @@ export function ExchangeGrid({ conns, onOpen, recent }: { conns: Connection[]; o
           <>
             <span className="flex items-center justify-between gap-2">
               <span className="flex min-w-0 items-center gap-2">
-                <span aria-hidden className="num grid size-7 shrink-0 place-items-center rounded-lg bg-surface-2 text-xs font-bold text-muted">
-                  {ex.mono}
-                </span>
+                <ExchangeLogo id={ex.id} mono={ex.mono} dim={ex.soon} />
                 <span className="truncate font-semibold">{name}</span>
               </span>
               {mine.length > 0 && <span className={`size-2 shrink-0 rounded-full ${broken ? 'bg-down' : 'bg-up'}`} aria-hidden />}

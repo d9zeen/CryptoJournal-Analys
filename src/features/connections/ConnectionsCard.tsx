@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import { SelectField, TextField } from '@/components/ui/Field'
 import { exchangeName } from '@/lib/exchanges'
+import { ExchangeLogo } from '@/components/ExchangeLogo'
 import { dbErrorMessage } from '@/lib/errors'
 import { formatDuration } from '@/lib/format'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
@@ -32,6 +33,8 @@ import { Orbit } from '@/components/fx/Orbit'
 import { useMediaQuery } from '@/lib/useMediaQuery'
 import { Shimmer } from '@/components/fx/Shimmer'
 import { pause } from '@/lib/motion'
+import { useQueryClient } from '@tanstack/react-query'
+import { refreshPortfolio } from '@/features/portfolio/api'
 import {
   CONNECTABLE,
   NEEDS_PASSPHRASE,
@@ -47,6 +50,8 @@ import {
   type ConnectableId,
   type Connection,
   type SyncResult,
+  PORTFOLIO_ONLY,
+  walletKey,
 } from './api'
 
 /** Ошибка подключения / синхронизации → текст */
@@ -320,9 +325,12 @@ function ConnectionTile({
     // №2 «Луч по рамке»: пока идёт синхронизация, по краю карточки бежит свет
     <li data-conn={conn.exchange} data-status={status} className={`relative flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 ${syncing ? 'beam-run' : ''}`}>
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="font-semibold">{name}</div>
-          <div className="num truncate text-xs text-muted">{conn.label ?? shortKey(conn.api_key)}</div>
+        <div className="flex min-w-0 items-center gap-3">
+          <ExchangeLogo id={conn.exchange} className="size-9 rounded-lg" />
+          <div className="min-w-0">
+            <div className="font-semibold">{name}</div>
+            <div className="num truncate text-xs text-muted">{conn.label ?? shortKey(conn.api_key)}</div>
+          </div>
         </div>
         <span data-pill className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${PILL[status]}`}>
           <span className={`size-1.5 rounded-full ${DOT[status]}`} aria-hidden />
@@ -397,6 +405,7 @@ export function AddForm({ count, admin, initial, onClose }: { count: number; adm
   const c = t.connections
   const add = useAddConnection()
   const sync = useSyncConnection()
+  const qc = useQueryClient()
   const { data: usage } = useUsage()
   const plan = usage?.plan
   // по умолчанию — первое подключение, доступное на тарифе
@@ -438,13 +447,28 @@ export function AddForm({ count, admin, initial, onClose }: { count: number; adm
     setPassphrase('')
     await pause(350)
     setStage('syncing')
+    // кошелёк (EVM / Solana): сделок нет — сразу монеты в «Портфель»
+    if (PORTFOLIO_ONLY.has(exchange)) {
+      const conn = { id, exchange, label: label.trim() || null, api_key: walletKey(exchange, apiKey), last_sync_at: null, cursor_at: null, last_error: null, key_expires_at: null, created_at: '' }
+      const r = await refreshPortfolio([conn])
+      void qc.invalidateQueries({ queryKey: ['holdings'] })
+      void qc.invalidateQueries({ queryKey: ['portfolio_snapshots'] })
+      if (r.failed.length) {
+        setSyncError(t.connections.errors.EXCHANGE_DOWN)
+        setStage('syncError')
+      } else {
+        setInserted(r.coins)
+        setStage('done')
+      }
+      return
+    }
     // первая синхронизация; панель можно закрыть — загрузка продолжится (окошко в углу)
     try {
       const r = await sync.mutateAsync({
         id,
         exchange,
         label: label.trim() || null,
-        api_key: kind === 'wallet' ? apiKey.trim().toLowerCase() : apiKey.trim(),
+        api_key: kind === 'wallet' ? walletKey(exchange, apiKey) : apiKey.trim(),
         last_sync_at: null,
         cursor_at: null,
         last_error: null,
@@ -524,11 +548,11 @@ export function AddForm({ count, admin, initial, onClose }: { count: number; adm
               label={c.wallet}
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder="0x…"
+              placeholder={exchange === 'solana' ? 'Ab3…' : '0x…'}
               autoComplete="off"
               spellCheck={false}
               required
-              hint={exchange === 'polymarket' ? c.walletHintPolymarket : c.walletHint}
+              hint={exchange === 'polymarket' ? c.walletHintPolymarket : exchange === 'evm' ? c.walletHintEvm : exchange === 'solana' ? c.walletHintSolana : c.walletHint}
             />
           )}
           <TextField label={c.label} value={label} onChange={(e) => setLabel(e.target.value)} maxLength={60} placeholder={c.labelPlaceholder} />
@@ -572,6 +596,7 @@ function Bridge({
   const c = t.connections
   const b = c.bridge
   const name = exchangeName(exchange, '')
+  const coins = PORTFOLIO_ONLY.has(exchange)
   const order: Exclude<Stage, 'form'>[] = ['saving', 'added', 'checked', 'syncing', 'done']
   const at = order.indexOf(stage === 'syncError' ? 'syncing' : stage)
   const flowing = stage === 'saving' || stage === 'syncing'
@@ -581,13 +606,25 @@ function Bridge({
     {
       done: stage === 'done',
       failed: stage === 'syncError',
-      text: stage === 'done' ? (inserted ? fmt(b.loaded, { n: inserted }) : b.loadedNothing) : stage === 'syncError' ? (syncError ?? c.errors.UNKNOWN) : b.loading,
+      text:
+        stage === 'done'
+          ? inserted
+            ? fmt(coins ? b.coinsLoaded : b.loaded, { n: inserted })
+            : coins
+              ? b.coinsNothing
+              : b.loadedNothing
+          : stage === 'syncError'
+            ? (syncError ?? c.errors.UNKNOWN)
+            : coins
+              ? b.coinsLoading
+              : b.loading,
     },
   ]
   return (
     <div data-bridge data-stage={stage} className="flex flex-col gap-4" aria-live="polite">
       <div className="flex items-center gap-2">
-        <span className="grid min-w-0 flex-1 place-items-center rounded-xl border border-border bg-surface-2/50 px-2 py-3 text-center">
+        <span className="grid min-w-0 flex-1 place-items-center gap-1 rounded-xl border border-border bg-surface-2/50 px-2 py-3 text-center">
+          <ExchangeLogo id={exchange} className="size-8 rounded-lg" />
           <span className="truncate text-sm font-semibold">{name}</span>
           <span className="text-xs text-muted">{kind === 'cex' ? b.readKey : b.address}</span>
         </span>
@@ -605,7 +642,7 @@ function Bridge({
         </span>
       </div>
 
-      {at >= 2 && <p className="text-sm font-medium">{stage === 'done' ? fmt(b.connectedDone, { name }) : fmt(c.added, { name })}</p>}
+      {at >= 2 && <p className="text-sm font-medium">{stage === 'done' ? fmt(coins ? b.walletDone : b.connectedDone, { name }) : fmt(c.added, { name })}</p>}
 
       <ol className="flex flex-col gap-2">
         {steps.map((s, i) => (
