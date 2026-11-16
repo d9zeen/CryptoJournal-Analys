@@ -97,11 +97,17 @@ for (const [width, height] of [
     // первая карточка — над «Торговые дни»
     expect(await panel.locator('section').first().getAttribute('data-shot')).toBe('month-total')
     await expect(cal.locator('section').first().locator('[data-shot="palette"]')).toBeVisible()
+    // низ последней карточки = низ календаря (ждём конца анимации появления — она сдвигает карточки)
+    const last = panel.locator('section').last()
+    const gap = async () => {
+      const g = (await cal.locator('section').first().boundingBox())!
+      const l = (await last.boundingBox())!
+      return Math.abs(g.y + g.height - (l.y + l.height))
+    }
+    await expect.poll(gap, { message: 'низ календаря и правой колонки' }).toBeLessThanOrEqual(2)
     const p = (await panel.boundingBox())!
-    const grid = (await cal.locator('section').first().boundingBox())!
-    expect(Math.abs(grid.y + grid.height - (p.y + p.height)), 'низ календаря и правой колонки').toBeLessThanOrEqual(120)
     expect(p.width).toBeLessThanOrEqual(320)
-    expect(Math.round((await cal.locator('[data-shot="weekday-chart"]').boundingBox())!.height)).toBe(176)
+    expect(Math.round((await cal.locator('[data-shot="weekday-chart"]').boundingBox())!.height)).toBeGreaterThanOrEqual(176)
   })
 
 test('календарь на телефоне: «Итог месяца» — сразу под сеткой', async ({ page, db }) => {

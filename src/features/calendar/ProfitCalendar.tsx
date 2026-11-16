@@ -92,7 +92,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
 
   return (
     // широкий экран (выбор владельца — вариант 2): высота ~86 % экрана, по краям небольшие поля (до 2000 px по центру);
-    // панели итогов справа — по высоте содержимого (не растягиваются), колонка 320px — остальное место у календаря
+    // панели итогов справа — колонка 320px до низа календаря (последняя карточка тянется) — остальное место у календаря
     <div data-shot="calendar" className="mx-auto grid w-full max-w-[2000px] gap-4 xl:min-h-[max(680px,86dvh)] xl:grid-cols-[minmax(0,1fr)_320px]">
       <section className="rise flex flex-col rounded-lg border border-border bg-surface p-4 sm:p-5 xl:h-full">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -287,7 +287,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
     const wdMax = Math.max(1e-9, ...sum.weekdays.map((w) => Math.abs(w.pnl)))
     const dayShare = sum.upDays + sum.downDays ? sum.upDays / (sum.upDays + sum.downDays) : 0
     return (
-      <aside ref={panelRef} data-shot="calendar-panel" className="flex flex-col gap-3 xl:gap-4 xl:self-start">
+      <aside ref={panelRef} data-shot="calendar-panel" className="flex flex-col gap-3 xl:gap-4">
         {side && <MonthTotalCard />}
         {m.count === 0 && (
           <section style={{ '--i': 1 } as CSSProperties} className="rise rounded-lg border border-border bg-surface p-4">
@@ -329,11 +329,11 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
               </div>
             </section>
 
-            {/* высота по содержимому: график дней недели фиксированной высоты (176px), без пустоты сверху */}
-            <section style={{ '--i': 4 } as CSSProperties} className="rise rounded-lg border border-border bg-surface p-4">
+            {/* последняя карточка тянется до низа календаря (вариант A владельца, 16.11.2026): график растёт вместе с ней, не меньше 176px */}
+            <section style={{ '--i': 4 } as CSSProperties} className="rise flex flex-col rounded-lg border border-border bg-surface p-4 xl:flex-1">
               <h2 className="text-xs text-muted">{c.byWeekday}</h2>
               {/* линия нуля посередине: прибыль вверх, убыток вниз, сумма над / под столбиком; дни без сделок — «—» */}
-              <div data-shot="weekday-chart" className="relative mt-3 grid h-44 grid-cols-7 gap-1.5">
+              <div data-shot="weekday-chart" className="relative mt-3 grid h-44 grid-cols-7 gap-1.5 xl:h-auto xl:min-h-44 xl:flex-1">
                 <i aria-hidden className="pointer-events-none absolute inset-x-0 top-[calc(50%-0.625rem)] border-t border-border" />
                 {sum.weekdays.map((w, i) => {
                   const h = w.count ? `${Math.max(4, (Math.abs(w.pnl) / wdMax) * 70)}%` : 0
