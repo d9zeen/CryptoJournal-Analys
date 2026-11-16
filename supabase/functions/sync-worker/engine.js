@@ -2361,7 +2361,8 @@ const READ_PATHS = {
 		"/openApi/swap/v2/user/income",
 		"/openApi/v1/account/apiPermissions",
 		"/openApi/spot/v1/account/balance",
-		"/openApi/swap/v2/user/balance"
+		"/openApi/swap/v2/user/balance",
+		"/openApi/spot/v1/trade/myTrades"
 	]),
 	okx: /* @__PURE__ */ new Set([
 		"/api/v5/account/positions-history",
@@ -2380,7 +2381,9 @@ const READ_PATHS = {
 		"/api/v2/spot/account/info",
 		"/api/v3/account/assets",
 		"/api/v2/spot/account/assets",
-		"/api/v2/mix/account/accounts"
+		"/api/v2/mix/account/accounts",
+		"/api/v3/trade/fills",
+		"/api/v2/spot/trade/fills"
 	]),
 	binance: /* @__PURE__ */ new Set([
 		"/fapi/v1/income",
@@ -2862,7 +2865,10 @@ async function fetchBalances(conn, deps) {
 *
 *  - Bybit: /v5/execution/list?category=spot — окна по 7 дней, первый раз за 2 года;
 *  - Binance: /api/v3/myTrades — по парам монет, которые сейчас на балансе (к USDT / USDC / FDUSD), с первой сделки по номерам;
-*  - OKX: /api/v5/trade/fills-history?instType=SPOT — последние 3 месяца (больше OKX не хранит).
+*  - OKX: /api/v5/trade/fills-history?instType=SPOT — последние 3 месяца (больше OKX не хранит);
+*  - Bitget: единый аккаунт — /api/v3/trade/fills?category=SPOT (окна по 30 дней), классический — /api/v2/spot/trade/fills; 90 дней;
+*  - BingX: /openApi/spot/v1/trade/myTrades — по парам монет с баланса, только последние 7 дней (дальше копится с каждой загрузкой);
+*  - Hyperliquid: userFillsByTime по адресу (спот — монеты «@N» и «PURR/USDC», названия из spotMeta), последние 10 000 исполнений.
 * Повторы безопасны: в базе unique (подключение, external_id), поэтому следующая загрузка берёт с запасом в сутки.
 */
 /** Валюты котировки, по которым узнаём пару BTCUSDT → BTC / USDT (длинные — первыми) */
@@ -3033,23 +3039,162 @@ async function okxSpotFills(call, from) {
 	}
 	return out.filter((f) => Date.parse(f.at) >= from);
 }
+const BITGET_DAYS = 90;
+/** Комиссия Bitget: у классического — объект {feeCoin, totalFee}, у единого — массив [{feeCoin, fee}] (знак — минус) */
+function bitgetFee(d) {
+	if (Array.isArray(d)) {
+		const x = d.find((f) => n(f.fee) !== 0) ?? d[0];
+		return {
+			fee: n(x?.fee),
+			coin: x?.feeCoin
+		};
+	}
+	const o = d ?? {};
+	return {
+		fee: n(o.totalFee),
+		coin: o.feeCoin
+	};
+}
+async function bitgetSpotFills(call, from, to) {
+	const out = [];
+	const add = (x, id, price, qty, ts) => {
+		const f = bitgetFee(x.feeDetail);
+		out.push(...only([fill(`bg:${id}`, splitPair(String(x.symbol)), x.side, qty, price, f.fee, f.coin, ts)]));
+	};
+	if ((await call("/api/v3/trade/fills", {
+		category: "SPOT",
+		startTime: Math.max(from, to - 30 * 864e5),
+		endTime: to,
+		limit: 100
+	}))?.code === "00000") {
+		for (const [start, end] of windows(from, to, 30 * DAY)) {
+			let cursor = "";
+			for (let page = 0; page < 100; page++) {
+				const d = await bitgetGet(call, "/api/v3/trade/fills", {
+					category: "SPOT",
+					startTime: start,
+					endTime: end,
+					limit: 100,
+					...cursor ? { cursor } : {}
+				});
+				const list = d?.list ?? [];
+				for (const x of list) add(x, x.execId, x.execPrice, x.execQty, x.createdTime);
+				if (list.length < 100 || !d.cursor || d.cursor === cursor) break;
+				cursor = String(d.cursor);
+			}
+		}
+		return out;
+	}
+	let idLessThan = "";
+	for (let page = 0; page < 200; page++) {
+		const rows = await bitgetGet(call, "/api/v2/spot/trade/fills", {
+			startTime: from,
+			endTime: to,
+			limit: 100,
+			...idLessThan ? { idLessThan } : {}
+		});
+		const list = Array.isArray(rows) ? rows : [];
+		for (const x of list) add(x, x.tradeId, x.priceAvg, x.size, x.cTime);
+		if (list.length < 100) break;
+		const last = String(list[list.length - 1].tradeId ?? "");
+		if (!last || last === idLessThan) break;
+		idLessThan = last;
+	}
+	return out;
+}
+const BINGX_DAYS = 7;
+const BINGX_QUOTES = ["USDT", "USDC"];
+/** История BingX — только по паре (BTC-USDT) и только за 7 дней; пары — из монет на балансе */
+async function bingxSpotFills(call, assets, from, to) {
+	const out = [];
+	const symbols = [...new Set(assets.map(clean))].filter((a) => okSym(a) && !USD_QUOTES.has(a)).flatMap((a) => BINGX_QUOTES.map((q) => ({
+		asset: a,
+		quote: q
+	})));
+	await inBatches(symbols, 3, async (pair) => {
+		const symbol = `${pair.asset}-${pair.quote}`;
+		let start = from;
+		for (let page = 0; page < 20; page++) {
+			let rows;
+			try {
+				const d = await bingxGet(call, "/openApi/spot/v1/trade/myTrades", {
+					symbol,
+					startTime: start,
+					endTime: to,
+					limit: 1e3
+				});
+				rows = Array.isArray(d?.fills) ? d.fills : [];
+			} catch (e) {
+				if (e instanceof ExchangeError && e.kind === "EXCHANGE") return;
+				throw e;
+			}
+			for (const x of rows) out.push(...only([fill(`bx:${symbol}:${x.id}`, pair, x.isBuyer ? "buy" : "sell", x.qty, x.price, x.commission, x.commissionAsset, x.time)]));
+			if (rows.length < 1e3) return;
+			const next = Math.max(...rows.map((x) => n(x.time)));
+			if (next <= start) return;
+			start = next;
+		}
+	});
+	return out;
+}
+/** «@107» / «PURR/USDC» → монета и котировка по spotMeta (обёртки UBTC, UETH → BTC, ETH — как в балансах) */
+function hlSpotPairs(meta) {
+	const tokens = new Map((meta.tokens ?? []).map((t) => [t.index, t.name ?? ""]));
+	const out = /* @__PURE__ */ new Map();
+	for (const u of meta.universe ?? []) {
+		const [b, q] = u.tokens ?? [];
+		const asset = cleanSymbol(tokens.get(b));
+		const quote = cleanSymbol(tokens.get(q));
+		if (!asset || !quote) continue;
+		const pair = {
+			asset,
+			quote
+		};
+		if (u.name) out.set(u.name, pair);
+		if (u.index !== void 0) out.set(`@${u.index}`, pair);
+	}
+	return out;
+}
+async function hyperliquidSpotFills(address, from, fetchFn = fetch) {
+	const res = await fetchFn(HL_API, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ type: "spotMeta" })
+	});
+	if (!res.ok) throw new Error(`HL_HTTP_${res.status} network`);
+	const pairs = hlSpotPairs(await res.json());
+	const fills = await fetchHlFills(address, from, fetchFn);
+	return only(fills.filter((f) => f.coin.startsWith("@") || f.coin.includes("/")).map((f) => fill(`hl:${f.tid}`, pairs.get(f.coin) ?? null, f.side === "B" ? "buy" : "sell", f.sz, f.px, f.fee, cleanSymbol(f.feeToken ?? "USDC"), f.time)));
+}
 /**
 * Новые исполнения подключения с прошлого раза (cursor — ISO или null: первый раз — вся доступная история).
 * Возвращает исполнения и новый курсор (сейчас) или null, если биржа историю спота не отдаёт.
+* call — запросы к бирже с ключом (exchange-proxy / sync-worker); Hyperliquid — по адресу (api_key), напрямую через fetchFn.
 */
 async function fetchSpotFills(conn, call, opts) {
 	const now = opts.now ?? Date.now();
 	const since = opts.cursor ? Date.parse(opts.cursor) - DAY : null;
+	const back = (days) => Math.max(since ?? 0, now - days * DAY);
 	let fills;
 	switch (conn.exchange) {
 		case "bybit":
-			fills = await bybitSpotFills(call, Math.max(since ?? 0, now - 730 * DAY), now);
+			fills = await bybitSpotFills(call, back(730), now);
 			break;
 		case "binance":
 			fills = await binanceSpotFills(call, opts.assets, since);
 			break;
 		case "okx":
-			fills = await okxSpotFills(call, Math.max(since ?? 0, now - 90 * DAY));
+			fills = await okxSpotFills(call, back(90));
+			break;
+		case "bitget":
+			fills = await bitgetSpotFills(call, back(BITGET_DAYS), now);
+			break;
+		case "bingx":
+			fills = await bingxSpotFills(call, opts.assets, back(BINGX_DAYS), now);
+			break;
+		case "hyperliquid":
+			if (!conn.api_key) return null;
+			fills = await hyperliquidSpotFills(conn.api_key, since ?? 0, opts.fetchFn);
 			break;
 		default: return null;
 	}

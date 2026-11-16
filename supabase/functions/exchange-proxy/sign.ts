@@ -24,6 +24,8 @@ export const READ_PATHS: Record<CexId, ReadonlySet<string>> = {
   bingx: new Set([
     '/openApi/swap/v2/trade/positionHistory', '/openApi/swap/v2/user/income', '/openApi/v1/account/apiPermissions',
     '/openApi/spot/v1/account/balance', '/openApi/swap/v2/user/balance',
+    // портфель, этап 2: история спотовых исполнений — средняя цена входа
+    '/openApi/spot/v1/trade/myTrades',
   ]),
   okx: new Set([
     '/api/v5/account/positions-history', '/api/v5/account/config', '/api/v5/public/instruments',
@@ -34,6 +36,8 @@ export const READ_PATHS: Record<CexId, ReadonlySet<string>> = {
   bitget: new Set([
     '/api/v2/mix/position/history-position', '/api/v3/position/history-position', '/api/v3/account/settings', '/api/v3/account/info', '/api/v2/spot/account/info',
     '/api/v3/account/assets', '/api/v2/spot/account/assets', '/api/v2/mix/account/accounts',
+    // портфель, этап 2: история спотовых исполнений (единый аккаунт / классический)
+    '/api/v3/trade/fills', '/api/v2/spot/trade/fills',
   ]),
   binance: new Set([
     '/fapi/v1/income', '/fapi/v1/userTrades', '/sapi/v1/account/apiRestrictions',

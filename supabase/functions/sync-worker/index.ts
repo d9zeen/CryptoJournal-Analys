@@ -69,10 +69,10 @@ Deno.serve(async (req) => {
   // старые балансы остаются (график не «падает»), следующий запуск попробует снова
   // этап 2 (0020): новые спотовые покупки / продажи с прошлого раза → spot_fills (средняя цена входа). Ошибка — не страшно, в следующий раз
   const syncFills = async (assets: string[]) => {
-    if (!cred) return
+    if (!cred && conn.exchange !== 'hyperliquid') return
     try {
       const { data: st } = await admin.from('spot_sync').select('cursor_at').eq('connection_id', conn.id).maybeSingle()
-      const r = await fetchSpotFills({ exchange: conn.exchange as string }, cexCall, { cursor: (st?.cursor_at as string | undefined) ?? null, assets })
+      const r = await fetchSpotFills({ exchange: conn.exchange as string, api_key: conn.api_key as string }, cexCall, { cursor: (st?.cursor_at as string | undefined) ?? null, assets })
       if (!r) return
       const parts = r.fills.length ? chunks(r.fills, 5000) : [[]]
       for (let i = 0; i < parts.length; i++) {

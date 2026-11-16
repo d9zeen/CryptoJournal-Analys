@@ -29,6 +29,7 @@ import {
   movers,
   portfolioRows,
   portfolioSeries,
+  estimateHistory,
   portfolioTotals,
   type Coin,
   type PortfolioRange,
@@ -89,7 +90,10 @@ export function PortfolioPage() {
   // график — по всему портфелю (снимки пишутся целиком), фильтр источника влияет на таблицу и цифры
   const allTotals = useMemo(() => portfolioTotals(portfolioRows(list, coins, costs, null, basis)), [list, coins, costs, basis])
   const btcPrice = useMemo(() => coins.find((c) => c.symbol === 'BTC')?.price ?? null, [coins])
-  const series = useMemo(() => portfolioSeries(snaps, range, Date.now(), { value: allTotals.value, btcPrice }), [snaps, range, allTotals.value, btcPrice])
+  // до первых снимков — оценка по нынешнему составу (все монеты, без фильтра по источнику — как и снимки)
+  const estimate = useMemo(() => estimateHistory(portfolioRows(list, coins, costs, null, basis), coins, Date.now()), [list, coins, costs, basis])
+  const series = useMemo(() => portfolioSeries(snaps, range, Date.now(), { value: allTotals.value, btcPrice }, estimate), [snaps, range, allTotals.value, btcPrice, estimate])
+  const hasEstimate = series.some((x) => x.value === null)
   const shown = hideDust ? rows.filter((r) => r.value !== null && r.value >= DUST_USD) : rows
   const dust = rows.length - shown.length
   const failed = refresh.data?.failed ?? []
@@ -189,6 +193,12 @@ export function PortfolioPage() {
               <i aria-hidden className="block w-3.5 border-t-2 border-dashed border-muted" />
               {p.chart.btc}
             </span>
+            {hasEstimate && (
+              <span data-chart-estimate className="flex items-center gap-1.5">
+                <i aria-hidden className="block w-3.5 border-t-2 border-dashed border-primary" />
+                {p.chart.estimate}
+              </span>
+            )}
           </div>
           {/* график занимает всю высоту карточки (на xl — вровень с «Из чего состоит»), не ниже 260px */}
           <div data-portfolio-chart className="relative mt-2 min-h-[260px] flex-1">

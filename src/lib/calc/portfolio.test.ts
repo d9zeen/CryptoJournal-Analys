@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { allocation, coinsBySymbol, costBasis, movers, portfolioRows, portfolioSeries, portfolioTotals, realizedTotal, thinOut, type Coin, type Holding } from './portfolio'
+import { allocation, coinsBySymbol, costBasis, estimateHistory, movers, portfolioRows, portfolioSeries, portfolioTotals, realizedTotal, thinOut, type Coin, type Holding } from './portfolio'
 
 const coin = (symbol: string, price: number | null, rank: number, change_24h: number | null = null, id = symbol.toLowerCase()): Coin => ({
   id, symbol, name: symbol, rank, price, change_24h, change_7d: null, spark: null, icon: null,
@@ -91,6 +91,30 @@ describe('портфель: доли, лучшие / худшие, график'
     const snaps = Array.from({ length: 24 * 30 }, (_, i) => ({ at: new Date(now - (24 * 30 - i) * H).toISOString(), total_usd: 1000 + (i % 2) * 50, btc_price: 100000 }))
     expect(portfolioSeries(snaps, '3m', now).length).toBeLessThanOrEqual(31)
     expect(portfolioSeries(snaps, '24h', now).length).toBe(24)
+  })
+})
+
+describe('портфель: оценка до первого снимка', () => {
+  const now = Date.parse('2026-11-16T12:00:00Z')
+  const withSpark = (c: Coin, spark: number[]): Coin => ({ ...c, spark })
+  const cs = [withSpark(coin('BTC', 100000, 1), [80000, 90000, 100000]), coin('USDT', 1, 3), coin('ETH', 3000, 2)]
+  const rows = portfolioRows([h('BTC', 0.5), h('USDT', 1000, null), h('POLYMARKET', 80, 'c3', 80)], cs, {})
+  it('нынешние монеты × цены недели; без недельной цены — по нынешней стоимости', () => {
+    const e = estimateHistory(rows, cs, now, 3)
+    expect(e.map((p) => p.value)).toEqual([0.5 * 80000 + 1000 + 80, 0.5 * 90000 + 1000 + 80])
+    expect(e[0].t).toBe(now - 7 * 864e5)
+    expect(e[1].btcPrice).toBe(90000)
+  })
+  it('ни у одной монеты нет недельной цены — оценки нет', () => {
+    expect(estimateHistory(portfolioRows([h('ETH', 1)], cs, {}), cs, now)).toEqual([])
+  })
+  it('на графике — пунктиром до первого снимка, стык общий; при истории снимков оценки нет', () => {
+    const e = estimateHistory(rows, cs, now, 3)
+    const snaps = [{ at: new Date(now - 3_600_000 * 2).toISOString(), total_usd: 51000, btc_price: 100000 }]
+    const s = portfolioSeries(snaps, '7d', now, { value: 51080, btcPrice: 100000 }, e)
+    expect(s.map((p) => [p.value, p.est])).toEqual([[null, 41080], [null, 46080], [51000, 51000], [51080, null]])
+    const old = [{ at: new Date(now - 8 * 864e5).toISOString(), total_usd: 40000, btc_price: 90000 }, ...snaps]
+    expect(portfolioSeries(old, 'all', now, undefined, e).every((p) => p.est === null)).toBe(true)
   })
 })
 
