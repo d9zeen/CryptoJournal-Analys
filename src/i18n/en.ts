@@ -952,6 +952,10 @@ export const en: Dict = {
     secret: 'API Secret',
     secretHint: 'Stored encrypted on the server. Neither you nor the site in your browser can see it again.',
     passphrase: 'Passphrase',
+    emptyTitle: 'Connect your first exchange',
+    emptyText: 'Trades will come in by themselves: Bybit, Binance, OKX, BingX, Bitget, Hyperliquid, Polymarket. Read-only key.',
+    hubCaption: 'Exchanges connected: {n} · the lights are trades flowing into your journal',
+    searching: 'Looking for new trades…',
     passphraseHint: 'The one you picked when creating the key. Stored encrypted together with the secret.',
     grid: {
       title: 'Connect an exchange or upload a file',

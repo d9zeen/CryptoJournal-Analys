@@ -28,6 +28,7 @@ import { useProfile } from '@/features/settings/api'
 import { browserTimeZone } from '@/lib/tz'
 import { ScanStrip } from './ScanStrip'
 import { CalendarLanding } from './CalendarLanding'
+import { Shimmer } from '@/components/fx/Shimmer'
 
 const MAX_BYTES = 5 * 1024 * 1024
 const PREVIEW_ROWS = 100
@@ -316,7 +317,11 @@ export function ImportPage() {
 
       {prepared && prepared.missing.length === 0 && prepared.table.rows.length > 0 && (
         <>
-          {existing.isLoading && <p className="text-sm text-muted">{t.import.checking}</p>}
+          {existing.isLoading && (
+            <p className="text-sm text-muted">
+              <Shimmer>{t.import.checking}</Shimmer>
+            </p>
+          )}
           {existing.error && <Alert tone="error">{dbErrorMessage(existing.error, t)}</Alert>}
 
           {sameError && (
@@ -330,7 +335,8 @@ export function ImportPage() {
           )}
 
           {plan && (
-            <Card className="flex flex-col gap-3 !p-4">
+            // №2 «Луч по рамке» — пока сделки записываются в базу
+            <Card className={`relative flex flex-col gap-3 !p-4 ${run.isPending ? 'beam-run' : ''}`}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap gap-2 text-sm">
                   <Badge status="new">{fmt(t.import.summary.new, { n: plan.counts.new })}</Badge>

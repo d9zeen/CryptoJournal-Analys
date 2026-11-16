@@ -9,7 +9,7 @@ import { formatNumber, formatPercent, formatPnl, formatPnlShort, formatR, format
 import { recentForm, type DayPnl, type DrawdownPeriod, type EquityPoint, type Outcome, type Summary } from '@/lib/calc/stats'
 import type { Delta, KpiDeltas } from '@/lib/calc/compare'
 import type { TraderScore } from '@/lib/calc/score'
-import { useShown, useSpotlight } from '@/lib/motion'
+import { useGlare, useShown, useSpotlight } from '@/lib/motion'
 import { AnimatedNumber } from '@/components/AnimatedNumber'
 import { daysBetween, withTime } from './equityTime'
 
@@ -144,9 +144,11 @@ export function Widget({
   return (
     <div
       data-spot
-      className={`spot-frame min-w-0 rounded-lg ${i !== undefined ? 'rise' : ''} ${className}`}
+      data-glare
+      className={`spot-frame relative min-w-0 overflow-hidden rounded-lg ${i !== undefined ? 'rise' : ''} ${className}`}
       style={i !== undefined ? ({ '--i': i } as CSSProperties) : undefined}
     >
+      <span aria-hidden className="glare-shine" />
       <section className="spot-card flex h-full min-w-0 flex-col gap-3 rounded-[calc(0.5rem-1px)] bg-surface p-4">
         <div className="flex items-center justify-between gap-2">
           <h2 className="flex items-center gap-1.5 text-xs font-medium text-muted">
@@ -206,6 +208,7 @@ export function KpiRow({
   const grossLoss = -(s.avgLoss ?? 0) * s.losses
   const spotRef = useRef<HTMLDivElement>(null)
   useSpotlight(spotRef)
+  useGlare(spotRef) // №4 «Блик и наклон»
   const num = (value: number | null, format: (n: number) => string) =>
     value === null || !Number.isFinite(value) ? <>{value === null ? '—' : format(value)}</> : <AnimatedNumber value={value} format={format} rollKey={rollKey} />
   const ratio = s.avgWin !== null && s.avgLoss !== null && s.avgLoss < 0 ? s.avgWin / -s.avgLoss : null

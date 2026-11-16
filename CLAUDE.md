@@ -181,7 +181,13 @@ docs/SECURITY.md       вся защита (база, сайт, сборка) + 
   .spot-frame / .spot-card, .tilt / .tilt-sheen, .draw-path, .eq-curtain, .cal-day-link); хуки — `src/lib/motion.ts`;
   компоненты — `src/components`: Skeleton (+ заготовки страниц), RollNumber, AnimatedNumber, PasswordInput, CheckMark, FormError, SaveButton.
 - «Уменьшить движение» — общий блок в theme.css; итоговое состояние задаётся в базовых стилях, анимация только «приводит» к нему.
-- Наклон (№2, useTilt) — только главная: превью дашборда.
+- Наклон (№2, useTilt) — главная: превью дашборда.
+- Анимации «следующего уровня» (16.11.2026, выбор владельца — все шесть, «везде»; образцы 21st.dev, демо — артефакт «Анимации CryptoJournal»), блоки — `src/components/fx` + CSS в theme.css:
+  №1 BeamHub «Поток в дневник» (animated-beam: огоньки stroke-dashoffset по линиям бирж к дневнику; «Биржи» сверху при подключениях, у синхронизируемой — быстрее; главная — блок «Работает с»),
+  №2 `.beam-run` «Луч по рамке» (border-beam: конус света вращается за карточкой; элементу нужна своя позиция relative / fixed, фон — `--beam-fill`): карточка биржи при синхронизации,
+  «Мост», запись файла, окошко загрузок, главная кнопка «Начать бесплатно»; №3 Shimmer «Мерцающий текст» (text-shimmer): все «идёт работа»;
+  №4 useGlare «Блик и наклон» (glare-card: [data-glare] + .glare-shine, токен --color-glare; только мышь): сетка бирж, карточки «Статистики», «Итог месяца»;
+  №5 Orbit «Орбита» (orbiting-circles): «Биржи» без подключений; №6 DigitTicker «Счётчик-барабан» (number-ticker): итог месяца после загрузки файла, окошко загрузок.
 - Свечной график первого экрана (features/landing/HeroCandles.tsx, canvas) — свои токены theme.css `--hero-up` / `--hero-down` / `--hero-*-a`
   (11.11.2026: растущие фиолетовые, падающие серые — на тёмной светлый, на светлой тёмный, вариант B; от палитры прибыли / убытка не зависит).
 - Тарифы на главной (PlanCards, образец — Prism UI «Pricing» с 21st.dev): вперёд выходит карточка под мышкой / в фокусе (без мышки — Pro Plus),
@@ -211,7 +217,7 @@ docs/SECURITY.md       вся защита (база, сайт, сборка) + 
 | `VITE_SUPABASE_ANON_KEY` | anon key или publishable key (публичный) |
 | `BASE_PATH` | только при сборке для GitHub Pages: `/CryptoJournal-Analys/` (ставит workflow) |
 
-Проект Supabase: `cryptojournal`, ref `dkjavndvuulnzflowdhj` (Frankfurt), миграции 0001–0015 применены (0016 — новые тарифы, 0017 — заметки дня, 0018 — Binance / OKX / BingX / Bitget по API: ждут применения владельцем, строго по порядку) (0005 — админка, владелец добавлен в `admins`; 0006 — подключения бирж; 0007–0008 — синхронизация по расписанию; 0009 — админ без лимитов; 0010–0011 — Polymarket, рынок `prediction`, `trades.title`; 0012–0013 — тарифы Pro / Pro Plus; 0014 — выдача админки на сайте, 05.11.2026; 0015 — палитра profiles.palette, 07.11.2026).
+Проект Supabase: `cryptojournal`, ref `dkjavndvuulnzflowdhj` (Frankfurt), миграции 0001–0018 применены (16.11.2026: 0016 — новые тарифы, 0017 — заметки дня, 0018 — Binance / OKX / BingX / Bitget по API; функции exchange-proxy и sync-worker выложены) (0005 — админка, владелец добавлен в `admins`; 0006 — подключения бирж; 0007–0008 — синхронизация по расписанию; 0009 — админ без лимитов; 0010–0011 — Polymarket, рынок `prediction`, `trades.title`; 0012–0013 — тарифы Pro / Pro Plus; 0014 — выдача админки на сайте, 05.11.2026; 0015 — палитра profiles.palette, 07.11.2026).
 Подключения бирж (как TradeZella): `features/connections` + `lib/sync` + серверная функция `supabase/functions/exchange-proxy` (index.ts + sign.ts; при изменении — выложить заново через коннектор Supabase, verify_jwt = true). Секреты ключей — в Vault, браузер их не видит; у OKX / Bitget в Vault JSON {s, p} с кодовой фразой (0018, `parseSecret`). По ключу: Bybit, Binance, OKX, BingX, Bitget (0018). Новые биржи: `connection_kind` в новой миграции + адреса чтения и подпись в `exchange-proxy/sign.ts` + модуль в `lib/sync` (CEX_MODULES) + `CONNECTABLE`.
 Синхронизация по расписанию (Pro Plus, каждые 3 ч): pg_cron `cj-sync` → `dispatch_sync()` → pg_net → функция `sync-worker` (verify_jwt = false, проверяет секрет `cj_sync_secret` из Vault).
 Логика одна для браузера и сервера: `src/lib/sync/run.ts`; `supabase/functions/sync-worker/engine.js` собирается `npm run build:functions` (CI проверяет, что он свежий).

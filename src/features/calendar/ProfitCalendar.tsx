@@ -22,6 +22,7 @@ import { AnimatedNumber } from '@/components/AnimatedNumber'
 import { CalendarSkeleton } from '@/components/Skeleton'
 import { PaletteStrip } from '@/features/palette/PaletteStrip'
 import { zonedParts } from '@/lib/tz'
+import { useGlare } from '@/lib/motion'
 import { DayPanel, type DayTrade } from './DayPanel'
 
 const monthTitle = () => new Intl.DateTimeFormat(intlLocale(), { month: 'long', year: 'numeric' })
@@ -70,6 +71,8 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
   // месяц, чьи сделки уже на экране: волна клеток (№11) и прокрутка итога — когда пришли данные нового месяца
   const monthKey = `${view.y}-${view.m}`
   const shownMonth = useRef(monthKey)
+  const panelRef = useRef<HTMLElement>(null)
+  useGlare(panelRef) // №4 «Блик и наклон» на «Итоге месяца»
   if (!isLoading && !isPlaceholderData) shownMonth.current = monthKey
 
   const cal = useMemo(() => profitCalendar(closedTrades(trades.map((tr) => ({ ...tr, tagIds: [] }))), view.y, view.m, timeZone), [trades, view, timeZone])
@@ -257,7 +260,8 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
   /** «Итог месяца» в правой колонке (xl): результат крупно, «16 сделок · винрейт 50 %», лучшая / худшая сделка; рамка — цвет кнопок */
   function MonthTotalCard() {
     return (
-      <section data-shot="month-total" style={{ '--i': 0 } as CSSProperties} className="rise rounded-lg border border-primary bg-surface p-5">
+      <section data-shot="month-total" data-glare style={{ '--i': 0 } as CSSProperties} className="rise relative overflow-hidden rounded-lg border border-primary bg-surface p-5">
+        <span aria-hidden className="glare-shine" />
         <h2 className="text-sm text-muted">{c.monthTotal}</h2>
         <div className={`num mt-1 text-4xl font-semibold ${m.count === 0 ? 'text-muted' : m.pnl >= 0 ? 'text-up' : 'text-down'}`}>
           {m.count ? <AnimatedNumber value={m.pnl} format={formatPnl} rollKey={shownMonth.current} /> : '—'}
@@ -283,7 +287,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
     const wdMax = Math.max(1e-9, ...sum.weekdays.map((w) => Math.abs(w.pnl)))
     const dayShare = sum.upDays + sum.downDays ? sum.upDays / (sum.upDays + sum.downDays) : 0
     return (
-      <aside data-shot="calendar-panel" className="flex flex-col gap-3 xl:gap-4 xl:self-start">
+      <aside ref={panelRef} data-shot="calendar-panel" className="flex flex-col gap-3 xl:gap-4 xl:self-start">
         {side && <MonthTotalCard />}
         {m.count === 0 && (
           <section style={{ '--i': 1 } as CSSProperties} className="rise rounded-lg border border-border bg-surface p-4">

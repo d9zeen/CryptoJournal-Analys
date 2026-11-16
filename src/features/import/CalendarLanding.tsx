@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { fmt, plural, useT } from '@/i18n'
 import { CheckMark } from '@/components/CheckMark'
+import { DigitTicker } from '@/components/fx/DigitTicker'
 import { formatNumber, formatPnl, pnlClass } from '@/lib/format'
 import { intlLocale } from '@/lib/locale'
 import { prefersReducedMotion } from '@/lib/motion'
@@ -116,7 +117,7 @@ export function CalendarLanding({
         </p>
         <p className="text-sm text-muted">
           {fmt(l.month, { month: monthName })}:{' '}
-          <span className={`num font-semibold ${pnlClass(cal.data.month.pnl)}`}>{formatPnl(cal.data.month.pnl)}</span>
+          <DigitTicker text={formatPnl(cal.data.month.pnl)} delay={0.3} className={`num font-semibold ${pnlClass(cal.data.month.pnl)}`} />
           {' · '}
           {plural(cal.data.month.count, t.dashboard.calendar.tradesN)}
         </p>
