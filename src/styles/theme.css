@@ -62,7 +62,7 @@
   /* блик наклона: в тёмной — чуть светлее текста, в светлой — белый свет */
   --sheen-r: 260px;
   --color-sheen: color-mix(in srgb, var(--color-text) 8%, transparent);
-  --color-glare: color-mix(in srgb, white 11%, transparent); /* блик на карточке под мышкой (№4) */
+  --color-glare: color-mix(in srgb, white 6%, transparent); /* блик на карточке под мышкой (№4), тихий */
   --sheen-end: 60%;
   --sheen-blend: normal;
 
@@ -196,7 +196,7 @@
   --color-spot-glow-mid: color-mix(in srgb, var(--color-primary) 8%, transparent);
   --sheen-r: 340px;
   --color-sheen: color-mix(in srgb, white 75%, transparent);
-  --color-glare: color-mix(in srgb, white 55%, transparent);
+  --color-glare: color-mix(in srgb, white 35%, transparent);
   --sheen-end: 65%;
 
   /* Свечи первого экрана: фиолетовые растущие, тёмные тёплые серые падающие (вариант B) — плотнее, чем в тёмной */

@@ -29,6 +29,7 @@ import { CheckMark } from '@/components/CheckMark'
 import { EXCHANGE_CARDS, ExchangeGrid, ExchangePanel } from './ExchangeGrid'
 import { BeamHub, type HubNode } from '@/components/fx/BeamHub'
 import { Orbit } from '@/components/fx/Orbit'
+import { useMediaQuery } from '@/lib/useMediaQuery'
 import { Shimmer } from '@/components/fx/Shimmer'
 import { pause } from '@/lib/motion'
 import {
@@ -84,6 +85,10 @@ export function ConnectionsCard({ onPickFile }: { onPickFile?: (exchange: string
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
   const now = useNow()
   const recent = useRecentPnl(conns.length > 0)
+  // «Орбита» крупнее на широком экране: 220 → 280 → 340
+  const wide = useMediaQuery('(min-width: 1280px)')
+  const mid = useMediaQuery('(min-width: 768px)')
+  const orbitSize = wide ? 340 : mid ? 280 : 220
   const syncingIds = useSyncingIds()
   // №1 «Поток в дневник»: сначала подключённые биржи, остальные места — неподключённые (серые), всего до 6
   const hubNodes = useMemo<HubNode[]>(() => {
@@ -137,13 +142,36 @@ export function ConnectionsCard({ onPickFile }: { onPickFile?: (exchange: string
         <p className="text-sm text-muted">{t.common.loading}</p>
       ) : conns.length === 0 ? (
         // подключений нет — №5 «Орбита»: биржи кружат вокруг дневника; на Basic — строка про тариф
-        <div data-empty-orbit className="flex flex-col items-center gap-5 rounded-xl border border-border bg-surface px-4 py-6 sm:flex-row sm:justify-center sm:gap-10">
-          <Orbit size={220} />
-          <div className="flex max-w-sm flex-col gap-2 text-center sm:text-left">
-            <p className="font-display text-lg font-semibold">{c.emptyTitle}</p>
-            <p className="text-sm text-muted">{c.emptyText}</p>
-            {usage && !admin && planInfo(plan).connections === 0 && <UpgradeLine text={t.plans.upgrade.connectionsFree} />}
+        // на широком экране — в три колонки: крупная орбита, текст с кнопкой, три шага «как подключить» (без пустого места по бокам)
+        <div
+          data-empty-orbit
+          className="grid items-center justify-items-center gap-6 rounded-xl border border-border bg-surface px-4 py-6 sm:px-8 md:grid-cols-[auto_minmax(0,1fr)] md:justify-items-start xl:grid-cols-[auto_minmax(0,30rem)_minmax(0,1fr)] xl:gap-12 xl:py-8"
+        >
+          <Orbit size={orbitSize} />
+          <div className="flex max-w-md flex-col items-center gap-3 text-center md:items-start md:text-left">
+            <p className="font-display text-xl font-semibold xl:text-2xl">{c.emptyTitle}</p>
+            <p className="text-sm text-muted xl:text-base">{c.emptyText}</p>
+            {usage && !admin && planInfo(plan).connections === 0 ? (
+              <UpgradeLine text={t.plans.upgrade.connectionsFree} />
+            ) : (
+              <Button className="mt-1" onClick={() => setPanel('picker')}>
+                {c.emptyCta}
+              </Button>
+            )}
           </div>
+          <ol className="grid w-full gap-3 md:col-span-2 md:grid-cols-3 xl:col-span-1 xl:grid-cols-1">
+            {c.emptySteps.map((step, i) => (
+              <li key={step.title} className="rise flex gap-3 rounded-lg border border-border bg-surface-2/50 p-3" style={{ '--i': i + 2 } as React.CSSProperties}>
+                <span aria-hidden className="num grid size-7 shrink-0 place-items-center rounded-full bg-primary/14 text-xs font-bold text-primary">
+                  {i + 1}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold">{step.title}</span>
+                  <span className="block text-xs text-muted">{step.text}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
         </div>
       ) : (
         <>

@@ -954,6 +954,12 @@ export const en: Dict = {
     passphrase: 'Passphrase',
     emptyTitle: 'Connect your first exchange',
     emptyText: 'Trades will come in by themselves: Bybit, Binance, OKX, BingX, Bitget, Hyperliquid, Polymarket. Read-only key.',
+    emptyCta: 'Connect an exchange',
+    emptySteps: [
+      { title: 'Pick an exchange', text: 'In the grid below or with “Connect an exchange” — you get instructions for that exchange.' },
+      { title: 'Create a read-only key', text: 'It cannot trade or withdraw. OKX and Bitget also need a passphrase; Hyperliquid and Polymarket just an address.' },
+      { title: 'Trades come in by themselves', text: 'First the history of recent months, then new trades while the site is open, and every 3 hours on Pro Plus.' },
+    ],
     hubCaption: 'Exchanges connected: {n} · the lights are trades flowing into your journal',
     searching: 'Looking for new trades…',
     passphraseHint: 'The one you picked when creating the key. Stored encrypted together with the secret.',
