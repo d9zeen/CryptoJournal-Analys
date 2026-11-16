@@ -476,6 +476,31 @@
   from { transform: translateX(32px); opacity: 0; }
 }
 
+/* Анимация A «Поток сделок»: записанные сделки въезжают сверху (ImportPage → ImportFlow) */
+.import-flow-row:first-child {
+  animation: var(--animate-drop);
+}
+
+/* Анимация C «Мост» (connections/ConnectionsCard → Bridge): по линии бегут точки (только transform), линия прорисовывается (.draw-path) */
+.bridge-dot {
+  animation: bridge-run 1.05s linear infinite;
+}
+@keyframes bridge-run {
+  from { transform: translateX(0); opacity: 0; }
+  15% { opacity: 1; }
+  85% { opacity: 1; }
+  to { transform: translateX(116px); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bridge-dot { display: none; }
+}
+
+/* Окошко фоновых загрузок (components/ActivityToast): въезжает снизу; строки — тоже */
+.activity-toast,
+.activity-toast li {
+  animation: var(--animate-rise);
+}
+
 /* Большая кривая капитала (EquityChart): «шторка» цвета карточки уезжает вправо — линия и заливка открываются слева направо;
    итоговое положение шторки — за правым краем (при «уменьшить движение» график виден сразу) */
 .eq-curtain {

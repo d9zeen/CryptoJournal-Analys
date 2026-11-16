@@ -8,6 +8,14 @@ import type { ImportedTrade, ParsedRow } from '@/lib/import/types'
 import { BYBIT_HISTORY_DAYS, BybitError, DAY, checkBybitKey, fetchBybitTrades, type BybitCall } from './bybit'
 import { fetchHlFills, hlFillsToTrades } from './hyperliquid'
 import { fetchPmClosed, pmDirectGet, pmPositionToTrade, type PmGet } from './polymarket'
+import { ExchangeError, type CexCall, type CexModule } from './cex'
+import { bingxModule } from './bingx'
+import { okxModule } from './okx'
+import { bitgetModule } from './bitget'
+import { binanceModule } from './binance'
+
+/** Биржи с ключом API, кроме Bybit (у него свой путь — с датой окончания ключа) */
+export const CEX_MODULES: Record<string, CexModule> = { bingx: bingxModule, okx: okxModule, bitget: bitgetModule, binance: binanceModule }
 
 export type SyncConnection = {
   id: string
@@ -20,8 +28,8 @@ export type SyncConnection = {
 export type SyncResult = { found: number; inserted: number; overLimit: number }
 
 export type SyncDeps = {
-  /** запросы к Bybit, подписанные ключом подключения */
-  bybitCall: BybitCall
+  /** запросы к бирже (Bybit, BingX, OKX, Bitget, Binance), подписанные ключом подключения; только чтение */
+  cexCall: CexCall
   fetchFn?: typeof fetch
   /** запросы к Polymarket Data API (по умолчанию — напрямую; из браузера — через exchange-proxy) */
   polymarketGet?: PmGet
@@ -60,6 +68,7 @@ function bybitErrorCode(e: BybitError): string {
 export function toSyncError(e: unknown): SyncError {
   if (e instanceof SyncError) return e
   if (e instanceof BybitError) return new SyncError(bybitErrorCode(e), `${e.code}: ${e.message}`)
+  if (e instanceof ExchangeError) return new SyncError(e.kind, e.detail)
   const msg = e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e)
   if (msg.includes('FREE_LIMIT_REACHED')) return new SyncError('FREE_LIMIT')
   if (/HL_HTTP|PM_HTTP|fetch|network/i.test(msg)) return new SyncError('EXCHANGE_DOWN', msg)
@@ -80,13 +89,23 @@ export async function runSync(conn: SyncConnection, deps: SyncDeps): Promise<Syn
     let nextCursor: number | null
     if (conn.exchange === 'bybit') {
       // ключ всё ещё «только чтение» и когда он истекает
-      const info = await checkBybitKey(deps.bybitCall)
+      const call = deps.cexCall as BybitCall
+      const info = await checkBybitKey(call)
       if (!info.readOnly) throw new SyncError('KEY_NOT_READONLY')
       await deps.setKeyExpiry?.(info.expiresAt)
       // с запасом в 2 дня: Bybit может отдать закрытие чуть позже, дубли всё равно отсеются
       const from = conn.cursor_at ? Date.parse(conn.cursor_at) - 2 * DAY : now - BYBIT_HISTORY_DAYS * DAY
-      trades = await fetchBybitTrades(deps.bybitCall, from, now)
+      trades = await fetchBybitTrades(call, from, now)
       nextCursor = now
+    } else if (CEX_MODULES[conn.exchange]) {
+      const m = CEX_MODULES[conn.exchange]
+      const info = await m.check(deps.cexCall)
+      if (!info.readOnly) throw new SyncError('KEY_NOT_READONLY')
+      if (info.expiresAt !== undefined) await deps.setKeyExpiry?.(info.expiresAt)
+      const from = conn.cursor_at ? Date.parse(conn.cursor_at) - m.overlapMs : now - m.historyDays * DAY
+      const res = await m.fetch(deps.cexCall, Math.max(from, now - m.historyDays * DAY), now)
+      trades = res.trades
+      nextCursor = res.cursor
     } else if (conn.exchange === 'hyperliquid') {
       const from = conn.cursor_at ? Date.parse(conn.cursor_at) : 0
       const res = hlFillsToTrades(await fetchHlFills(conn.api_key, from, deps.fetchFn))

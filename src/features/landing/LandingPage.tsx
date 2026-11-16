@@ -23,8 +23,8 @@ import type { ClosedTrade } from '@/lib/calc/stats'
 const EquityChart = lazy(() => import('@/features/dashboard/charts').then((m) => ({ default: m.EquityChart })))
 
 /** Полоса бирж: две честные строки — что подключается само по API и что загружается файлом (названия не переводятся) */
-const VIA_API = ['Bybit', 'Hyperliquid', 'Polymarket']
-const VIA_FILE = ['Binance', 'OKX', 'BingX', 'Bitget', 'MEXC']
+const VIA_API = ['Bybit', 'Binance', 'OKX', 'BingX', 'Bitget', 'Hyperliquid', 'Polymarket']
+const VIA_FILE = ['MEXC']
 const pill = 'inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-sm font-medium'
 
 const btn = 'inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors'

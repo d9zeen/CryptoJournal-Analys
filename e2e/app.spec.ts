@@ -319,8 +319,16 @@ test.describe('импорт', () => {
     const bar = page.getByRole('progressbar', { name: 'Записываю сделки…' })
     await expect(bar).toContainText(/500 из 1\s040 сделок/)
     await expect(bar).toHaveAttribute('aria-valuenow', '500')
+    // анимация A: записанные сделки въезжают; окошко в углу показывает тот же прогресс
+    await expect(page.locator('[data-import-flow] li').first()).toBeVisible()
+    await expect(page.locator('[data-activity-item="file"]')).toContainText(/500 из 1\s040 сделок/)
     await expect(page.getByText(/Готово: импортировано сделок — 1\s?040/)).toBeVisible()
+    await expect(page.locator('[data-import-done]')).toBeVisible()
     await expect(bar).toHaveCount(0)
+    // окошко остаётся и на другой странице, со ссылкой «К сделкам»
+    await expect(page.locator('[data-activity-item="file"]')).toHaveAttribute('data-status', 'done')
+    await page.goto('trades')
+    await expect(page.locator('[data-activity]')).toHaveCount(0) // после перезагрузки страницы окошка нет — загрузка уже закончилась
   })
 })
 
@@ -537,7 +545,7 @@ test('страница тарифов: Basic, Pro, Pro Plus; цены тольк
   if (!phone) await expect(page.getByText('Всё автоматически')).toBeVisible()
   await expect(page.getByText('Сделок в месяц', { exact: true }).locator('visible=true')).toBeVisible()
   await expect(page.getByRole('row').filter({ hasText: 'без лимита' })).toContainText(/50.*без лимита.*без лимита/)
-  await expect(page.getByText('Биржи и кошельки: Bybit по ключу, Hyperliquid по адресу').locator('visible=true')).toBeVisible()
+  await expect(page.getByText('Биржи по ключу, Hyperliquid по адресу').locator('visible=true')).toBeVisible()
   // оплаты за год пока нет: ни переключателя «Месяц / Год», ни годовых цен, ни «цены основателя»
   await expect(page.getByRole('radio', { name: /^(Месяц|Год)/ })).toHaveCount(0)
   await expect(page.getByText(/в год|основател/)).toHaveCount(0)

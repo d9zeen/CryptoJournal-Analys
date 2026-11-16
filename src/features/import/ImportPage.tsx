@@ -22,6 +22,9 @@ import { detectExchange } from '@/lib/import/detect'
 import { stableHash } from '@/lib/import/values'
 import { fetchExistingIds, useDeleteImport, useImports, useRunImport, type RunImportResult } from './api'
 import { ConnectionsCard } from '@/features/connections/ConnectionsCard'
+import { finishActivity, progressActivity, startActivity } from '@/lib/activity'
+import { CheckMark } from '@/components/CheckMark'
+import type { ImportedTrade } from '@/lib/import/types'
 
 const MAX_BYTES = 5 * 1024 * 1024
 const PREVIEW_ROWS = 100
@@ -53,6 +56,8 @@ export function ImportPage() {
   // запись в базу идёт пачками — после каждой обновляем полосу прогресса
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  // биржа, выбранная в панели («Файлом» → «Выбрать файл»): подставим её вместо автоопределения
+  const presetExchange = useRef<string | null>(null)
   // со стартового экрана «Подключить биржу» ведёт сюда с #connections — сразу показываем подключения
   const { hash } = useLocation()
   useEffect(() => {
@@ -106,7 +111,8 @@ export function ImportPage() {
     setFileError(null)
     setMappingOverride(null)
     setOffsetOverride(null)
-    setExchangeChoice('')
+    setExchangeChoice(presetExchange.current ?? '')
+    presetExchange.current = null
     if (f.size > MAX_BYTES) {
       setFile(null)
       setFileError(t.import.tooBig)
@@ -142,6 +148,9 @@ export function ImportPage() {
   async function submit() {
     if (!plan || !file || !prepared) return
     setProgress({ done: 0, total: plan.toInsert.length })
+    // окошко в углу: запись идёт дальше, даже если уйти на другую страницу
+    const activityId = `file:${Date.now()}`
+    startActivity({ id: activityId, kind: 'file', label: file.name, done: 0, total: plan.toInsert.length })
     let res: RunImportResult
     try {
       res = await run.mutateAsync({
@@ -149,11 +158,18 @@ export function ImportPage() {
         filename: file.name,
         rowsTotal: prepared.rows.length,
         trades: plan.toInsert,
-        onProgress: (done, total) => setProgress({ done, total }),
+        onProgress: (done, total) => {
+          setProgress({ done, total })
+          progressActivity(activityId, done, total)
+        },
       })
+    } catch (e) {
+      finishActivity(activityId, { error: true })
+      throw e
     } finally {
       setProgress(null)
     }
+    finishActivity(activityId, { inserted: res.inserted, duplicates: res.duplicates + plan.counts.duplicate, error: res.error !== null })
     setResult(res)
     setFile(null)
     if (inputRef.current) inputRef.current.value = ''
@@ -178,7 +194,12 @@ export function ImportPage() {
 
       {/* Сверху во всю ширину — подключённые биржи; ниже — загрузка файла и история */}
       <div id="connections" className="scroll-mt-20">
-        <ConnectionsCard />
+        <ConnectionsCard
+          onPickFile={(ex) => {
+            presetExchange.current = ex && parserFor(ex) ? ex : null
+            inputRef.current?.click()
+          }}
+        />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[400px_minmax(0,1fr)] xl:items-start">
@@ -315,7 +336,12 @@ export function ImportPage() {
                     )}
                   </div>
 
-                  {run.isPending && progress && <ImportProgress {...progress} />}
+                  {run.isPending && progress && (
+                    <>
+                      <ImportProgress {...progress} />
+                      <ImportFlow trades={plan.toInsert} done={progress.done} />
+                    </>
+                  )}
 
                   <p className="text-xs text-muted">{prepared.mode === 'fills' ? fmt(t.import.formatFills, { rows: prepared.table.rows.length }) : t.import.formatPositions}</p>
                   {prepared.sideFallback && <p className="text-xs text-warning">{t.import.sideFallback[prepared.sideFallback]}</p>}
@@ -484,6 +510,38 @@ function ImportProgress({ done, total }: { done: number; total: number }) {
   )
 }
 
+/**
+ * Анимация A «Поток сделок» (образец — 21st.dev animated-file-upload): записанные сделки въезжают по одной.
+ * База пишет пачками, поэтому показ догоняет число записанных плавно — но только среди уже записанных (индекс < done).
+ */
+function ImportFlow({ trades, done }: { trades: ImportedTrade[]; done: number }) {
+  const [shown, setShown] = useState(0)
+  useEffect(() => {
+    if (shown >= done) return
+    const id = window.setTimeout(() => setShown((s) => Math.min(done, s + Math.max(1, Math.ceil((done - s) / 12)))), 70)
+    return () => window.clearTimeout(id)
+  }, [shown, done])
+  const last = trades.slice(Math.max(0, shown - 4), shown).map((tr, k) => ({ tr, i: Math.max(0, shown - 4) + k })).reverse()
+  if (!last.length) return null
+  return (
+    <ul data-import-flow aria-hidden className="flex flex-col gap-1.5">
+      {last.map(({ tr, i }, k) => (
+        <li
+          key={i}
+          className="import-flow-row flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-2/40 px-3 py-1.5 text-sm"
+          style={{ opacity: 1 - k * 0.22 }}
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="truncate font-medium">{tr.title ?? tr.symbol}</span>
+            <SideBadge side={tr.side} />
+          </span>
+          <span className={`num shrink-0 font-medium ${pnlClass(tr.pnl)}`}>{formatPnl(tr.pnl)}</span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 function Badge({ status, children }: { status: RowStatus; children: string }) {
   return <span className={`inline-block whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-medium ${badgeStyles[status]}`}>{children}</span>
 }
@@ -491,19 +549,34 @@ function Badge({ status, children }: { status: RowStatus; children: string }) {
 function ResultAlert({ result }: { result: RunImportResult }) {
   const t = useT()
   const stopped = result.error !== null
+  if (stopped)
+    return (
+      <Alert tone="error">
+        <p>{fmt(t.import.stopped, { n: result.inserted })}</p>
+        <p className="mt-1">{dbErrorMessage(result.error, t)}</p>
+        {result.inserted > 0 && (
+          <Link to="/trades" className="mt-1 inline-block underline">
+            {t.import.toTrades}
+          </Link>
+        )}
+      </Alert>
+    )
+  // итог анимации A: галочка рисуется линией, рядом — сколько новых и сколько уже было
   return (
-    <Alert tone={stopped ? 'error' : 'success'}>
-      <p>
-        {stopped ? fmt(t.import.stopped, { n: result.inserted }) : fmt(t.import.done, { n: result.inserted })}
-        {result.duplicates > 0 && ` ${fmt(t.import.doneDuplicates, { n: result.duplicates })}`}
-      </p>
-      {stopped && <p className="mt-1">{dbErrorMessage(result.error, t)}</p>}
-      {result.inserted > 0 && (
-        <Link to="/trades" className="mt-1 inline-block underline">
-          {t.import.toTrades}
-        </Link>
-      )}
-    </Alert>
+    <div role="status" data-import-done className="rise flex items-center gap-3 rounded-xl border border-up/40 bg-up/10 px-4 py-3">
+      <CheckMark circle className="size-9 shrink-0 text-up" />
+      <div className="min-w-0 text-sm">
+        <p className="font-medium">
+          {fmt(t.import.done, { n: result.inserted })}
+          {result.duplicates > 0 && ` ${fmt(t.import.doneDuplicates, { n: result.duplicates })}`}
+        </p>
+        {result.inserted > 0 && (
+          <Link to="/trades" className="mt-0.5 inline-block text-primary hover:underline">
+            {t.import.toTrades} →
+          </Link>
+        )}
+      </div>
+    </div>
   )
 }
 

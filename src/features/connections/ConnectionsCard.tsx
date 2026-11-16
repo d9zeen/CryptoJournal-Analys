@@ -1,13 +1,13 @@
 /**
  * Блок «Подключённые биржи» на странице «Биржи»: каждое подключение — карточка со статусом (Работает / Ошибка / На паузе / Синхронизация…),
  * временем обновления, «Обновить» и «Отключить» (с подтверждением). Ниже — бледные карточки бирж «скоро по API».
- * Подключить: Bybit (ключ «только чтение»), Hyperliquid / Polymarket (адрес). Сделки подтягиваются сами (useAutoSync в AppLayout).
+ * Подключить: Bybit, Binance, OKX, BingX, Bitget (ключ «только чтение»; у OKX и Bitget — ещё кодовая фраза), Hyperliquid / Polymarket (адрес).
+ * Сделки подтягиваются сами (useAutoSync в AppLayout).
  */
 import { intlLocale } from '@/lib/locale'
 import { useEffect, useState, type FormEvent } from 'react'
 import { fmt, useT } from '@/i18n'
 import type { Dict } from '@/i18n/ru'
-import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import { SelectField, TextField } from '@/components/ui/Field'
@@ -22,10 +22,12 @@ import { UpgradeLine } from '@/components/UpgradeLine'
 import type { Plan } from '@/types/db'
 import { PolymarketDemoDialog } from './PolymarketDemoDialog'
 import { PasswordInput } from '@/components/PasswordInput'
-import { SaveButton, type SaveState } from '@/components/SaveButton'
+import { CheckMark } from '@/components/CheckMark'
+import { ExchangeGrid, ExchangePanel } from './ExchangeGrid'
 import { pause } from '@/lib/motion'
 import {
   CONNECTABLE,
+  NEEDS_PASSPHRASE,
   SyncError,
   errorCodeOf,
   shortKey,
@@ -47,6 +49,7 @@ export function connectionError(e: unknown, t: Dict): string {
   for (const code of [
     'BAD_WALLET',
     'BAD_API_KEY',
+    'PASSPHRASE_REQUIRED',
     'CONNECTION_LIMIT_REACHED',
     'TOO_MANY_CONNECTIONS',
     'CONNECTION_EXISTS',
@@ -57,10 +60,8 @@ export function connectionError(e: unknown, t: Dict): string {
   return dbErrorMessage(e, t)
 }
 
-/** Биржи, которые скоро можно будет подключить по API (имена собственные — не переводятся) */
-const SOON = ['Binance', 'OKX', 'BingX', 'Bitget', 'MEXC', 'Lighter'] as const
-
-export function ConnectionsCard() {
+/** Блок «Биржи»: подключённые (карточки со статусом) и сетка всех бирж; onPickFile — «Файлом» из панели биржи (выбор файла на странице) */
+export function ConnectionsCard({ onPickFile }: { onPickFile?: (exchange: string) => void } = {}) {
   const t = useT()
   const c = t.connections
   const { data: conns = [], isLoading } = useConnections()
@@ -71,7 +72,8 @@ export function ConnectionsCard() {
   const pro = planInfo(plan).serverSync // Pro Plus: синхронизация на сервере каждые 3 часа
   // работают только подключения в пределах тарифа; остальные (Polymarket на Pro, сверх лимита) — на паузе, не удаляются
   const active = activeConnections(conns, plan, admin)
-  const [adding, setAdding] = useState(false)
+  // открытая панель: id биржи из сетки или 'picker' — общий «+ Подключить»
+  const [panel, setPanel] = useState<string | null>(null)
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
   const now = useNow()
 
@@ -92,38 +94,28 @@ export function ConnectionsCard() {
           </h2>
           <p className="mt-0.5 text-xs text-muted">{pro ? c.hintPro : c.hintFree}</p>
         </div>
-        {!adding && (
-          <Button variant="secondary" className="shrink-0 !px-3 !py-1.5 text-xs whitespace-nowrap" onClick={() => setAdding(true)}>
-            {c.add}
-          </Button>
-        )}
+        <Button variant="secondary" className="shrink-0 !px-3 !py-1.5 text-xs whitespace-nowrap" onClick={() => setPanel('picker')}>
+          {c.add}
+        </Button>
       </div>
 
       {notice && <Alert tone={notice.tone}>{notice.text}</Alert>}
 
-      {adding && (
-        <Card className="!p-4">
-          <AddForm
-            count={conns.length}
-            admin={admin}
-            onDone={(name) => {
-              setAdding(false)
-              setNotice({ tone: 'success', text: fmt(c.added, { name }) })
-            }}
-            onCancel={() => setAdding(false)}
-          />
-        </Card>
+      {panel && (
+        <ExchangePanel
+          exchange={panel === 'picker' ? null : panel}
+          count={conns.length}
+          admin={admin}
+          onClose={() => setPanel(null)}
+          onPickFile={onPickFile}
+        />
       )}
 
       {isLoading ? (
         <p className="text-sm text-muted">{t.common.loading}</p>
       ) : conns.length === 0 ? (
-        !adding && (
-          <Card className="!p-4">
-            <p className="text-sm text-muted">{c.empty}</p>
-            {usage && !admin && planInfo(plan).connections === 0 && <UpgradeLine className="mt-2" text={t.plans.upgrade.connectionsFree} />}
-          </Card>
-        )
+        // подключений нет — пустую карточку не рисуем: ниже сетка бирж; на Basic — одна строка про тариф
+        usage && !admin && planInfo(plan).connections === 0 && <UpgradeLine text={t.plans.upgrade.connectionsFree} />
       ) : (
         // каждое подключение — своя карточка: 1 колонка на телефоне, 2 — от sm, 3 — от xl
         <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -142,18 +134,9 @@ export function ConnectionsCard() {
         </ul>
       )}
 
-      {/* «скоро по API» — такими же карточками, только бледными и без кнопок */}
-      <ul aria-label={c.soonTitle} className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-        {SOON.map((name) => (
-          <li key={name} data-soon={name} className="flex flex-col gap-1 rounded-xl border border-border bg-surface px-3 py-2.5 opacity-60">
-            <span className="flex items-center justify-between gap-2">
-              <span className="truncate text-sm font-medium">{name}</span>
-              <span className="shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted">{c.soonBadge}</span>
-            </span>
-            <span className="text-xs text-muted">{c.soonHint}</span>
-          </li>
-        ))}
-      </ul>
+      {/* «Сначала биржа, потом способ»: все биржи карточками; клик — панель этой биржи (API / адрес / файл) */}
+      <h3 className="mt-2 text-sm font-semibold">{c.grid.title}</h3>
+      <ExchangeGrid conns={conns} onOpen={setPanel} />
     </section>
   )
 }
@@ -309,7 +292,14 @@ function ConnectionTile({
   )
 }
 
-function AddForm({ count, admin, onDone, onCancel }: { count: number; admin: boolean; onDone: (name: string) => void; onCancel: () => void }) {
+type Stage = 'form' | 'saving' | 'added' | 'checked' | 'syncing' | 'done' | 'syncError'
+
+/**
+ * Форма подключения. После «Подключить» на её месте — анимация C «Мост» (Bridge): биржа → дневник, шаги отмечаются по-настоящему:
+ * ключ сохранён → права проверены у биржи (только чтение) → первая синхронизация (число новых сделок).
+ * initial — биржа из карточки (тогда выбора биржи нет); без него — выбор, по умолчанию первое доступное на тарифе.
+ */
+export function AddForm({ count, admin, initial, onClose }: { count: number; admin: boolean; initial?: ConnectableId; onClose: () => void }) {
   const t = useT()
   const c = t.connections
   const add = useAddConnection()
@@ -317,27 +307,47 @@ function AddForm({ count, admin, onDone, onCancel }: { count: number; admin: boo
   const { data: usage } = useUsage()
   const plan = usage?.plan
   // по умолчанию — первое подключение, доступное на тарифе
-  const [exchange, setExchange] = useState<ConnectableId>(() => CONNECTABLE.find((x) => admin || connectionTypeOk(x.id, plan))?.id ?? 'bybit')
+  const [exchange, setExchange] = useState<ConnectableId>(() => initial ?? CONNECTABLE.find((x) => admin || connectionTypeOk(x.id, plan))?.id ?? 'bybit')
   const block = connectBlock(exchange, plan, count, admin)
   const allowed = block === null
   const [apiKey, setApiKey] = useState('')
   const [secret, setSecret] = useState('')
+  const [passphrase, setPassphrase] = useState('')
   const [label, setLabel] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [demo, setDemo] = useState(false)
-  // №15: «Подключить» — крутилка в круге (идёт проверка ключа), галочка цветом прибыли
-  const [saveState, setSaveState] = useState<SaveState>('idle')
+  const [stage, setStage] = useState<Stage>('form')
+  const [inserted, setInserted] = useState(0)
+  const [syncError, setSyncError] = useState<string | null>(null)
   const kind = CONNECTABLE.find((x) => x.id === exchange)!.kind
+  const needsPassphrase = NEEDS_PASSPHRASE.has(exchange)
 
   async function submit(e: FormEvent) {
     e.preventDefault()
     setError(null)
-    setSaveState('busy')
+    setStage('saving')
+    let id: string
     try {
-      const id = await add.mutateAsync({ exchange, apiKey, secret: kind === 'cex' ? secret : undefined, label })
-      setSecret('')
-      // сразу первая синхронизация (ошибку покажет строка подключения) — до паузы на галочку, чтобы автосинхронизация не начала её второй раз
-      sync.mutate({
+      id = await add.mutateAsync({
+        exchange,
+        apiKey,
+        secret: kind === 'cex' ? secret : undefined,
+        passphrase: needsPassphrase ? passphrase : undefined,
+        label,
+        onStage: (st) => setStage(st),
+      })
+    } catch (err) {
+      setStage('form')
+      setError(connectionError(err, t))
+      return
+    }
+    setSecret('')
+    setPassphrase('')
+    await pause(350)
+    setStage('syncing')
+    // первая синхронизация; панель можно закрыть — загрузка продолжится (окошко в углу)
+    try {
+      const r = await sync.mutateAsync({
         id,
         exchange,
         label: label.trim() || null,
@@ -348,25 +358,29 @@ function AddForm({ count, admin, onDone, onCancel }: { count: number; admin: boo
         key_expires_at: null,
         created_at: '',
       })
-      setSaveState('done')
-      await pause(600)
-      onDone(exchangeName(exchange, ''))
+      setInserted(r.inserted)
+      setStage('done')
     } catch (err) {
-      setSaveState('idle')
-      setError(connectionError(err, t))
+      setSyncError(connectionError(err, t))
+      setStage('syncError')
     }
   }
 
+  if (stage !== 'form')
+    return <Bridge exchange={exchange} kind={kind} stage={stage} inserted={inserted} syncError={syncError} onClose={onClose} />
+
   return (
     <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3">
-      <SelectField label={c.exchange} value={exchange} onChange={(e) => setExchange(e.target.value as ConnectableId)}>
-        {CONNECTABLE.map((x) => (
-          <option key={x.id} value={x.id}>
-            {exchangeName(x.id, '')} · {c.kind[x.kind]}
-            {admin || connectionTypeOk(x.id, plan) ? '' : ` · ${t.plans.names[planFor(x.id)]}`}
-          </option>
-        ))}
-      </SelectField>
+      {!initial && (
+        <SelectField label={c.exchange} value={exchange} onChange={(e) => setExchange(e.target.value as ConnectableId)}>
+          {CONNECTABLE.map((x) => (
+            <option key={x.id} value={x.id}>
+              {exchangeName(x.id, '')} · {c.kind[x.kind]}
+              {admin || connectionTypeOk(x.id, plan) ? '' : ` · ${t.plans.names[planFor(x.id)]}`}
+            </option>
+          ))}
+        </SelectField>
+      )}
 
       <details className="text-xs text-muted" open>
         <summary className="cursor-pointer text-text">{c.howTitle}</summary>
@@ -401,6 +415,16 @@ function AddForm({ count, admin, onDone, onCancel }: { count: number; admin: boo
                 required
                 hint={c.secretHint}
               />
+              {needsPassphrase && (
+                <PasswordInput
+                  label={c.passphrase}
+                  value={passphrase}
+                  onChange={(e) => setPassphrase(e.target.value)}
+                  autoComplete="new-password"
+                  required
+                  hint={c.passphraseHint}
+                />
+              )}
             </>
           ) : (
             <TextField
@@ -420,13 +444,96 @@ function AddForm({ count, admin, onDone, onCancel }: { count: number; admin: boo
 
       {error && <Alert tone="error">{error}</Alert>}
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" onClick={onCancel}>
+        <Button type="button" variant="ghost" onClick={onClose}>
           {t.common.cancel}
         </Button>
-        <SaveButton state={saveState} disabled={!allowed}>
+        <Button type="submit" disabled={!allowed}>
           {c.connect}
-        </SaveButton>
+        </Button>
       </div>
     </form>
+  )
+}
+
+/**
+ * Анимация C «Мост» (образцы — 21st.dev integrations-3 и progress-indicator): биржа ── линия ── дневник.
+ * Линия прорисовывается (stroke-dashoffset), пока идёт загрузка — по ней бегут точки (transform), шаги отмечаются галочкой.
+ * Отдельный шаг «Только чтение» — главный страх «украдут ли деньги» снят прямо в анимации.
+ */
+function Bridge({
+  exchange,
+  kind,
+  stage,
+  inserted,
+  syncError,
+  onClose,
+}: {
+  exchange: ConnectableId
+  kind: 'cex' | 'wallet'
+  stage: Exclude<Stage, 'form'>
+  inserted: number
+  syncError: string | null
+  onClose: () => void
+}) {
+  const t = useT()
+  const c = t.connections
+  const b = c.bridge
+  const name = exchangeName(exchange, '')
+  const order: Exclude<Stage, 'form'>[] = ['saving', 'added', 'checked', 'syncing', 'done']
+  const at = order.indexOf(stage === 'syncError' ? 'syncing' : stage)
+  const flowing = stage === 'saving' || stage === 'syncing'
+  const steps = [
+    { done: at >= 1, text: kind === 'cex' ? b.keySaved : b.walletSaved },
+    { done: at >= 2, text: kind === 'cex' ? b.readOnly : b.public },
+    {
+      done: stage === 'done',
+      failed: stage === 'syncError',
+      text: stage === 'done' ? (inserted ? fmt(b.loaded, { n: inserted }) : b.loadedNothing) : stage === 'syncError' ? (syncError ?? c.errors.UNKNOWN) : b.loading,
+    },
+  ]
+  return (
+    <div data-bridge data-stage={stage} className="flex flex-col gap-4" aria-live="polite">
+      <div className="flex items-center gap-2">
+        <span className="grid min-w-0 flex-1 place-items-center rounded-xl border border-border bg-surface-2/50 px-2 py-3 text-center">
+          <span className="truncate text-sm font-semibold">{name}</span>
+          <span className="text-xs text-muted">{kind === 'cex' ? b.readKey : b.address}</span>
+        </span>
+        <svg viewBox="0 0 120 12" className={`bridge-line h-3 w-24 shrink-0 text-primary sm:w-32 ${at >= 1 ? 'drawn' : ''}`} preserveAspectRatio="none" aria-hidden>
+          <path d="M2 6H118" stroke="var(--color-border)" strokeWidth={2} strokeDasharray="3 4" fill="none" />
+          <path d="M2 6H118" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" fill="none" className="draw-path" style={{ '--len': 116 } as React.CSSProperties} />
+          {flowing && [0, 1, 2].map((k) => <circle key={k} cx="2" cy="6" r="2.6" fill="currentColor" className="bridge-dot" style={{ animationDelay: `${k * 0.35}s` }} />)}
+        </svg>
+        <span className="grid min-w-0 flex-1 place-items-center rounded-xl border border-primary/50 bg-primary/8 px-2 py-3 text-center">
+          <span className="truncate text-sm font-semibold">CryptoJournal</span>
+          <span className="text-xs text-muted">{b.journal}</span>
+        </span>
+      </div>
+
+      {at >= 2 && <p className="text-sm font-medium">{stage === 'done' ? fmt(b.connectedDone, { name }) : fmt(c.added, { name })}</p>}
+
+      <ol className="flex flex-col gap-2">
+        {steps.map((s, i) => (
+          <li key={i} data-step={s.done ? 'done' : s.failed ? 'failed' : 'pending'} className="flex items-center gap-2.5 text-sm">
+            <span className="grid size-6 shrink-0 place-items-center">
+              {s.done ? (
+                <CheckMark className="size-5 text-up" />
+              ) : s.failed ? (
+                <span className="size-2.5 rounded-full bg-down" aria-hidden />
+              ) : (
+                <span className={`size-4 rounded-full border-2 border-border ${at + 1 === i || (i === 2 && stage === 'syncing') ? 'animate-spin border-t-primary' : ''}`} aria-hidden />
+              )}
+            </span>
+            <span className={s.failed ? 'text-loss' : s.done ? '' : 'text-muted'}>{s.text}</span>
+          </li>
+        ))}
+      </ol>
+
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs text-muted">{stage === 'syncing' ? b.background : ''}</p>
+        <Button type="button" variant={stage === 'done' ? 'primary' : 'secondary'} onClick={onClose} disabled={stage === 'saving' || stage === 'added'}>
+          {stage === 'syncing' ? b.hide : b.close}
+        </Button>
+      </div>
+    </div>
   )
 }

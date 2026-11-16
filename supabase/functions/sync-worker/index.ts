@@ -10,11 +10,8 @@
  * Выкладка: Supabase → Edge Functions → sync-worker (файлы index.ts + engine.js), verify_jwt = false.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { buildQuery, bybitSignature, runSync } from './engine.js'
+import { READ_PATHS, callExchange, isCex, parseSecret, runSync } from './engine.js'
 
-const BYBIT = 'https://api.bybit.com'
-const RECV_WINDOW = '10000'
-const READ_PATHS = new Set(['/v5/position/closed-pnl', '/v5/user/query-api'])
 const ID_CHUNK = 150
 const CHUNK = 500
 
@@ -49,23 +46,19 @@ Deno.serve(async (req) => {
   const { data: active } = await admin.rpc('connection_active', { p_id: conn.id })
   if (active !== true) return json({ skipped: 'OVER_PLAN' })
 
-  // 3. Bybit: подпись запросов ключом пользователя (только адреса для чтения)
-  let secret: string | null = null
-  if (conn.exchange === 'bybit') {
+  // 3. Биржи с ключом (Bybit, BingX, OKX, Bitget, Binance): подпись ключом пользователя, только адреса для чтения
+  let cred: { apiKey: string; secret: string; passphrase: string | null } | null = null
+  if (isCex(conn.exchange as string)) {
     const { data } = await admin.rpc('get_connection_secret', { p_id: conn.id })
     if (typeof data !== 'string') return json({ error: 'NO_SECRET' }, 500)
-    secret = data
+    cred = { apiKey: conn.api_key as string, ...parseSecret(data) }
   }
-  const bybitCall = async (path: string, params: Record<string, string | number>) => {
-    if (!READ_PATHS.has(path) || !secret) throw new Error('NOT_ALLOWED')
-    const query = buildQuery(params)
-    const ts = Date.now().toString()
-    const sign = await bybitSignature(secret, ts + conn.api_key + RECV_WINDOW + query)
-    const res = await fetch(`${BYBIT}${path}${query ? `?${query}` : ''}`, {
-      headers: { 'X-BAPI-API-KEY': conn.api_key as string, 'X-BAPI-TIMESTAMP': ts, 'X-BAPI-RECV-WINDOW': RECV_WINDOW, 'X-BAPI-SIGN': sign },
-    })
-    if (!res.ok) throw new Error(`EXCHANGE_HTTP_${res.status} network`)
-    return await res.json()
+  const cexCall = async (path: string, params: Record<string, string | number>) => {
+    const ex = conn.exchange as string
+    if (!cred || !isCex(ex) || !READ_PATHS[ex].has(path)) throw new Error('NOT_ALLOWED')
+    const reply = await callExchange(ex, cred, path, params)
+    if (reply.status >= 500 || reply.json === null) throw new Error(`EXCHANGE_HTTP_${reply.status} network`)
+    return reply.json
   }
 
   const update = (patch: Row) => admin.from('exchange_connections').update(patch).eq('id', conn.id)
@@ -74,7 +67,7 @@ Deno.serve(async (req) => {
     const result = await runSync(
       { id: conn.id as string, exchange: conn.exchange as string, label: conn.label as string | null, api_key: conn.api_key as string, cursor_at: conn.cursor_at as string | null },
       {
-        bybitCall,
+        cexCall,
         // какие сделки уже есть у пользователя на этой бирже
         existingIds: async (exchange, ids) => {
           const found = new Set<string>()
