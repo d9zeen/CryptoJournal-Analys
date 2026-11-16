@@ -912,6 +912,10 @@ export const en: Dict = {
       investedHint: 'at average entry prices',
       coins: { one: '{n} coin', few: '{n} coins', many: '{n} coins' },
       noPrice: 'no price: {n}',
+      investedShort: 'invested {v}',
+      realized: 'Realized',
+      realizedHint: 'profit from sales on exchanges',
+      realizedNone: 'appears from exchange trade history',
     },
     chart: {
       title: 'Portfolio value',
@@ -951,6 +955,8 @@ export const en: Dict = {
       removeTitle: 'Remove {symbol} from the portfolio?',
       removeText: 'Only the manually added coin is removed. Exchange balances stay.',
       share: 'share',
+      avgFrom: { manual: 'manual', trades: 'from trades', stable: 'stablecoin — $1' },
+      covered: '{p} of the current amount was bought on exchanges — the rest came by transfer and uses the same price',
     },
     accounts: { spot: 'spot', fund: 'funding', futures: 'futures', earn: 'Earn', perp: 'perps', prediction: 'positions', manual: 'manual' },
     empty: {

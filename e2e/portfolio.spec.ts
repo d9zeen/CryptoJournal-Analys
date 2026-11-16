@@ -40,7 +40,13 @@ test('портфель: балансы Bybit приходят сами, икон
       { account: 'fund', symbol: 'ETH', amount: 2 },
     ]),
   })
-  expect(db.portfolioCalls?.some((c) => c.fn === 'portfolio_snapshot')).toBe(true)
+  // снимок — после балансов и истории покупок
+  await expect.poll(() => db.portfolioCalls?.some((c) => c.fn === 'portfolio_snapshot')).toBe(true)
+  // этап 2: история спотовых покупок Bybit записана — из неё средняя цена входа
+  await expect.poll(() => db.portfolioCalls?.find((c) => c.fn === 'add_spot_fills' && (c.body.p_items as unknown[]).length)?.body).toMatchObject({
+    p_connection: 'c1',
+    p_items: [{ external_id: 'bb:spot-1', asset: 'BTC', quote: 'USDT', side: 'buy', qty: 0.25, price: 80000 }],
+  })
 
   const table = page.locator('[data-portfolio-table]')
   await expect(table.locator('[data-coin="BTC"]')).toContainText('25 000,00 $')
@@ -57,20 +63,29 @@ test('портфель: балансы Bybit приходят сами, икон
   // сводка: 25 000 + 6 000 + 1 200,5 = 32 200,50 $
   const kpis = page.locator('[data-portfolio-kpis]')
   await expect(kpis).toContainText('32 200,50 $')
-  // прибыль: у USDT цена входа 1 $ (стейблкоин), у остальных — не указана
-  await expect(kpis).toContainText('по цене входа у 1 из 4')
+  // прибыль: у BTC цена входа — из покупки на Bybit, у USDT — 1 $ (стейблкоин), у остальных — не указана
+  await expect(kpis).toContainText('по цене входа у 2 из 4')
+  await expect(kpis.locator('[data-kpi-realized]')).toContainText('Зафиксировано')
 
   // график (3 снимка + «сейчас») и кольцо долей
   await expect(page.locator('[data-portfolio-chart] .recharts-area')).toBeVisible()
   await expect(page.locator('[data-portfolio-alloc]')).toContainText('BTC')
   await expect(page.locator('[data-portfolio-alloc]')).toContainText('Хуже всех за 24 ч')
 
-  // цена входа BTC руками → прибыль по BTC
-  await table.locator('[data-coin="BTC"]').getByRole('button', { name: 'указать' }).click()
-  await page.getByRole('textbox', { name: 'Средняя цена входа BTC, $' }).fill('80000')
-  await table.locator('[data-coin="BTC"]').getByRole('button', { name: 'Сохранить' }).click()
-  await expect.poll(() => db.costWrites?.[0]).toMatchObject({ method: 'POST', body: { symbol: 'BTC', avg_price: 80000 } })
+  // средняя цена BTC — из истории покупок: 0,25 по 80 000 → прибыль +5 000 $
+  const btcAvg = table.locator('[data-coin="BTC"] [data-avg-source]')
+  await expect(btcAvg).toHaveAttribute('data-avg-source', 'trades')
+  await expect(btcAvg).toContainText('по сделкам')
   await expect(table.locator('[data-coin="BTC"]')).toContainText('+5 000,00 $')
+  // руками важнее истории: 70 000 → +7 500 $
+  await btcAvg.click()
+  await page.getByRole('textbox', { name: 'Средняя цена входа BTC, $' }).fill('70000')
+  await table.locator('[data-coin="BTC"]').getByRole('button', { name: 'Сохранить' }).click()
+  await expect.poll(() => db.costWrites?.[0]).toMatchObject({ method: 'POST', body: { symbol: 'BTC', avg_price: 70000 } })
+  await expect(btcAvg).toHaveAttribute('data-avg-source', 'manual')
+  await expect(table.locator('[data-coin="BTC"]')).toContainText('+7 500,00 $')
+  // ETH без истории — «указать»
+  await expect(table.locator('[data-coin="ETH"]').getByRole('button', { name: 'указать' })).toBeVisible()
 
   // страница не шире экрана
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1440)

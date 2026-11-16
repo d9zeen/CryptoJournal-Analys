@@ -49,8 +49,14 @@ export type PortfolioRow = {
   change24: number | null
   change24Usd: number | null
   avgPrice: number | null
-  /** цена входа указана руками (иначе — стейблкоин по 1 $ или неизвестна) */
+  /** цена входа указана руками (иначе — из истории покупок, стейблкоин по 1 $ или неизвестна) */
   avgManual: boolean
+  /** откуда цена входа: руками, из покупок на биржах, стейблкоин — 1 $ */
+  avgSource: 'manual' | 'trades' | 'stable' | null
+  /** по покупкам на биржах: сколько монет из нынешнего количества куплено (0…1; меньше 1 — часть пришла переводом) */
+  covered: number | null
+  /** прибыль, зафиксированная продажами этой монеты (из истории сделок) */
+  realized: number
   invested: number | null
   pnl: number | null
   pnlPct: number | null
@@ -81,7 +87,13 @@ export function coinsBySymbol(coins: Coin[]): Map<string, Coin> {
  * Строки таблицы: одна монета — одна строка (со всех бирж и счетов).
  * source — показать только одно подключение (id) или монеты вручную ('manual'); null — всё.
  */
-export function portfolioRows(holdings: Holding[], coins: Coin[], costs: Record<string, number>, source: string | null = null): PortfolioRow[] {
+export function portfolioRows(
+  holdings: Holding[],
+  coins: Coin[],
+  costs: Record<string, number>,
+  source: string | null = null,
+  basis: Record<string, CostBasis> = {},
+): PortfolioRow[] {
   const bySym = coinsBySymbol(coins)
   const groups = new Map<string, Holding[]>()
   for (const h of holdings) {
@@ -99,7 +111,10 @@ export function portfolioRows(holdings: Holding[], coins: Coin[], costs: Record<
     // стоимость сутки назад = сейчас / (1 + %): разница — сколько принесли сутки
     const change24Usd = value !== null && change24 !== null && known === null ? value - value / (1 + change24 / 100) : null
     const manual = costs[symbol]
-    const avgPrice = manual ?? (STABLES.has(symbol) ? 1 : null)
+    const fromTrades = basis[symbol]?.qty > 0 ? basis[symbol].avg : null
+    // приоритет: руками → по покупкам на биржах → стейблкоин 1 $
+    const avgPrice = manual ?? fromTrades ?? (STABLES.has(symbol) ? 1 : null)
+    const avgSource = manual !== undefined ? 'manual' : fromTrades !== null ? 'trades' : STABLES.has(symbol) ? 'stable' : null
     const invested = avgPrice !== null && known === null ? avgPrice * amount : null
     const pnl = invested !== null && value !== null ? value - invested : null
     rows.push({
@@ -112,6 +127,9 @@ export function portfolioRows(holdings: Holding[], coins: Coin[], costs: Record<
       change24Usd,
       avgPrice: known === null ? avgPrice : null,
       avgManual: manual !== undefined,
+      avgSource: known === null ? avgSource : null,
+      covered: fromTrades !== null && amount > 0 ? Math.min(1, basis[symbol].qty / amount) : null,
+      realized: basis[symbol]?.realized ?? 0,
       invested,
       pnl,
       pnlPct: pnl !== null && invested ? pnl / invested : null,
@@ -125,6 +143,56 @@ export function portfolioRows(holdings: Holding[], coins: Coin[], costs: Record<
   // сначала дорогие; монеты без цены — в конце, по символу
   return rows.sort((a, b) => (b.value ?? -1) - (a.value ?? -1) || a.symbol.localeCompare(b.symbol))
 }
+
+export type SpotFillLike = { asset: string; quote: string; side: 'buy' | 'sell'; qty: number; price: number; fee: number; fee_asset: string | null; at: string }
+/** По монете из истории сделок: сколько осталось купленного, средняя цена входа, зафиксированная прибыль */
+export type CostBasis = { qty: number; avg: number | null; realized: number; bought: number }
+
+/** Котировки, равные доллару: только по ним считаем цену входа (BTC-котировки без исторической цены BTC не считаем) */
+const USD_QUOTES: ReadonlySet<string> = new Set(['USDT', 'USDC', 'FDUSD', 'USDE', 'TUSD', 'BUSD', 'USD1', 'DAI', 'USD'])
+
+/**
+ * Средняя цена входа по истории спотовых покупок / продаж (средневзвешенная, как у бирж):
+ *  - покупка: +количество (минус комиссия, если она в этой монете), +стоимость (плюс комиссия, если она в котировке);
+ *  - продажа: фиксируем прибыль (цена продажи − средняя цена входа) × количество − комиссия; средняя цена не меняется;
+ *    продают больше, чем куплено по истории (монеты пришли переводом) — лишнее в расчёт не берём;
+ *  - всё продано — следующая покупка начинает среднюю заново.
+ * Комиссия в третьей монете (BNB) не учитывается — она мала и в долларах на момент сделки неизвестна.
+ */
+export function costBasis(fills: SpotFillLike[]): Record<string, CostBasis> {
+  const st: Record<string, { qty: number; cost: number; realized: number; bought: number }> = {}
+  const sorted = [...fills].sort((a, b) => a.at.localeCompare(b.at))
+  for (const f of sorted) {
+    if (!USD_QUOTES.has(f.quote) || !(f.qty > 0) || !(f.price > 0)) continue
+    const s = (st[f.asset] ??= { qty: 0, cost: 0, realized: 0, bought: 0 })
+    const feeInQuote = f.fee_asset === f.quote ? f.fee : 0
+    const feeInAsset = f.fee_asset === f.asset ? f.fee : 0
+    if (f.side === 'buy') {
+      const got = Math.max(0, f.qty - feeInAsset)
+      s.qty += got
+      s.bought += got
+      s.cost += f.qty * f.price + feeInQuote
+    } else {
+      if (s.qty <= 1e-12) continue
+      const sold = Math.min(f.qty + feeInAsset, s.qty)
+      const part = sold / (f.qty + feeInAsset)
+      const avg = s.cost / s.qty
+      s.realized += sold * f.price * (f.qty / (f.qty + feeInAsset)) - feeInQuote * part - avg * sold
+      s.cost -= avg * sold
+      s.qty -= sold
+      if (s.qty <= 1e-12) {
+        s.qty = 0
+        s.cost = 0
+      }
+    }
+  }
+  const out: Record<string, CostBasis> = {}
+  for (const [asset, s] of Object.entries(st)) out[asset] = { qty: s.qty, avg: s.qty > 0 ? s.cost / s.qty : null, realized: s.realized, bought: s.bought }
+  return out
+}
+
+/** Прибыль, зафиксированная продажами по всем монетам (и тем, которых уже нет на балансе) */
+export const realizedTotal = (basis: Record<string, CostBasis>) => Object.values(basis).reduce((a, b) => a + b.realized, 0)
 
 export type PortfolioTotals = {
   value: number

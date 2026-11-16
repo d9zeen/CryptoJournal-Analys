@@ -51,6 +51,8 @@ export type FakeDb = {
   snapshots?: Row[]
   portfolioCalls?: { fn: string; body: Record<string, unknown> }[]
   costWrites?: { method: string; body: unknown }[]
+  /** этап 2 (0020): история спотовых покупок / продаж */
+  spotFills?: Row[]
 }
 
 /** Картинка 1×1 (иконка монеты из Storage) */
@@ -109,6 +111,15 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
     if (path.startsWith('/storage/v1/object/public/coin-icons/')) return route.fulfill({ status: 200, contentType: 'image/png', body: PNG })
     if (path === '/rest/v1/coins') return json(db.coins ?? [])
     if (path === '/rest/v1/portfolio_snapshots') return json(db.snapshots ?? [])
+    if (path === '/rest/v1/spot_fills') return json(db.spotFills ?? [])
+    if (path === '/rest/v1/spot_sync') return json([])
+    if (path.endsWith('/rpc/add_spot_fills')) {
+      const b = (body() ?? {}) as Record<string, unknown>
+      ;(db.portfolioCalls ??= []).push({ fn: 'add_spot_fills', body: b })
+      const items = (b.p_items ?? []) as Row[]
+      db.spotFills = [...(db.spotFills ?? []), ...items]
+      return json(items.length)
+    }
     if (path === '/rest/v1/holdings') {
       const list = (db.holdings ??= [])
       if (method === 'POST') {
@@ -183,6 +194,13 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
         const t = String(Date.now() - 3_600_000)
         const pos = { instId: 'BTC-USDT-SWAP', posId: 'okx-1', direction: 'long', type: '2', openAvgPx: '60000', closeAvgPx: '61000', closeTotalPos: '3', realizedPnl: '29.1', fee: '-0.72', fundingFee: '-0.18', lever: '10', cTime: t, uTime: t }
         return json({ code: '0', msg: '', data: Number(params.after) > Date.now() - 60_000 ? [pos] : [] })
+      }
+      // exchange-proxy: спотовые покупки Bybit (портфель, этап 2) — одна покупка BTC в последнем окне
+      if (b.path === '/v5/execution/list' && params.category === 'spot') {
+        const t = Date.now() - 2 * 86_400_000
+        const inWindow = Number(params.startTime) <= t && t <= Number(params.endTime)
+        const item = { symbol: 'BTCUSDT', side: 'Buy', execQty: '0.25', execPrice: '80000', execFee: '0', execId: 'spot-1', execTime: String(t) }
+        return json({ retCode: 0, retMsg: 'OK', result: { list: inWindow ? [item] : [], nextPageCursor: '' } })
       }
       // exchange-proxy: балансы Bybit (портфель)
       if (b.path === '/v5/account/wallet-balance')

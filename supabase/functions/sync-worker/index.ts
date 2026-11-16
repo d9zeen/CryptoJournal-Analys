@@ -7,12 +7,12 @@
  * Лимиты и проверки данных по-прежнему делает база (триггеры на trades).
  *
  * После сделок — балансы подключения для «Портфеля» (replace_holdings_for) и снимок стоимости (portfolio_snapshot_for, 0019).
- * Режим { mode: 'balances' } (cron cj-balances каждый час) — только балансы и снимок, без сделок.
+ * Режим { mode: 'balances' } (cron cj-balances каждый час) — только балансы, история спотовых покупок (0020) и снимок, без сделок.
  * Логика синхронизации — общая с браузером: engine.js собирается из src/lib/sync (npm run build:functions).
  * Выкладка: Supabase → Edge Functions → sync-worker (файлы index.ts + engine.js), verify_jwt = false.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { READ_PATHS, callExchange, fetchBalances, isCex, parseSecret, runSync } from './engine.js'
+import { READ_PATHS, callExchange, fetchBalances, fetchSpotFills, isCex, parseSecret, runSync } from './engine.js'
 
 const ID_CHUNK = 150
 const CHUNK = 500
@@ -67,11 +67,28 @@ Deno.serve(async (req) => {
 
   // Портфель (0019): балансы этого подключения и снимок стоимости. Ошибка здесь сделки не ломает:
   // старые балансы остаются (график не «падает»), следующий запуск попробует снова
+  // этап 2 (0020): новые спотовые покупки / продажи с прошлого раза → spot_fills (средняя цена входа). Ошибка — не страшно, в следующий раз
+  const syncFills = async (assets: string[]) => {
+    if (!cred) return
+    try {
+      const { data: st } = await admin.from('spot_sync').select('cursor_at').eq('connection_id', conn.id).maybeSingle()
+      const r = await fetchSpotFills({ exchange: conn.exchange as string }, cexCall, { cursor: (st?.cursor_at as string | undefined) ?? null, assets })
+      if (!r) return
+      const parts = r.fills.length ? chunks(r.fills, 5000) : [[]]
+      for (let i = 0; i < parts.length; i++) {
+        const { error } = await admin.rpc('add_spot_fills_for', { p_user: userId, p_connection: conn.id, p_items: parts[i], p_cursor: i === parts.length - 1 ? r.cursor : null })
+        if (error) return
+      }
+    } catch {
+      /* биржа не отдала историю — попробуем в следующий раз */
+    }
+  }
   const syncBalances = async (): Promise<number | null> => {
     try {
       const items = await fetchBalances({ exchange: conn.exchange as string, api_key: conn.api_key as string }, { cexCall })
       const { data, error } = await admin.rpc('replace_holdings_for', { p_user: userId, p_connection: conn.id, p_items: items })
       if (error) return null
+      await syncFills(items.map((b) => b.symbol))
       await admin.rpc('portfolio_snapshot_for', { p_user: userId })
       return data as number
     } catch {

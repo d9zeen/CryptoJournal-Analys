@@ -732,6 +732,42 @@ select pg_temp.check((select count(*) from portfolio_snapshots where user_id = '
 delete from auth.users where id = 'eeeeeeee-0000-0000-0000-000000000005';
 select pg_temp.check((select count(*) from holdings) = 0 and (select count(*) from asset_costs) = 0 and (select count(*) from portfolio_snapshots) = 0, 'удаление аккаунта удаляет портфель');
 
+-- Портфель, этап 2 (0020): история спотовых покупок / продаж
+insert into auth.users (id, email) values ('ffffffff-0000-0000-0000-000000000006', 'f@test');
+update profiles set plan = 'pro_plus', plan_until = null, plan_trial = false where id = 'ffffffff-0000-0000-0000-000000000006';
+set role authenticated;
+set request.jwt.claim.sub = 'ffffffff-0000-0000-0000-000000000006';
+select add_exchange_connection('hyperliquid', '0x7777777777777777777777777777777777777777') as f_conn \gset
+select pg_temp.check(add_spot_fills(:'f_conn', '[{"external_id":"t1","asset":"btc","quote":"usdt","side":"buy","qty":0.1,"price":60000,"fee":0.0001,"fee_asset":"BTC","at":"2026-10-01T10:00:00Z"},{"external_id":"t2","asset":"BTC","quote":"USDT","side":"sell","qty":0.05,"price":70000,"fee":3.5,"fee_asset":"USDT","at":"2026-11-01T10:00:00Z"}]', '2026-11-02T00:00:00Z') = 2, 'исполнения записаны');
+select pg_temp.check(add_spot_fills(:'f_conn', '[{"external_id":"t1","asset":"BTC","quote":"USDT","side":"buy","qty":0.1,"price":60000,"at":"2026-10-01T10:00:00Z"}]', null) = 0, 'повтор того же исполнения не записывается');
+select pg_temp.check((select asset = 'BTC' and quote = 'USDT' from spot_fills where external_id = 't1'), 'монета и котировка — заглавными');
+select pg_temp.check((select cursor_at = '2026-11-02T00:00:00Z' from spot_sync where connection_id = :'f_conn'), 'запомнено, откуда продолжать');
+select add_spot_fills(:'f_conn', '[]', '2026-10-15T00:00:00Z');
+select pg_temp.check((select cursor_at = '2026-11-02T00:00:00Z' from spot_sync where connection_id = :'f_conn'), 'курсор назад не отъезжает');
+select pg_temp.expect_error($$select add_spot_fills('$$ || :'f_conn' || $$', '[{"external_id":"x","asset":"BTC","quote":"USDT","side":"buy","qty":-1,"price":1,"at":"2026-10-01T10:00:00Z"}]', null)$$, 'spot_fills_qty_check');
+select pg_temp.check(true, 'отрицательное количество не записать');
+select pg_temp.expect_error($$insert into spot_fills (user_id, connection_id, external_id, asset, quote, side, qty, price, at) values ('ffffffff-0000-0000-0000-000000000006', '$$ || :'f_conn' || $$', 'fake', 'BTC', 'USDT', 'buy', 100, 1, now())$$, 'permission denied');
+select pg_temp.check(true, 'историю покупок напрямую не подделать');
+select pg_temp.expect_error($$update spot_sync set cursor_at = now()$$, 'permission denied');
+select pg_temp.check(true, 'курсор напрямую не изменить');
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
+select pg_temp.check((select count(*) from spot_fills) = 0 and (select count(*) from spot_sync) = 0, 'B не видит историю покупок F');
+select pg_temp.expect_error($$select add_spot_fills('$$ || :'f_conn' || $$', '[]', now())$$, 'NOT_FOUND|PLAN_REQUIRED');
+select pg_temp.check(true, 'B не пишет в подключение F');
+reset role;
+set role anon;
+set request.jwt.claim.sub = '';
+select pg_temp.expect_error($$select * from spot_fills$$, 'permission denied');
+select pg_temp.expect_error($$select add_spot_fills('00000000-0000-0000-0000-000000000000', '[]', now())$$, 'permission denied');
+select pg_temp.check(true, 'аноним не видит и не пишет историю покупок');
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = 'ffffffff-0000-0000-0000-000000000006';
+select delete_exchange_connection(:'f_conn');
+reset role;
+select pg_temp.check((select count(*) from spot_fills where connection_id = :'f_conn') = 0 and (select count(*) from spot_sync where connection_id = :'f_conn') = 0, 'отключение биржи удаляет её историю покупок');
+delete from auth.users where id = 'ffffffff-0000-0000-0000-000000000006';
+
 -- Удаление аккаунта чистит всё
 set role authenticated;
 set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
