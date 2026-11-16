@@ -709,6 +709,26 @@ select pg_temp.expect_error($$select portfolio_snapshot()$$, 'permission denied'
 select pg_temp.check(true, 'аноним не видит портфель и цены');
 reset role;
 select pg_temp.check((select public from storage.buckets where id = 'coin-icons'), 'иконки монет — публичный bucket');
+-- само, без открытого сайта (0019)
+set role authenticated;
+set request.jwt.claim.sub = 'eeeeeeee-0000-0000-0000-000000000005';
+select pg_temp.expect_error($$select portfolio_snapshot_all()$$, 'permission denied');
+select pg_temp.expect_error($$select dispatch_balances()$$, 'permission denied');
+select pg_temp.expect_error($$select held_missing_symbols(10)$$, 'permission denied');
+select pg_temp.expect_error($$select * from coin_misses$$, 'permission denied');
+select pg_temp.check(true, 'служебные функции портфеля из браузера не вызвать');
+insert into holdings (account, symbol, amount) values ('manual', 'NEWCOIN', 5);
+reset role;
+select pg_temp.check((select array_agg(x) from held_missing_symbols(10) x) = array['NEWCOIN'], 'сервер знает, какие монеты держат, а цены нет');
+insert into coin_misses (symbol) values ('NEWCOIN');
+select pg_temp.check((select count(*) from held_missing_symbols(10)) = 0, 'монету, которую не нашли, сутки не ищем снова');
+select pg_temp.check((select array_agg(x order by x) from held_coin_ids() x) = array['bitcoin', 'ethereum'], 'цены держимых монет — по монете с лучшим rank');
+delete from net.calls;
+select dispatch_balances();
+select pg_temp.check((select count(*) from net.calls where body ->> 'mode' = 'balances' and body ->> 'connectionId' = :'e_conn') = 1, 'балансы Pro Plus — каждый час сервером');
+update portfolio_snapshots set at = now() - interval '2 hours';
+select pg_temp.check(portfolio_snapshot_all() >= 1, 'снимок раз в час — сам');
+select pg_temp.check((select count(*) from portfolio_snapshots where user_id = 'eeeeeeee-0000-0000-0000-000000000005') = 2, 'снимок раз в час — у всех с монетами');
 delete from auth.users where id = 'eeeeeeee-0000-0000-0000-000000000005';
 select pg_temp.check((select count(*) from holdings) = 0 and (select count(*) from asset_costs) = 0 and (select count(*) from portfolio_snapshots) = 0, 'удаление аккаунта удаляет портфель');
 

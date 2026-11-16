@@ -15,6 +15,8 @@ export type Coin = {
   change_7d: number | null
   spark: number[] | null
   icon: string | null
+  /** цвет монеты из логотипа (#rrggbb) — доли в кольце */
+  color?: string | null
 }
 
 export type Holding = {
@@ -175,11 +177,11 @@ export function portfolioTotals(rows: PortfolioRow[]): PortfolioTotals {
 }
 
 /** Доли для кольца: top самых крупных + «Другое» */
-export function allocation(rows: PortfolioRow[], top = 5): { symbol: string | null; value: number; share: number }[] {
+export function allocation(rows: PortfolioRow[], top = 5): { symbol: string | null; value: number; share: number; color: string | null }[] {
   const priced = rows.filter((r) => r.value !== null && r.value > 0)
-  const head = priced.slice(0, top).map((r) => ({ symbol: r.symbol as string | null, value: r.value!, share: r.share }))
+  const head = priced.slice(0, top).map((r) => ({ symbol: r.symbol as string | null, value: r.value!, share: r.share, color: r.coin?.color ?? null }))
   const tail = priced.slice(top)
-  if (tail.length) head.push({ symbol: null, value: tail.reduce((a, r) => a + r.value!, 0), share: tail.reduce((a, r) => a + r.share, 0) })
+  if (tail.length) head.push({ symbol: null, value: tail.reduce((a, r) => a + r.value!, 0), share: tail.reduce((a, r) => a + r.share, 0), color: null })
   return head
 }
 
@@ -199,15 +201,36 @@ const RANGE_MS: Record<PortfolioRange, number> = { '24h': 864e5, '7d': 7 * 864e5
 export type SeriesPoint = { t: number; value: number; btc: number | null }
 
 /**
+ * Шаг точек графика: за длинный период — не каждый снимок (раз в час), а последний в окне (6 ч / сутки),
+ * иначе линия превращается в «пилу» из мелких колебаний.
+ */
+const STEP_MS: Record<PortfolioRange, number> = { '24h': 0, '7d': 3 * 3_600_000, '1m': 6 * 3_600_000, '3m': 864e5, '1y': 864e5, all: 864e5 }
+
+/** Последняя точка в каждом окне шага (точки уже по времени) */
+export function thinOut<T extends { t: number }>(pts: T[], step: number): T[] {
+  if (step <= 0 || pts.length < 3) return pts
+  const out: T[] = []
+  for (const p of pts) {
+    const prev = out[out.length - 1]
+    if (prev && Math.floor(prev.t / step) === Math.floor(p.t / step)) out[out.length - 1] = p
+    else out.push(p)
+  }
+  return out
+}
+
+/**
  * Точки графика за период: стоимость и «если бы всё было в BTC» — сколько стоили бы деньги первой точки,
  * переложенные в BTC по её цене. now — текущая стоимость (последняя точка «сейчас», если снимок старше часа).
  */
 export function portfolioSeries(snaps: Snapshot[], range: PortfolioRange, nowMs: number, now?: { value: number; btcPrice: number | null }): SeriesPoint[] {
   const from = nowMs - RANGE_MS[range]
-  const pts = snaps
-    .map((s) => ({ t: Date.parse(s.at), value: num(s.total_usd) ?? 0, btcPrice: num(s.btc_price) }))
-    .filter((p) => Number.isFinite(p.t) && p.t >= from)
-    .sort((a, b) => a.t - b.t)
+  const pts = thinOut(
+    snaps
+      .map((s) => ({ t: Date.parse(s.at), value: num(s.total_usd) ?? 0, btcPrice: num(s.btc_price) }))
+      .filter((p) => Number.isFinite(p.t) && p.t >= from)
+      .sort((a, b) => a.t - b.t),
+    STEP_MS[range],
+  )
   if (now && now.value > 0 && (!pts.length || nowMs - pts[pts.length - 1].t > 3_600_000)) pts.push({ t: nowMs, value: now.value, btcPrice: now.btcPrice })
   if (!pts.length) return []
   const first = pts[0]

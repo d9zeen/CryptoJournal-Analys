@@ -52,7 +52,11 @@ import { CoinIcon } from './CoinIcon'
 const PortfolioChart = lazy(() => import('./PortfolioChart').then((m) => ({ default: m.PortfolioChart })))
 
 const RANGES: PortfolioRange[] = ['24h', '7d', '1m', '3m', '1y', 'all']
-/** Цвета долей в кольце: фиолетовый, мятный и приглушённые — в тон кривой капитала */
+/**
+ * Цвет доли в кольце — цвет самой монеты (из её логотипа: BTC оранжевый, USDT зелёный…, считает prices-worker).
+ * Цвета нет — запасные в тон сайта; «Другое» — серый
+ */
+const sliceColor = (s: { symbol: string | null; color: string | null }, i: number) => (s.symbol === null ? SLICE[5] : (s.color ?? SLICE[i % 5]))
 const SLICE = ['var(--color-primary)', 'var(--color-accent)', 'var(--color-muted)', 'color-mix(in srgb, var(--color-primary) 45%, var(--color-surface))', 'color-mix(in srgb, var(--color-accent) 40%, var(--color-surface))', 'var(--color-border)']
 
 export function PortfolioPage() {
@@ -284,7 +288,7 @@ function Allocation({ rows }: { rows: PortfolioRow[] }) {
                 cy="68"
                 r={R}
                 fill="none"
-                stroke={SLICE[s.symbol === null ? 5 : i]}
+                stroke={sliceColor(s, i)}
                 strokeWidth="12"
                 strokeDasharray={`${Math.max(0, len - gap)} ${C}`}
                 strokeDashoffset={-off}
@@ -298,7 +302,7 @@ function Allocation({ rows }: { rows: PortfolioRow[] }) {
         <ul className="grid w-full min-w-0 gap-2 text-sm">
           {parts.map((s, i) => (
             <li key={s.symbol ?? 'other'} className="grid grid-cols-[10px_minmax(0,1fr)_auto] items-center gap-2">
-              <i aria-hidden className="size-2.5 rounded-[3px]" style={{ background: SLICE[s.symbol === null ? 5 : i] }} />
+              <i aria-hidden className="size-2.5 rounded-[3px]" style={{ background: sliceColor(s, i) }} />
               <span className="truncate">{s.symbol ?? a.other}</span>
               <span className="num text-muted">{formatPercent(s.share)}</span>
             </li>

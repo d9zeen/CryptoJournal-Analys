@@ -12,7 +12,10 @@
 --  * portfolio_snapshots — «сколько стоило»: пишет ТОЛЬКО база (portfolio_snapshot / portfolio_snapshot_for) по своим
 --    балансам и своим ценам; вставить снимок руками нельзя — историю не подделать. Не чаще раза в 50 минут.
 --  * везде RLS user_id = auth.uid() + restrictive-политика 2FA; потолок строк; удаление аккаунта удаляет всё (cascade).
---  * cj-prices: pg_cron каждые 10 минут → dispatch_prices() → pg_net → prices-worker (секрет cj_sync_secret из Vault).
+--  * cj-prices: pg_cron каждые 10 минут → dispatch_prices() → pg_net → prices-worker (секрет cj_sync_secret из Vault):
+--    топ-500 + монеты, которые кто-то держит (не из топа — ищет сам), иконки TradingView (запасные — CoinGecko) и цвет монеты.
+--  * само, без открытого сайта: cj-balances (каждый час, Pro Plus) — балансы бирж через sync-worker (mode = balances);
+--    cj-snapshots (каждый час, все с монетами) — снимок стоимости по последним балансам и свежим ценам.
 --
 -- Как применить: Supabase → SQL Editor → New query → вставить весь файл → Run. Один раз.
 -- Потом выложить функцию prices-worker (verify_jwt = false) — она сама наполнит цены и иконки за несколько запусков.
@@ -28,8 +31,10 @@ create table public.coins (
   change_24h  numeric,                                                -- %
   change_7d   numeric,                                                -- %
   spark       jsonb,                                                  -- цены за 7 дней, до 42 точек
-  icon        text check (icon is null or icon ~ '^[a-z0-9-]{1,80}\.(png|jpg|webp)$'),  -- файл в coin-icons
-  image_src   text,                                                   -- откуда сервер качает иконку
+  icon        text check (icon is null or icon ~ '^[a-z0-9-]{1,80}\.(svg|png|jpg|webp)$'),  -- файл в coin-icons
+  color       text check (color is null or color ~ '^#[0-9a-f]{6}$'),  -- цвет монеты (из логотипа) — доли в кольце
+  image_src   text,                                                   -- запасная иконка (CoinGecko)
+  icon_checked_at timestamptz,                                        -- иконку не нашли — пробуем снова через неделю
   updated_at  timestamptz not null default now()
 );
 create index coins_symbol_idx on public.coins (symbol, rank);
@@ -40,11 +45,20 @@ create policy coins_mfa on public.coins
   as restrictive for all to authenticated using ((select public.mfa_ok())) with check ((select public.mfa_ok()));
 revoke all on public.coins from anon, authenticated;
 -- все поля, кроме image_src (откуда сервер качает иконку — браузеру не нужно)
-grant select (id, symbol, name, rank, price, change_24h, change_7d, spark, icon, updated_at) on public.coins to authenticated;
+grant select (id, symbol, name, rank, price, change_24h, change_7d, spark, icon, color, updated_at) on public.coins to authenticated;
 
--- Иконки монет: публичный bucket, пишет только сервер (service_role); только картинки-растры до 200 КБ (без SVG)
+-- Монеты, которых нет у CoinGecko среди ранжированных (мусорные токены): проверяем снова не чаще раза в сутки
+create table public.coin_misses (
+  symbol     text primary key check (symbol ~ '^[A-Z0-9._-]{1,24}$'),
+  checked_at timestamptz not null default now()
+);
+alter table public.coin_misses enable row level security;
+revoke all on public.coin_misses from anon, authenticated;
+
+-- Иконки монет: публичный bucket, пишет только сервер (service_role), до 200 КБ.
+-- SVG — только логотипы TradingView после проверки сервером (без скриптов, обработчиков, внешних ссылок)
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('coin-icons', 'coin-icons', true, 204800, array['image/png', 'image/jpeg', 'image/webp'])
+values ('coin-icons', 'coin-icons', true, 204800, array['image/svg+xml', 'image/png', 'image/jpeg', 'image/webp'])
 on conflict (id) do nothing;
 
 
@@ -253,6 +267,113 @@ as $$
 $$;
 revoke execute on function public.coingecko_key() from public, anon, authenticated;
 grant execute on function public.coingecko_key() to service_role;
+
+
+-- ---------- Для prices-worker: какие монеты держат люди ----------
+-- id монет (лучший rank на символ), которые кто-то держит — их цены обновляем, даже если они не в топ-500
+create or replace function public.held_coin_ids()
+returns setof text
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select distinct on (c.symbol) c.id
+    from public.coins c
+   where c.symbol in (select distinct h.symbol from public.holdings h)
+   order by c.symbol, c.rank nulls last;
+$$;
+revoke execute on function public.held_coin_ids() from public, anon, authenticated;
+grant execute on function public.held_coin_ids() to service_role;
+
+-- символы, которые держат, а монеты в coins нет (и не проверяли последние сутки) — сервер поищет их у CoinGecko
+create or replace function public.held_missing_symbols(p_limit int default 10)
+returns setof text
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select h.symbol
+    from (select distinct symbol from public.holdings where value_usd is null) h
+   where not exists (select 1 from public.coins c where c.symbol = h.symbol)
+     and not exists (select 1 from public.coin_misses m where m.symbol = h.symbol and m.checked_at > now() - interval '1 day')
+   order by h.symbol
+   limit least(greatest(p_limit, 1), 50);
+$$;
+revoke execute on function public.held_missing_symbols(int) from public, anon, authenticated;
+grant execute on function public.held_missing_symbols(int) to service_role;
+
+
+-- ---------- Само, без открытого сайта ----------
+-- Каждый час: снимок стоимости у всех, у кого есть монеты (по последним балансам и свежим ценам) — график растёт сам.
+create or replace function public.portfolio_snapshot_all()
+returns int
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  u uuid;
+  n int := 0;
+begin
+  for u in select distinct h.user_id from public.holdings h loop
+    if public.portfolio_snapshot_for(u) is not null then
+      n := n + 1;
+    end if;
+  end loop;
+  return n;
+end;
+$$;
+revoke execute on function public.portfolio_snapshot_all() from public, anon, authenticated;
+
+-- Каждый час: балансы бирж Pro Plus (sync-worker в режиме balances — без сделок). Сломанные ключи не трогаем.
+create or replace function public.dispatch_balances()
+returns int
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  base   text;
+  secret text;
+  c      record;
+  n      int := 0;
+begin
+  select decrypted_secret into base from vault.decrypted_secrets where name = 'cj_project_url';
+  select decrypted_secret into secret from vault.decrypted_secrets where name = 'cj_sync_secret';
+  if base is null or secret is null then
+    raise notice 'dispatch_balances: нет cj_project_url или cj_sync_secret в Vault';
+    return 0;
+  end if;
+  for c in
+    select ec.id
+      from public.exchange_connections ec
+     where public.effective_plan(ec.user_id) = 'pro_plus'
+       and public.connection_ok(ec.id)
+       and (ec.last_error is null or ec.last_error not like 'KEY\_%')
+     limit 5000
+  loop
+    perform net.http_post(
+      url := rtrim(base, '/') || '/functions/v1/sync-worker',
+      body := jsonb_build_object('connectionId', c.id, 'mode', 'balances'),
+      headers := jsonb_build_object('Content-Type', 'application/json', 'x-sync-secret', secret, 'x-region', 'eu-central-1'),
+      timeout_milliseconds := 120000
+    );
+    n := n + 1;
+  end loop;
+  return n;
+end;
+$$;
+revoke execute on function public.dispatch_balances() from public, anon, authenticated;
+
+do $$
+begin
+  if exists (select 1 from pg_namespace where nspname = 'cron') then
+    perform cron.schedule('cj-balances', '37 * * * *', 'select public.dispatch_balances()');
+    perform cron.schedule('cj-snapshots', '52 * * * *', 'select public.portfolio_snapshot_all()');
+  end if;
+end $$;
 
 
 -- ---------- Цены каждые 10 минут ----------

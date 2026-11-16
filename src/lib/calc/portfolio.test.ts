@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { allocation, coinsBySymbol, movers, portfolioRows, portfolioSeries, portfolioTotals, type Coin, type Holding } from './portfolio'
+import { allocation, coinsBySymbol, movers, portfolioRows, portfolioSeries, portfolioTotals, thinOut, type Coin, type Holding } from './portfolio'
 
 const coin = (symbol: string, price: number | null, rank: number, change_24h: number | null = null, id = symbol.toLowerCase()): Coin => ({
   id, symbol, name: symbol, rank, price, change_24h, change_7d: null, spark: null, icon: null,
@@ -81,5 +81,15 @@ describe('портфель: доли, лучшие / худшие, график'
     expect(s.map((p) => p.btc)).toEqual([1000, 900, 950])
     expect(portfolioSeries(snaps, 'all', now).length).toBe(3)
     expect(portfolioSeries([], '7d', now)).toEqual([])
+  })
+  it('за длинный период — последняя точка в окне (без «пилы» из часовых снимков)', () => {
+    const H = 3_600_000
+    const pts = Array.from({ length: 48 }, (_, i) => ({ t: i * H, v: i }))
+    expect(thinOut(pts, 6 * H).map((p) => p.v)).toEqual([5, 11, 17, 23, 29, 35, 41, 47])
+    expect(thinOut(pts, 0)).toHaveLength(48)
+    const now = 90 * 86_400_000
+    const snaps = Array.from({ length: 24 * 30 }, (_, i) => ({ at: new Date(now - (24 * 30 - i) * H).toISOString(), total_usd: 1000 + (i % 2) * 50, btc_price: 100000 }))
+    expect(portfolioSeries(snaps, '3m', now).length).toBeLessThanOrEqual(31)
+    expect(portfolioSeries(snaps, '24h', now).length).toBe(24)
   })
 })

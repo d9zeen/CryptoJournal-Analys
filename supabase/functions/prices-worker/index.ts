@@ -1,27 +1,30 @@
 /**
- * prices-worker — цены и иконки монет для вкладки «Портфель» (0019).
+ * prices-worker — цены, иконки и цвета монет для вкладки «Портфель» (0019). Работает само, без открытого сайта.
  *
  * Кто вызывает: только база (pg_cron cj-prices каждые 10 минут → public.dispatch_prices → pg_net) с секретом
  * cj_sync_secret из Vault в заголовке x-sync-secret. Из браузера вызвать нельзя: без секрета — 403 (verify_jwt = false).
  *
- * Что делает:
- *  1. Топ-500 монет CoinGecko (две страницы /coins/markets): цена, изменение за 24 ч и 7 дней, мини-график за 7 дней →
- *     таблица coins (upsert по id; иконку не трогает).
- *  2. Иконки: до 40 монет за запуск, у которых иконки ещё нет, — скачивает картинку CoinGecko и кладёт в наш Storage
- *     (bucket coin-icons). Сайт показывает иконки с нашего Supabase: CSP не трогаем, CoinGecko не видит, у кого какие монеты.
- *     Только PNG / JPEG / WebP до 200 КБ (SVG не берём — в нём может быть скрипт).
+ * Что делает за один запуск:
+ *  1. Цены (CoinGecko /coins/markets): топ-500 + монеты, которые кто-то держит, но они не в топе (held_coin_ids).
+ *  2. Новые монеты: символы, которые держат, а монеты в coins нет (held_missing_symbols), — ищет у CoinGecko (/search),
+ *     берёт только ранжированную монету с точно таким символом (мусорные токены не подхватит); не нашёл — coin_misses (сутки не ищем).
+ *  3. Иконки (до 40 за запуск): логотип TradingView (SVG, после проверки safeSvg) → наш Storage coin-icons; цвет монеты — из логотипа.
+ *     Нет логотипа у TradingView — картинка CoinGecko (PNG / JPEG / WebP). Браузер иконки берёт только с нашего Supabase:
+ *     CSP не трогаем, сторонние сайты не узнают, у кого какие монеты.
  *
  * Ключ CoinGecko необязателен: если в Vault есть cj_coingecko_key (Demo), он уходит в заголовке x-cg-demo-api-key.
- * Выкладка: Supabase → Edge Functions → prices-worker (index.ts), verify_jwt = false.
+ * Выкладка: Supabase → Edge Functions → prices-worker (index.ts + svg.ts), verify_jwt = false.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { safeSvg, svgColor, tradingViewLogo } from './svg.ts'
 
 const CG = 'https://api.coingecko.com/api/v3'
 const PAGES = 2
+const SEARCH_PER_RUN = 3
 const ICONS_PER_RUN = 40
 const ICON_MAX = 200 * 1024
 const ICON_HOSTS = ['coin-images.coingecko.com', 'assets.coingecko.com']
-const ICON_TYPES: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }
+const RASTER: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }
 
 type Market = {
   id?: unknown
@@ -71,6 +74,7 @@ function toCoin(m: Market) {
     updated_at: new Date().toISOString(),
   }
 }
+type CoinRow = NonNullable<ReturnType<typeof toCoin>>
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'METHOD' }, 405)
@@ -82,71 +86,113 @@ Deno.serve(async (req) => {
   const { data: key } = await admin.rpc('coingecko_key')
   const headers: Record<string, string> = { accept: 'application/json' }
   if (typeof key === 'string' && key) headers['x-cg-demo-api-key'] = key
+  const cg = async (path: string, params: Record<string, string>) => {
+    const res = await fetch(`${CG}${path}?${new URLSearchParams(params)}`, { headers })
+    if (!res.ok) throw new Error(`COINGECKO_HTTP_${res.status}`)
+    return res.json()
+  }
+  const marketParams = { vs_currency: 'usd', sparkline: 'true', price_change_percentage: '24h,7d' }
 
-  // 1. Цены. У монет, которые уже есть, адрес иконки не перезаписываем: неподходящую картинку сервер помечает
-  // (image_src = null) и больше её не качает
+  // монеты, которые уже есть: адрес запасной иконки не перезаписываем (он мог смениться — не страшно)
   const { data: have } = await admin.from('coins').select('id')
   const known = new Set(((have ?? []) as { id: string }[]).map((r) => r.id))
-  let saved = 0
-  for (let page = 1; page <= PAGES; page++) {
-    const q = new URLSearchParams({
-      vs_currency: 'usd',
-      order: 'market_cap_desc',
-      per_page: '250',
-      page: String(page),
-      sparkline: 'true',
-      price_change_percentage: '24h,7d',
-    })
-    const res = await fetch(`${CG}/coins/markets?${q}`, { headers })
-    if (!res.ok) return json({ error: 'COINGECKO_HTTP', status: res.status, saved }, 502)
-    const list = (await res.json().catch(() => null)) as Market[] | null
-    if (!Array.isArray(list)) return json({ error: 'COINGECKO_BODY', saved }, 502)
-    const rows = list.map(toCoin).filter((r): r is NonNullable<typeof r> => r !== null)
+  const save = async (rows: CoinRow[]) => {
     const fresh = rows.filter((r) => !known.has(r.id))
     const update = rows.filter((r) => known.has(r.id)).map(({ image_src: _skip, ...r }) => r)
     for (const part of [fresh, update]) {
       if (!part.length) continue
       const { error } = await admin.from('coins').upsert(part, { onConflict: 'id' })
-      if (error) return json({ error: 'DB', message: error.message, saved }, 500)
+      if (error) throw new Error(`DB ${error.message}`)
     }
-    saved += rows.length
+    for (const r of rows) known.add(r.id)
   }
 
-  // 2. Иконки, которых ещё нет
+  const report = { coins: 0, held: 0, found: 0, missed: 0, icons: 0, errors: [] as string[] }
+
+  // 1. Топ-500
+  const seen = new Set<string>()
+  try {
+    for (let page = 1; page <= PAGES; page++) {
+      const list = (await cg('/coins/markets', { ...marketParams, order: 'market_cap_desc', per_page: '250', page: String(page) })) as Market[]
+      const rows = (Array.isArray(list) ? list : []).map(toCoin).filter((r): r is CoinRow => r !== null)
+      await save(rows)
+      rows.forEach((r) => seen.add(r.id))
+      report.coins += rows.length
+    }
+  } catch (e) {
+    report.errors.push(String(e))
+  }
+
+  // 2. Держимые монеты не из топа + новые монеты по символу
+  try {
+    const { data: heldIds } = await admin.rpc('held_coin_ids')
+    const ids = new Set(((heldIds ?? []) as string[]).filter((id) => !seen.has(id)))
+    const { data: missing } = await admin.rpc('held_missing_symbols', { p_limit: SEARCH_PER_RUN })
+    for (const sym of (missing ?? []) as string[]) {
+      const r = (await cg('/search', { query: sym })) as { coins?: { id?: unknown; symbol?: unknown; market_cap_rank?: unknown }[] }
+      const match = (r.coins ?? [])
+        .filter((c) => typeof c.id === 'string' && String(c.symbol).toUpperCase() === sym && num(c.market_cap_rank) !== null)
+        .sort((a, b) => num(a.market_cap_rank)! - num(b.market_cap_rank)!)[0]
+      if (match) {
+        ids.add(match.id as string)
+        report.found++
+      } else {
+        await admin.from('coin_misses').upsert({ symbol: sym, checked_at: new Date().toISOString() })
+        report.missed++
+      }
+    }
+    const all = [...ids].filter((id) => /^[a-z0-9-]{1,80}$/.test(id))
+    for (let i = 0; i < all.length; i += 250) {
+      const list = (await cg('/coins/markets', { ...marketParams, ids: all.slice(i, i + 250).join(',') })) as Market[]
+      const rows = (Array.isArray(list) ? list : []).map(toCoin).filter((r): r is CoinRow => r !== null)
+      await save(rows)
+      report.held += rows.length
+    }
+  } catch (e) {
+    report.errors.push(String(e))
+  }
+
+  // 3. Иконки и цвета: сначала TradingView (SVG), иначе CoinGecko
   const { data: todo } = await admin
     .from('coins')
-    .select('id, image_src')
+    .select('id, symbol, image_src')
     .is('icon', null)
-    .not('image_src', 'is', null)
+    .or(`icon_checked_at.is.null,icon_checked_at.lt.${new Date(Date.now() - 7 * 86_400_000).toISOString()}`)
     .order('rank', { ascending: true, nullsFirst: false })
     .limit(ICONS_PER_RUN)
-  let icons = 0
-  for (const c of (todo ?? []) as { id: string; image_src: string }[]) {
+  for (const c of (todo ?? []) as { id: string; symbol: string; image_src: string | null }[]) {
     try {
-      if (!ICON_HOSTS.includes(new URL(c.image_src).hostname)) continue
-      const res = await fetch(c.image_src)
-      const type = (res.headers.get('content-type') ?? '').split(';')[0].trim()
-      const ext = ICON_TYPES[type]
-      // неподходящая картинка (SVG, слишком большая, нет файла) — больше не пробуем, на сайте будет буква-значок
-      const skip = () => admin.from('coins').update({ image_src: null }).eq('id', c.id)
-      if (!res.ok || !ext) {
-        await skip()
-        continue
+      let file: string | null = null
+      let color: string | null = null
+      const tv = await fetch(tradingViewLogo(c.symbol))
+      const svg = tv.ok && (tv.headers.get('content-type') ?? '').includes('svg') ? safeSvg(await tv.text()) : null
+      if (svg && svg.length <= ICON_MAX) {
+        file = `${c.id}.svg`
+        color = svgColor(svg)
+        const { error } = await admin.storage.from('coin-icons').upload(file, new TextEncoder().encode(svg), { contentType: 'image/svg+xml', upsert: true, cacheControl: '604800' })
+        if (error) file = null
       }
-      const bytes = new Uint8Array(await res.arrayBuffer())
-      if (bytes.byteLength === 0 || bytes.byteLength > ICON_MAX) {
-        await skip()
-        continue
+      if (!file && c.image_src && ICON_HOSTS.includes(new URL(c.image_src).hostname)) {
+        const res = await fetch(c.image_src)
+        const type = (res.headers.get('content-type') ?? '').split(';')[0].trim()
+        const bytes = res.ok && RASTER[type] ? new Uint8Array(await res.arrayBuffer()) : null
+        if (bytes && bytes.byteLength > 0 && bytes.byteLength <= ICON_MAX) {
+          const name = `${c.id}.${RASTER[type]}`
+          const { error } = await admin.storage.from('coin-icons').upload(name, bytes, { contentType: type, upsert: true, cacheControl: '604800' })
+          if (!error) file = name
+        }
       }
-      const file = `${c.id}.${ext}`
-      const { error: upErr } = await admin.storage.from('coin-icons').upload(file, bytes, { contentType: type, upsert: true, cacheControl: '604800' })
-      if (upErr) continue
-      await admin.from('coins').update({ icon: file }).eq('id', c.id)
-      icons++
+      if (file) {
+        await admin.from('coins').update({ icon: file, color }).eq('id', c.id)
+        report.icons++
+      } else {
+        // ни у TradingView, ни у CoinGecko нет подходящей картинки — на сайте буквы, снова пробуем через неделю
+        await admin.from('coins').update({ icon_checked_at: new Date().toISOString() }).eq('id', c.id)
+      }
     } catch {
       /* одна иконка не скачалась — возьмём в следующий раз */
     }
   }
 
-  return json({ coins: saved, icons })
+  return json(report, report.errors.length && !report.coins ? 502 : 200)
 })

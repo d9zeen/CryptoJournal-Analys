@@ -28,7 +28,7 @@ export function useCoins() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('coins')
-        .select('id, symbol, name, rank, price, change_24h, change_7d, spark, icon')
+        .select('id, symbol, name, rank, price, change_24h, change_7d, spark, icon, color')
         .order('rank', { ascending: true, nullsFirst: false })
         .limit(1000)
       if (error) throw error

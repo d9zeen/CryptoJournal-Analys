@@ -7,6 +7,7 @@
  * Лимиты и проверки данных по-прежнему делает база (триггеры на trades).
  *
  * После сделок — балансы подключения для «Портфеля» (replace_holdings_for) и снимок стоимости (portfolio_snapshot_for, 0019).
+ * Режим { mode: 'balances' } (cron cj-balances каждый час) — только балансы и снимок, без сделок.
  * Логика синхронизации — общая с браузером: engine.js собирается из src/lib/sync (npm run build:functions).
  * Выкладка: Supabase → Edge Functions → sync-worker (файлы index.ts + engine.js), verify_jwt = false.
  */
@@ -63,6 +64,22 @@ Deno.serve(async (req) => {
   }
 
   const update = (patch: Row) => admin.from('exchange_connections').update(patch).eq('id', conn.id)
+
+  // Портфель (0019): балансы этого подключения и снимок стоимости. Ошибка здесь сделки не ломает:
+  // старые балансы остаются (график не «падает»), следующий запуск попробует снова
+  const syncBalances = async (): Promise<number | null> => {
+    try {
+      const items = await fetchBalances({ exchange: conn.exchange as string, api_key: conn.api_key as string }, { cexCall })
+      const { data, error } = await admin.rpc('replace_holdings_for', { p_user: userId, p_connection: conn.id, p_items: items })
+      if (error) return null
+      await admin.rpc('portfolio_snapshot_for', { p_user: userId })
+      return data as number
+    } catch {
+      return null
+    }
+  }
+  // каждый час (cron cj-balances, mode = balances): только балансы, без сделок
+  if (body?.mode === 'balances') return json({ holdings: await syncBalances() })
 
   try {
     const result = await runSync(
@@ -122,20 +139,7 @@ Deno.serve(async (req) => {
         },
       },
     )
-    // Портфель (0019): балансы этого подключения и снимок стоимости. Ошибка здесь сделки не ломает:
-    // старые балансы остаются (график не «падает»), следующая синхронизация попробует снова
-    let holdings: number | null = null
-    try {
-      const items = await fetchBalances({ exchange: conn.exchange as string, api_key: conn.api_key as string }, { cexCall })
-      const { data, error } = await admin.rpc('replace_holdings_for', { p_user: userId, p_connection: conn.id, p_items: items })
-      if (!error) {
-        holdings = data as number
-        await admin.rpc('portfolio_snapshot_for', { p_user: userId })
-      }
-    } catch {
-      /* биржа не отдала балансы — попробуем в следующий раз */
-    }
-    return json({ ...result, holdings })
+    return json({ ...result, holdings: await syncBalances() })
   } catch (e) {
     // ошибка уже записана в подключение (last_error) — сайт её покажет
     return json({ error: (e as { code?: string }).code ?? 'UNKNOWN' })
