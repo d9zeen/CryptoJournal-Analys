@@ -127,7 +127,7 @@ Deno.serve(async (req) => {
           for (let from = 0; from < 200_000; from += 1000) {
             const { data, error } = await admin
               .from('trades')
-              .select('external_id, symbol, side, exit_at, pnl')
+              .select('external_id, symbol, side, entry_at, exit_at, pnl')
               .eq('user_id', userId)
               .eq('exchange', exchange)
               .gte('exit_at', range.from)

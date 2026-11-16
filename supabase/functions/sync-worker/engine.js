@@ -3380,35 +3380,81 @@ async function fetchSpotFills(conn, call, opts) {
 
 // src/lib/import/twins.ts
 const TWIN_WINDOW_MS = 18e4;
-const close = (a, b) => a !== null && b !== null && Math.abs(a - b) <= Math.max(.02, Math.abs(a) * .001);
-/** external_id новых сделок, у которых уже есть записанный двойник (с другим номером) */
+/** Позиция дольше этого — кусками не сравниваем (окно поиска было бы слишком большим) */
+const MAX_POSITION_MS = 7776e6;
+const close = (a, b, rel = .001) => a !== null && b !== null && Math.abs(a - b) <= Math.max(.02, Math.abs(a) * rel);
+const toItem = (r) => {
+	const t = Date.parse(r.exit_at);
+	if (!Number.isFinite(t)) return null;
+	const o = r.entry_at ? Date.parse(r.entry_at) : NaN;
+	return {
+		id: r.external_id,
+		t,
+		open: Number.isFinite(o) && o < t && t - o <= MAX_POSITION_MS ? o : null,
+		sym: r.symbol.toUpperCase(),
+		side: r.side,
+		pnl: r.pnl,
+		used: false
+	};
+};
+/**
+* Куски внутри целой сделки, последний — в момент её закрытия, сумма PnL = PnL целой.
+* Берём последние k кусков (частичные закрытия идут подряд перед полным): k = 2, 3, … пока сумма не сойдётся.
+*/
+function piecesOf(whole, pool) {
+	if (whole.open === null || whole.pnl === null) return null;
+	const inside = pool.filter((p) => !p.used && p.sym === whole.sym && p.side === whole.side && p.pnl !== null && p.t >= whole.open - 18e4 && p.t <= whole.t + 18e4).sort((a, b) => a.t - b.t);
+	if (inside.length < 2 || Math.abs(inside[inside.length - 1].t - whole.t) > 18e4) return null;
+	let sum = 0;
+	for (let k = 1; k <= inside.length; k++) {
+		sum += inside[inside.length - k].pnl;
+		if (k >= 2 && close(whole.pnl, sum, .002)) return inside.slice(inside.length - k);
+	}
+	return null;
+}
+/** external_id новых сделок, у которых уже есть записанный двойник (с другим номером или кусками) */
 function findTwins(trades, existing) {
 	const out = /* @__PURE__ */ new Set();
-	const pool = existing.map((r) => ({
-		...r,
-		t: Date.parse(r.exit_at),
-		sym: r.symbol.toUpperCase(),
-		used: false
-	})).filter((r) => Number.isFinite(r.t)).sort((a, b) => a.t - b.t);
-	for (const tr of trades) {
-		const t = Date.parse(tr.exit_at);
-		if (!Number.isFinite(t)) continue;
-		const sym = tr.symbol.toUpperCase();
-		const hit = pool.find((r) => !r.used && r.external_id !== tr.external_id && r.sym === sym && r.side === tr.side && Math.abs(r.t - t) <= 18e4 && close(r.pnl, tr.pnl));
+	const ids = new Set(trades.map((t) => t.external_id));
+	const pool = existing.filter((r) => !r.external_id || !ids.has(r.external_id)).map(toItem).filter((x) => x !== null);
+	const fresh = trades.map(toItem).filter((x) => x !== null);
+	for (const n of fresh) {
+		const hit = pool.find((r) => !r.used && r.sym === n.sym && r.side === n.side && Math.abs(r.t - n.t) <= 18e4 && close(r.pnl, n.pnl));
 		if (hit) {
 			hit.used = true;
-			out.add(tr.external_id);
+			n.used = true;
+			out.add(n.id);
 		}
+	}
+	for (const whole of pool) {
+		if (whole.used) continue;
+		const pieces = piecesOf(whole, fresh);
+		if (!pieces) continue;
+		whole.used = true;
+		for (const p of pieces) {
+			p.used = true;
+			out.add(p.id);
+		}
+	}
+	for (const whole of fresh) {
+		if (whole.used) continue;
+		const pieces = piecesOf(whole, pool);
+		if (!pieces) continue;
+		for (const p of pieces) p.used = true;
+		whole.used = true;
+		out.add(whole.id);
 	}
 	return out;
 }
-/** Окно времени, в котором искать двойников у этих сделок (null — сделок нет) */
+/** Окно времени, в котором искать двойников у этих сделок (от самого раннего открытия; null — сделок нет) */
 function twinRange(trades) {
 	const ts = trades.map((t) => Date.parse(t.exit_at)).filter(Number.isFinite);
 	if (!ts.length) return null;
+	const opens = trades.map((t) => t.entry_at ? Date.parse(t.entry_at) : NaN).filter((x) => Number.isFinite(x));
+	const from = Math.min(...ts, ...opens.filter((o) => Math.min(...ts) - o <= MAX_POSITION_MS)) - TWIN_WINDOW_MS;
 	return {
-		from: (/* @__PURE__ */ new Date(Math.min(...ts) - TWIN_WINDOW_MS)).toISOString(),
-		to: new Date(Math.max(...ts) + TWIN_WINDOW_MS).toISOString()
+		from: new Date(from).toISOString(),
+		to: new Date(Math.max(...ts) + MAX_POSITION_MS + TWIN_WINDOW_MS).toISOString()
 	};
 }
 
