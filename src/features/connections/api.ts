@@ -15,7 +15,7 @@ import { checkBybitKey, type BybitCall } from '@/lib/sync/bybit'
 import type { CexCall } from '@/lib/sync/cex'
 import { pmPositionToTrade, type PmGet } from '@/lib/sync/polymarket'
 import { CEX_MODULES, SyncError, errorCodeOf, runSync, toSyncError, type SyncResult } from '@/lib/sync/run'
-import { fetchExistingIds, runImport } from '@/features/import/api'
+import { fetchExistingIds, fetchTwinIds, runImport } from '@/features/import/api'
 import { useUsage } from '@/features/settings/api'
 import { activeConnections } from '@/lib/plans'
 import { useIsAdmin } from '@/features/admin/api'
@@ -173,6 +173,7 @@ export function syncConnection(conn: Connection, remaining: () => Promise<number
     cexCall: cexCall(conn.id),
     polymarketGet: polymarketGet(conn.id),
     existingIds: fetchExistingIds,
+    twins: fetchTwinIds,
     remaining,
     insert: ({ exchange, filename, trades }) => runImport({ exchange, filename, rowsTotal: trades.length, trades, source: 'api' }),
     touch: async (cursor, error) => {

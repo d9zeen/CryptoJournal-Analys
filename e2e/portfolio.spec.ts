@@ -110,8 +110,8 @@ test('портфель на Basic: пусто → монета вручную', 
   // монета появилась (на телефоне — карточкой, на компьютере — строкой)
   await expect(page.locator('[data-coin="ETH"]')).toContainText('4 500,00 $')
   await expect(page.locator('[data-coin="ETH"]')).toContainText('Вручную')
-  // снимков ещё нет — график сразу есть: оценка по нынешнему составу за неделю, пунктиром с подписью
-  await expect(page.locator('[data-portfolio-chart] .recharts-line').first()).toBeVisible()
+  // снимков ещё нет — график сразу есть: оценка по нынешнему составу за неделю (сплошная линия, подпись над графиком)
+  await expect(page.locator('[data-portfolio-chart] .recharts-area').first()).toBeVisible()
   await expect(page.locator('[data-chart-estimate]')).toContainText('оценка')
 })
 

@@ -190,28 +190,18 @@ export function PortfolioPage() {
               ))}
             </div>
           </div>
-          <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted">
-            <span className="flex items-center gap-1.5">
-              <i aria-hidden className="block h-0.5 w-3.5 rounded bg-primary" />
-              {p.chart.portfolio}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <i aria-hidden className="block w-3.5 border-t-2 border-dashed border-muted" />
-              {p.chart.btc}
-            </span>
-            {hasEstimate && (
-              <span data-chart-estimate className="flex items-center gap-1.5">
-                <i aria-hidden className="block w-3.5 border-t-2 border-dashed border-primary" />
-                {p.chart.estimate}
-              </span>
-            )}
-          </div>
+          {/* одна сплошная линия, как кривая капитала в «Статистике»; оценка до первого снимка — подписью, без пунктира */}
+          {hasEstimate && (
+            <p data-chart-estimate className="mt-2 text-xs text-muted">
+              {p.chart.estimateNote}
+            </p>
+          )}
           {/* график занимает всю высоту карточки (на xl — вровень с «Из чего состоит»), не ниже 260px */}
           <div data-portfolio-chart className="relative mt-2 min-h-[260px] flex-1">
             <div className="absolute inset-0">
               {series.length >= 2 ? (
                 <Suspense fallback={<Skeleton className="h-full" />}>
-                  <PortfolioChart points={series} short={range === '24h'} />
+                  <PortfolioChart points={series} short={range === '24h'} drawKey={range} />
                 </Suspense>
               ) : (
                 <p className="grid h-full place-items-center px-6 text-center text-sm text-muted">{p.chart.empty}</p>

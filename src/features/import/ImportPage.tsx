@@ -20,7 +20,7 @@ import type { MarketChoice, RowWarning } from '@/lib/import/types'
 import { parseCsv, type CsvTable } from '@/lib/import/csv'
 import { detectExchange } from '@/lib/import/detect'
 import { stableHash } from '@/lib/import/values'
-import { fetchExistingIds, useDeleteImport, useImports, useRunImport, type RunImportResult } from './api'
+import { fetchExistingIds, fetchTwinIds, useDeleteImport, useImports, useRunImport, type RunImportResult } from './api'
 import { ConnectionsCard } from '@/features/connections/ConnectionsCard'
 import { finishActivity, progressActivity, startActivity } from '@/lib/activity'
 import type { ImportedTrade } from '@/lib/import/types'
@@ -89,7 +89,13 @@ export function ImportPage() {
   const existing = useQuery({
     queryKey: ['importCheck', user?.id, exchange, stableHash(ids.join(','))],
     enabled: ids.length > 0,
-    queryFn: () => fetchExistingIds(exchange, ids),
+    // уже есть с тем же номером + та же сделка с другим номером (раньше пришла по API или другим файлом)
+    queryFn: async () => {
+      const found = await fetchExistingIds(exchange, ids)
+      const fresh = (prepared?.rows ?? []).flatMap((r) => (r.trade && !found.has(r.trade.external_id) ? [r.trade] : []))
+      for (const id of await fetchTwinIds(exchange, fresh)) found.add(id)
+      return found
+    },
   })
 
   const remaining = usage && usage.trade_limit !== null ? Math.max(0, usage.trade_limit - usage.trades_created) : null

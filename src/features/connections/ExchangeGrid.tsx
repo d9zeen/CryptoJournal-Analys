@@ -9,6 +9,7 @@ import { formatPnl } from '@/lib/format'
 import { useT } from '@/i18n'
 import { Button } from '@/components/ui/Button'
 import { exchangeName } from '@/lib/exchanges'
+import { ExchangeLogo } from '@/components/ExchangeLogo'
 import { CONNECTABLE, errorCodeOf, type ConnectableId, type Connection } from './api'
 import { AddForm } from './ConnectionsCard'
 
@@ -53,9 +54,7 @@ export function ExchangeGrid({ conns, onOpen, recent }: { conns: Connection[]; o
           <>
             <span className="flex items-center justify-between gap-2">
               <span className="flex min-w-0 items-center gap-2">
-                <span aria-hidden className="num grid size-7 shrink-0 place-items-center rounded-lg bg-surface-2 text-xs font-bold text-muted">
-                  {ex.mono}
-                </span>
+                <ExchangeLogo id={ex.id} mono={ex.mono} dim={ex.soon} />
                 <span className="truncate font-semibold">{name}</span>
               </span>
               {mine.length > 0 && <span className={`size-2 shrink-0 rounded-full ${broken ? 'bg-down' : 'bg-up'}`} aria-hidden />}

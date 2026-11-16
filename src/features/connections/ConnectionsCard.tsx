@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import { SelectField, TextField } from '@/components/ui/Field'
 import { exchangeName } from '@/lib/exchanges'
+import { ExchangeLogo } from '@/components/ExchangeLogo'
 import { dbErrorMessage } from '@/lib/errors'
 import { formatDuration } from '@/lib/format'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
@@ -324,9 +325,12 @@ function ConnectionTile({
     // №2 «Луч по рамке»: пока идёт синхронизация, по краю карточки бежит свет
     <li data-conn={conn.exchange} data-status={status} className={`relative flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 ${syncing ? 'beam-run' : ''}`}>
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="font-semibold">{name}</div>
-          <div className="num truncate text-xs text-muted">{conn.label ?? shortKey(conn.api_key)}</div>
+        <div className="flex min-w-0 items-center gap-3">
+          <ExchangeLogo id={conn.exchange} className="size-9 rounded-lg" />
+          <div className="min-w-0">
+            <div className="font-semibold">{name}</div>
+            <div className="num truncate text-xs text-muted">{conn.label ?? shortKey(conn.api_key)}</div>
+          </div>
         </div>
         <span data-pill className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${PILL[status]}`}>
           <span className={`size-1.5 rounded-full ${DOT[status]}`} aria-hidden />
@@ -619,7 +623,8 @@ function Bridge({
   return (
     <div data-bridge data-stage={stage} className="flex flex-col gap-4" aria-live="polite">
       <div className="flex items-center gap-2">
-        <span className="grid min-w-0 flex-1 place-items-center rounded-xl border border-border bg-surface-2/50 px-2 py-3 text-center">
+        <span className="grid min-w-0 flex-1 place-items-center gap-1 rounded-xl border border-border bg-surface-2/50 px-2 py-3 text-center">
+          <ExchangeLogo id={exchange} className="size-8 rounded-lg" />
           <span className="truncate text-sm font-semibold">{name}</span>
           <span className="text-xs text-muted">{kind === 'cex' ? b.readKey : b.address}</span>
         </span>

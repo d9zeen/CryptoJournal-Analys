@@ -1,91 +1,139 @@
 /**
- * График стоимости портфеля (Recharts, грузится отдельно): одна фиолетовая линия с мягкой заливкой, как кривая капитала,
- * и пунктир «если бы всё было в BTC» — сколько стоили бы деньги первой точки, переложенные в BTC (образец — 21st.dev web3-bento).
- * До первого снимка — оценка по нынешнему составу (est): та же линия пунктиром, без заливки.
+ * График стоимости портфеля — как кривая капитала в «Статистике» (выбор владельца 16.11.2026, features/dashboard/charts.tsx EquityChart):
+ * одна сплошная фиолетовая линия с мягкой заливкой, без пунктиров; ось X — по порядку точек (без длинных прямых в паузах),
+ * подписи — даты; на конце — точка с итогом; кривая открывается слева направо («шторка» .eq-draw / .eq-curtain в theme.css).
+ * До первого снимка — оценка по нынешнему составу (est): та же линия, «оценка» — только в подсказке.
+ * «Если бы всё было в BTC» — тоже в подсказке, отдельной линии нет.
  */
 import { useId, useMemo } from 'react'
-import { Area, AreaChart, CartesianGrid, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Area, AreaChart, CartesianGrid, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useT } from '@/i18n'
 import { formatDateTime, formatPercent, formatUsd, formatUsdShort } from '@/lib/format'
-
-const signedPct = (v: number, digits = 1) => (v > 0 ? '+' : v < 0 ? '−' : '') + formatPercent(Math.abs(v), digits)
+import { niceStep } from '@/lib/calc/axis'
+import { useMediaQuery } from '@/lib/useMediaQuery'
 import { intlLocale } from '@/lib/locale'
+import { shortDate } from '@/features/dashboard/equityTime'
 import type { SeriesPoint } from '@/lib/calc/portfolio'
 
 const axisProps = { tick: { fill: 'var(--color-muted)', fontSize: 11 }, tickLine: false, axisLine: false } as const
+const signedPct = (v: number, digits = 1) => (v > 0 ? '+' : v < 0 ? '−' : '') + formatPercent(Math.abs(v), digits)
 
-type TipProps = { active?: boolean; payload?: ReadonlyArray<{ payload?: SeriesPoint }> }
+type Row = { i: number; t: number; v: number; est: boolean; btc: number | null }
+type TipProps = { active?: boolean; payload?: ReadonlyArray<{ payload?: Row }> }
+
+/** Ось Y по данным, не от нуля: портфель в 50 000 $ и колебания в 2 % должны быть видны; деления — «круглые» */
+function axisFor(values: number[]) {
+  let lo = Math.min(...values)
+  let hi = Math.max(...values)
+  if (hi === lo) {
+    const d = Math.abs(hi) * 0.05 || 1
+    lo -= d
+    hi += d
+  }
+  const pad = (hi - lo) * 0.12
+  const step = niceStep((hi - lo + 2 * pad) / 4)
+  const a = Math.floor((lo - pad) / step) * step
+  const b = Math.ceil((hi + pad) / step) * step
+  const ticks: number[] = []
+  for (let x = a; x <= b + step / 2; x += step) ticks.push(Math.round(x * 1e6) / 1e6)
+  return { lo: a, hi: b, ticks }
+}
 
 /** pct — значения в процентах к первой точке (100 = начало): портфель по ссылке со скрытыми суммами */
-export function PortfolioChart({ points, short, pct = false }: { points: SeriesPoint[]; short: boolean; pct?: boolean }) {
-  const money = (v: number) => (pct ? signedPct((v - 100) / 100) : formatUsd(v))
-  const moneyShort = (v: number) => (pct ? signedPct((v - 100) / 100, 0) : formatUsdShort(v))
+export function PortfolioChart({ points, short, pct = false, drawKey }: { points: SeriesPoint[]; short: boolean; pct?: boolean; drawKey?: unknown }) {
   const t = useT()
   const p = t.portfolio.chart
   const id = useId().replace(/:/g, '')
-  // ось не от нуля: портфель в 50 000 $ и колебания в 2 % должны быть видны
-  const axis = useMemo(() => {
-    const values = points.flatMap((x) => [x.value, x.est, x.btc].filter((v): v is number => v !== null))
-    const lo = Math.min(...values)
-    const hi = Math.max(...values)
-    const pad = (hi - lo || hi * 0.05 || 1) * 0.12
-    return { lo: Math.max(0, lo - pad), hi: hi + pad }
-  }, [points])
-  // подписи оси — по полуночам (не больше ~7), иначе за неделю выходит «12 нояб., 12 нояб.»
-  const ticks = useMemo(() => {
-    if (short || points.length < 2) return undefined
-    const lo = points[0].t
-    const hi = points[points.length - 1].t
-    const days = (hi - lo) / 864e5
-    if (days < 2) return undefined
-    const step = Math.ceil(days / 7) * 864e5
-    const d = new Date(lo)
-    d.setHours(24, 0, 0, 0)
-    const out: number[] = []
-    for (let t = d.getTime(); t <= hi; t += step) out.push(t)
-    return out
-  }, [points, short])
-  const fmtTick = (ms: number) =>
-    new Intl.DateTimeFormat(intlLocale(), short ? { hour: '2-digit', minute: '2-digit' } : { day: 'numeric', month: 'short' }).format(new Date(ms))
+  const wide = useMediaQuery('(min-width: 640px)')
+  const money = (v: number) => (pct ? signedPct((v - 100) / 100) : formatUsd(v))
+  const moneyShort = (v: number) => (pct ? signedPct((v - 100) / 100, 0) : formatUsdShort(v))
+  const data = useMemo<Row[]>(
+    () =>
+      points
+        .map((x) => ({ t: x.t, v: x.value ?? x.est, est: x.value === null, btc: x.btc }))
+        .filter((x): x is Omit<Row, 'i'> & { v: number } => x.v !== null)
+        .map((x, i) => ({ ...x, i })),
+    [points],
+  )
+  const axis = useMemo(() => axisFor(data.map((d) => d.v)), [data])
+  const last = data[data.length - 1]
+  const tick = (i: number) => {
+    const d = data[Math.round(i)]
+    if (!d) return ''
+    return short ? new Intl.DateTimeFormat(intlLocale(), { hour: '2-digit', minute: '2-digit' }).format(d.t) : shortDate(d.t)
+  }
   const color = 'var(--color-primary)'
+  const right = wide ? 104 : 16
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={points} margin={{ top: 12, right: 8, bottom: 0, left: 0 }}>
-        <defs>
-          <linearGradient id={`${id}f`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset={0} stopColor={color} stopOpacity={0.26} />
-            <stop offset={1} stopColor={color} stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid stroke="var(--color-border)" vertical={false} />
-        <XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} {...axisProps} tickFormatter={fmtTick} ticks={ticks} minTickGap={48} />
-        <YAxis {...axisProps} width={64} orientation="right" domain={[axis.lo, axis.hi]} tickFormatter={(v: number) => moneyShort(v)} allowDataOverflow />
-        <Tooltip
-          cursor={{ stroke: 'var(--color-muted)', strokeOpacity: 0.4 }}
-          content={(props) => {
-            const pt = (props as TipProps).active ? (props as TipProps).payload?.[0]?.payload : undefined
-            if (!pt) return null
-            return (
-              <div className="num rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs shadow-lg">
-                <div className="text-muted">{formatDateTime(new Date(pt.t).toISOString())}</div>
-                <div className="mt-0.5 text-sm font-semibold">{money(pt.value ?? pt.est ?? 0)}</div>
-                {pt.value === null && <div className="text-muted">{p.estimate}</div>}
-                {pt.btc !== null && (
-                  <div className="mt-1 flex justify-between gap-4 text-muted">
-                    <span>{p.btc}</span>
-                    <span>{formatUsd(pt.btc)}</span>
-                  </div>
-                )}
-              </div>
-            )
-          }}
-        />
-        <Area type="monotone" dataKey="value" stroke={color} strokeWidth={2} fill={`url(#${id}f)`} dot={false} isAnimationActive={false}
-          activeDot={{ r: 4.5, fill: color, stroke: 'var(--color-surface)', strokeWidth: 2 }} />
-        <Line type="monotone" dataKey="est" stroke={color} strokeWidth={2} strokeDasharray="6 4" dot={false} isAnimationActive={false}
-          activeDot={{ r: 4.5, fill: color, stroke: 'var(--color-surface)', strokeWidth: 2 }} />
-        <Line type="monotone" dataKey="btc" stroke="var(--color-muted)" strokeWidth={1.5} strokeDasharray="4 4" dot={false} isAnimationActive={false} connectNulls />
-      </AreaChart>
-    </ResponsiveContainer>
+    <div key={String(drawKey)} className="eq-draw relative h-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data} margin={{ top: 22, right, bottom: 0, left: 0 }}>
+          <defs>
+            <linearGradient id={`${id}f`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset={0} stopColor={color} stopOpacity={0.26} />
+              <stop offset={1} stopColor={color} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid stroke="var(--color-border)" vertical={false} />
+          <XAxis dataKey="i" type="number" domain={['dataMin', 'dataMax']} {...axisProps} tickFormatter={tick} minTickGap={40} />
+          <YAxis {...axisProps} width={60} domain={[axis.lo, axis.hi]} ticks={axis.ticks} tickFormatter={(v: number) => moneyShort(v)} allowDataOverflow />
+          <Tooltip
+            cursor={{ stroke: 'var(--color-muted)', strokeOpacity: 0.4 }}
+            content={(props) => {
+              const pt = (props as TipProps).active ? (props as TipProps).payload?.[0]?.payload : undefined
+              if (!pt) return null
+              return (
+                <div className="num rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs shadow-lg">
+                  <div className="text-muted">{formatDateTime(new Date(pt.t).toISOString())}</div>
+                  <div className="mt-0.5 text-sm font-semibold">{money(pt.v)}</div>
+                  {pt.est && <div className="mt-0.5 text-muted">{p.estimate}</div>}
+                  {pt.btc !== null && !pct && (
+                    <div className="mt-1 flex justify-between gap-4 text-muted">
+                      <span>{p.btc}</span>
+                      <span>{formatUsd(pt.btc)}</span>
+                    </div>
+                  )}
+                </div>
+              )
+            }}
+          />
+          <Area
+            type="monotone"
+            dataKey="v"
+            baseValue="dataMin"
+            stroke={color}
+            fill={`url(#${id}f)`}
+            strokeWidth={2}
+            dot={false}
+            activeDot={{ r: 4.5, fill: color, stroke: 'var(--color-surface)', strokeWidth: 2 }}
+            isAnimationActive={false}
+          />
+          {last && (
+            <ReferenceDot
+              x={last.i}
+              y={last.v}
+              r={4.5}
+              fill={color}
+              stroke="var(--color-surface)"
+              strokeWidth={2}
+              label={{
+                value: money(last.v),
+                position: wide ? 'right' : 'top',
+                offset: 10,
+                fill: 'var(--color-text)',
+                fontSize: 12,
+                fontWeight: 600,
+                fontFamily: 'var(--font-sans)',
+                ...(wide ? {} : { textAnchor: 'end' }),
+              }}
+            />
+          )}
+        </AreaChart>
+      </ResponsiveContainer>
+      {/* шторка над областью графика: слева ось Y (60px), справа подпись итога, снизу ось X */}
+      <div aria-hidden className="pointer-events-none absolute top-0 bottom-[30px] left-[60px] overflow-hidden" style={{ right }}>
+        <div className="eq-curtain size-full bg-surface" />
+      </div>
+    </div>
   )
 }

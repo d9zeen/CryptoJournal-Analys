@@ -925,6 +925,7 @@ export const en: Dict = {
       btc: 'If it were all in BTC',
       empty: 'The chart starts with the second point: a value snapshot is saved once an hour while the site is open, and every 3 hours on its own on Pro Plus.',
       estimate: 'estimate: current coins at past prices',
+      estimateNote: 'The start of the chart is an estimate: current coins at past prices. After that — real value, a snapshot every hour.',
       now: 'now',
     },
     alloc: {

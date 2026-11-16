@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { deleteScreenshots } from '@/features/trades/screenshot'
 import type { ImportedTrade } from '@/lib/import/types'
+import { findTwins, twinRange, type TwinCandidate, type TwinRow } from '@/lib/import/twins'
 
 export type ImportRecord = {
   id: string
@@ -35,6 +36,30 @@ export async function fetchExistingIds(exchange: string, ids: string[]): Promise
     }
   }
   return found
+}
+
+/**
+ * Какие из этих сделок уже записаны с другим номером (файлом — а теперь по API, или наоборот): lib/import/twins.ts.
+ * Берём записанные сделки этой биржи в том же окне времени (пачками по 1000) и сравниваем пару, сторону, время закрытия и PnL.
+ */
+export async function fetchTwinIds(exchange: string, trades: TwinCandidate[]): Promise<Set<string>> {
+  const range = twinRange(trades)
+  if (!range) return new Set()
+  const rows: TwinRow[] = []
+  for (let from = 0; from < 200_000; from += 1000) {
+    const { data, error } = await supabase
+      .from('trades')
+      .select('external_id, symbol, side, exit_at, pnl')
+      .eq('exchange', exchange)
+      .gte('exit_at', range.from)
+      .lte('exit_at', range.to)
+      .order('exit_at')
+      .range(from, from + 999)
+    if (error) throw error
+    rows.push(...((data ?? []) as TwinRow[]))
+    if (!data || data.length < 1000) break
+  }
+  return findTwins(trades, rows)
 }
 
 /** История импортов, новые сверху */

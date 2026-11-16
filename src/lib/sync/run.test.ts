@@ -41,6 +41,20 @@ describe('runSync', () => {
     expect(log.expiry).toEqual(['2027-01-01T00:00:00Z'])
   })
 
+  it('та же сделка уже есть с другим номером (файлом) — не пишем второй раз', async () => {
+    const asked: string[][] = []
+    const { d, log } = deps({
+      twins: async (_ex, list) => {
+        asked.push(list.map((t) => t.external_id))
+        return new Set(['o:o2'])
+      },
+    })
+    const r = await runSync(conn, d)
+    expect(asked).toEqual([['o:o2', 'o:o3']]) // o1 уже есть по номеру — двойника не ищем
+    expect(r).toEqual({ found: 3, inserted: 1, overLimit: 0 })
+    expect(log.inserted).toEqual([['o:o3']])
+  })
+
   it('лимит Free: лишнее не пишем и курсор не двигаем', async () => {
     const { d, log } = deps({ remaining: async () => 1 })
     const r = await runSync(conn, d)

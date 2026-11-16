@@ -3,6 +3,7 @@
  * Всё внешнее (запросы к бирже, база) передаётся снаружи в deps: в браузере — с правами пользователя,
  * на сервере — с правами service_role. Так логика одна и покрыта одними тестами.
  */
+import type { TwinCandidate } from '@/lib/import/twins'
 import { planImport } from '@/lib/import/plan'
 import type { ImportedTrade, ParsedRow } from '@/lib/import/types'
 import { BYBIT_HISTORY_DAYS, BybitError, DAY, checkBybitKey, fetchBybitTrades, type BybitCall } from './bybit'
@@ -35,6 +36,8 @@ export type SyncDeps = {
   polymarketGet?: PmGet
   /** external_id сделок этой биржи, которые уже есть у пользователя */
   existingIds: (exchange: string, ids: string[]) => Promise<Set<string>>
+  /** та же сделка, уже записанная с другим номером (файлом, а теперь по API) — lib/import/twins.ts */
+  twins?: (exchange: string, trades: TwinCandidate[]) => Promise<Set<string>>
   /** сколько сделок ещё можно создать в этом месяце (null — без лимита) */
   remaining: () => Promise<number | null>
   /** записать сделки (одна запись в «Истории импортов») */
@@ -130,6 +133,7 @@ export async function runSync(conn: SyncConnection, deps: SyncDeps): Promise<Syn
     // одна и та же сделка могла прийти дважды (окна, страницы) — оставляем одну
     trades = [...new Map(trades.map((t) => [t.external_id, t])).values()]
     const existing = await deps.existingIds(conn.exchange, trades.map((t) => t.external_id))
+    if (deps.twins) for (const id of await deps.twins(conn.exchange, trades.filter((t) => !existing.has(t.external_id)))) existing.add(id)
     const rows: ParsedRow[] = trades.map((trade, i) => ({ line: i + 2, trade, error: null, warnings: [] }))
     const plan = planImport(rows, existing, await deps.remaining())
     let inserted = 0

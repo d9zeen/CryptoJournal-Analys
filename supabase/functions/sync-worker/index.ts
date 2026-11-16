@@ -13,7 +13,7 @@
  * Выкладка: Supabase → Edge Functions → sync-worker (файлы index.ts + engine.js), verify_jwt = false.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { READ_PATHS, callExchange, fetchBalances, fetchSpotFills, isCex, parseSecret, runSync } from './engine.js'
+import { READ_PATHS, callExchange, fetchBalances, fetchSpotFills, findTwins, isCex, parseSecret, runSync, twinRange } from './engine.js'
 
 const ID_CHUNK = 150
 const CHUNK = 500
@@ -118,6 +118,27 @@ Deno.serve(async (req) => {
             for (const r of data as { external_id: string }[]) found.add(r.external_id)
           }
           return found
+        },
+        // та же сделка с другим номером (файлом — а теперь по API): пара, сторона, время закрытия ±3 мин, PnL
+        twins: async (exchange, list) => {
+          const range = twinRange(list)
+          if (!range) return new Set<string>()
+          const rows: Row[] = []
+          for (let from = 0; from < 200_000; from += 1000) {
+            const { data, error } = await admin
+              .from('trades')
+              .select('external_id, symbol, side, exit_at, pnl')
+              .eq('user_id', userId)
+              .eq('exchange', exchange)
+              .gte('exit_at', range.from)
+              .lte('exit_at', range.to)
+              .order('exit_at')
+              .range(from, from + 999)
+            if (error) throw error
+            rows.push(...((data ?? []) as Row[]))
+            if (!data || data.length < 1000) break
+          }
+          return findTwins(list, rows as never)
         },
         remaining: async () => null, // Pro Plus — без лимита (лимит всё равно проверяет триггер в базе)
         insert: async ({ exchange, filename, trades }) => {

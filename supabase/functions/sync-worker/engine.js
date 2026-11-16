@@ -2224,11 +2224,6 @@ const binanceModule = {
 };
 
 // src/lib/sync/run.ts
-/**
-* Синхронизация одного подключения — общий движок для браузера и сервера (sync-worker по расписанию).
-* Всё внешнее (запросы к бирже, база) передаётся снаружи в deps: в браузере — с правами пользователя,
-* на сервере — с правами service_role. Так логика одна и покрыта одними тестами.
-*/
 /** Биржи с ключом API, кроме Bybit (у него свой путь — с датой окончания ключа) */
 const CEX_MODULES = {
 	bingx: bingxModule,
@@ -2309,6 +2304,7 @@ async function runSync(conn, deps) {
 		} else throw new SyncError("UNSUPPORTED");
 		trades = [...new Map(trades.map((t) => [t.external_id, t])).values()];
 		const existing = await deps.existingIds(conn.exchange, trades.map((t) => t.external_id));
+		if (deps.twins) for (const id of await deps.twins(conn.exchange, trades.filter((t) => !existing.has(t.external_id)))) existing.add(id);
 		const rows = trades.map((trade, i) => ({
 			line: i + 2,
 			trade,
@@ -3382,4 +3378,38 @@ async function fetchSpotFills(conn, call, opts) {
 	};
 }
 
-export { READ_PATHS, SyncError, buildQuery, bybitSignature, callExchange, fetchBalances, fetchSpotFills, isCex, parseSecret, runSync, toSyncError };
+// src/lib/import/twins.ts
+const TWIN_WINDOW_MS = 18e4;
+const close = (a, b) => a !== null && b !== null && Math.abs(a - b) <= Math.max(.02, Math.abs(a) * .001);
+/** external_id новых сделок, у которых уже есть записанный двойник (с другим номером) */
+function findTwins(trades, existing) {
+	const out = /* @__PURE__ */ new Set();
+	const pool = existing.map((r) => ({
+		...r,
+		t: Date.parse(r.exit_at),
+		sym: r.symbol.toUpperCase(),
+		used: false
+	})).filter((r) => Number.isFinite(r.t)).sort((a, b) => a.t - b.t);
+	for (const tr of trades) {
+		const t = Date.parse(tr.exit_at);
+		if (!Number.isFinite(t)) continue;
+		const sym = tr.symbol.toUpperCase();
+		const hit = pool.find((r) => !r.used && r.external_id !== tr.external_id && r.sym === sym && r.side === tr.side && Math.abs(r.t - t) <= 18e4 && close(r.pnl, tr.pnl));
+		if (hit) {
+			hit.used = true;
+			out.add(tr.external_id);
+		}
+	}
+	return out;
+}
+/** Окно времени, в котором искать двойников у этих сделок (null — сделок нет) */
+function twinRange(trades) {
+	const ts = trades.map((t) => Date.parse(t.exit_at)).filter(Number.isFinite);
+	if (!ts.length) return null;
+	return {
+		from: (/* @__PURE__ */ new Date(Math.min(...ts) - TWIN_WINDOW_MS)).toISOString(),
+		to: new Date(Math.max(...ts) + TWIN_WINDOW_MS).toISOString()
+	};
+}
+
+export { READ_PATHS, SyncError, buildQuery, bybitSignature, callExchange, fetchBalances, fetchSpotFills, findTwins, isCex, parseSecret, runSync, toSyncError, twinRange };
