@@ -4,7 +4,7 @@
  * сверху переключатель «По API / Файлом». Образцы — 21st.dev integrations-4 (сетка) и settings / sheet (панель).
  */
 import { useEffect, useRef, useState } from 'react'
-import { useSpotlight } from '@/lib/motion'
+import { useGlare, useSpotlight } from '@/lib/motion'
 import { formatPnl } from '@/lib/format'
 import { useT } from '@/i18n'
 import { Button } from '@/components/ui/Button'
@@ -39,6 +39,7 @@ export function ExchangeGrid({ conns, onOpen, recent }: { conns: Connection[]; o
   const g = t.connections.grid
   const ref = useRef<HTMLUListElement>(null)
   useSpotlight(ref)
+  useGlare(ref) // №4 «Блик и наклон»
   return (
     <ul ref={ref} data-exchanges aria-label={g.title} className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
       {EXCHANGE_CARDS.map((ex, i) => {
@@ -74,7 +75,8 @@ export function ExchangeGrid({ conns, onOpen, recent }: { conns: Connection[]; o
         )
         const cls = 'spot-card flex h-full min-h-28 w-full flex-col gap-2 rounded-[calc(0.75rem-1px)] bg-surface p-3 text-left'
         return (
-          <li key={ex.id} data-spot className="spot-frame rise rounded-xl" style={{ '--i': i } as React.CSSProperties}>
+          <li key={ex.id} data-spot data-glare className="spot-frame rise relative overflow-hidden rounded-xl" style={{ '--i': i } as React.CSSProperties}>
+            <span aria-hidden className="glare-shine" />
             {ex.soon ? (
               // «скоро» — без кнопки: нажимать нечего
               <div data-soon={name} className={`${cls} opacity-60`}>

@@ -293,3 +293,32 @@ test('Мост: подключение Bybit из карточки — шаги 
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(page.locator('[data-exchange="bybit"]')).toContainText('Подключена')
 })
+
+test('Анимации «Бирж»: без подключений — «Орбита», с подключением — «Поток в дневник», синхронизация — луч по рамке и мерцающий текст', async ({ page, db }) => {
+  db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
+  await fakeSupabase(page, db)
+  await page.goto('import')
+  await expect(page.locator('[data-empty-orbit]')).toContainText('Подключи первую биржу')
+  await expect(page.locator('[data-beam-hub]')).toHaveCount(0)
+  // подключаем Bybit — появляется «Поток в дневник», Bybit горит
+  await page.locator('[data-exchange="bybit"]').click()
+  const panel = page.getByRole('dialog', { name: 'Bybit' })
+  await panel.getByLabel('API Key').fill('AbCdEf123456')
+  await panel.getByLabel('API Secret').fill('SuperSecret123456')
+  await panel.getByRole('button', { name: 'Подключить', exact: true }).click()
+  await expect(panel.locator('[data-bridge]')).toHaveAttribute('data-stage', 'done', { timeout: 20_000 })
+  await page.keyboard.press('Escape')
+  await expect(page.locator('[data-empty-orbit]')).toHaveCount(0)
+  await expect(page.locator('[data-beam-hub] [data-hub-node="bybit"]')).toHaveAttribute('data-on', 'true')
+  await expect(page.locator('[data-beam-hub] [data-hub-node="okx"]')).not.toHaveAttribute('data-on', 'true')
+  // «Обновить»: пока идёт синхронизация — луч по рамке карточки и «Ищем новые сделки…»
+  await page.route('**/functions/v1/exchange-proxy', async (route) => {
+    await new Promise((r) => setTimeout(r, 800))
+    await route.fallback()
+  })
+  const tile = page.locator('[data-conn="bybit"]')
+  await tile.getByRole('button', { name: 'Обновить' }).click()
+  await expect(tile).toHaveClass(/beam-run/)
+  await expect(tile).toContainText('Ищем новые сделки…')
+  await expect(tile).not.toHaveClass(/beam-run/, { timeout: 20_000 })
+})

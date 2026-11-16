@@ -26,7 +26,10 @@ import type { Plan } from '@/types/db'
 import { PolymarketDemoDialog } from './PolymarketDemoDialog'
 import { PasswordInput } from '@/components/PasswordInput'
 import { CheckMark } from '@/components/CheckMark'
-import { ExchangeGrid, ExchangePanel } from './ExchangeGrid'
+import { EXCHANGE_CARDS, ExchangeGrid, ExchangePanel } from './ExchangeGrid'
+import { BeamHub, type HubNode } from '@/components/fx/BeamHub'
+import { Orbit } from '@/components/fx/Orbit'
+import { Shimmer } from '@/components/fx/Shimmer'
 import { pause } from '@/lib/motion'
 import {
   CONNECTABLE,
@@ -39,6 +42,7 @@ import {
   useDeleteConnection,
   useSyncConnection,
   useSyncing,
+  useSyncingIds,
   type ConnectableId,
   type Connection,
   type SyncResult,
@@ -80,6 +84,20 @@ export function ConnectionsCard({ onPickFile }: { onPickFile?: (exchange: string
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
   const now = useNow()
   const recent = useRecentPnl(conns.length > 0)
+  const syncingIds = useSyncingIds()
+  // №1 «Поток в дневник»: сначала подключённые биржи, остальные места — неподключённые (серые), всего до 6
+  const hubNodes = useMemo<HubNode[]>(() => {
+    const api = EXCHANGE_CARDS.filter((x) => x.methods.includes('api') || x.methods.includes('wallet'))
+    const mine = api.filter((x) => conns.some((cn) => cn.exchange === x.id))
+    const rest = api.filter((x) => !mine.includes(x))
+    return [...mine, ...rest].slice(0, 6).map((x) => ({
+      id: x.id,
+      mono: x.mono,
+      name: exchangeName(x.id, ''),
+      on: mine.includes(x),
+      fast: conns.some((cn) => cn.exchange === x.id && syncingIds.has(cn.id)),
+    }))
+  }, [conns, syncingIds])
 
   const onSynced = (r: SyncResult) =>
     setNotice({
@@ -118,10 +136,22 @@ export function ConnectionsCard({ onPickFile }: { onPickFile?: (exchange: string
       {isLoading ? (
         <p className="text-sm text-muted">{t.common.loading}</p>
       ) : conns.length === 0 ? (
-        // подключений нет — пустую карточку не рисуем: ниже сетка бирж; на Basic — одна строка про тариф
-        usage && !admin && planInfo(plan).connections === 0 && <UpgradeLine text={t.plans.upgrade.connectionsFree} />
+        // подключений нет — №5 «Орбита»: биржи кружат вокруг дневника; на Basic — строка про тариф
+        <div data-empty-orbit className="flex flex-col items-center gap-5 rounded-xl border border-border bg-surface px-4 py-6 sm:flex-row sm:justify-center sm:gap-10">
+          <Orbit size={220} />
+          <div className="flex max-w-sm flex-col gap-2 text-center sm:text-left">
+            <p className="font-display text-lg font-semibold">{c.emptyTitle}</p>
+            <p className="text-sm text-muted">{c.emptyText}</p>
+            {usage && !admin && planInfo(plan).connections === 0 && <UpgradeLine text={t.plans.upgrade.connectionsFree} />}
+          </div>
+        </div>
       ) : (
-        // каждое подключение — своя карточка: 1 колонка на телефоне, 2 — от sm, 3 — от xl
+        <>
+        {/* №1 «Поток в дневник»: по линиям подключённых бирж бегут огоньки, у синхронизируемой — быстрее */}
+        <div className="rounded-xl border border-border bg-surface px-3 py-4 sm:px-6">
+          <BeamHub nodes={hubNodes} caption={fmt(c.hubCaption, { n: new Set(conns.map((cn) => cn.exchange)).size })} />
+        </div>
+        {/* каждое подключение — своя карточка: 1 колонка на телефоне, 2 — от sm, 3 — от xl */}
         <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {conns.map((conn) => (
             <ConnectionTile
@@ -136,6 +166,7 @@ export function ConnectionsCard({ onPickFile }: { onPickFile?: (exchange: string
             />
           ))}
         </ul>
+        </>
       )}
 
       {/* «Сначала биржа, потом способ»: все биржи карточками; клик — панель этой биржи (API / адрес / файл) */}
@@ -258,7 +289,8 @@ function ConnectionTile({
   const next = synced === null ? null : synced + SERVER_EVERY_MS - now
 
   return (
-    <li data-conn={conn.exchange} data-status={status} className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4">
+    // №2 «Луч по рамке»: пока идёт синхронизация, по краю карточки бежит свет
+    <li data-conn={conn.exchange} data-status={status} className={`relative flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 ${syncing ? 'beam-run' : ''}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="font-semibold">{name}</div>
@@ -280,7 +312,7 @@ function ConnectionTile({
       {expiry && !errText && <p className={`text-xs ${expiry.tone}`}>{expiry.text}</p>}
 
       <p className="text-xs text-muted">
-        {syncing ? c.status.syncing : ago === null ? c.neverSynced : ago < 60_000 ? c.updatedNow : fmt(c.updatedAgo, { ago: formatDuration(ago) })}
+        {syncing ? <Shimmer>{c.searching}</Shimmer> : ago === null ? c.neverSynced : ago < 60_000 ? c.updatedNow : fmt(c.updatedAgo, { ago: formatDuration(ago) })}
         {/* Pro Plus: сервер подтянет сам — примерно через 3 ч после прошлой синхронизации */}
         {!syncing && pro && status === 'ok' && next !== null && (
           <span> · {next > 60_000 ? fmt(c.nextIn, { in: formatDuration(next) }) : c.nextSoon}</span>
@@ -536,7 +568,10 @@ function Bridge({
           <path d="M2 6H118" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" fill="none" className="draw-path" style={{ '--len': 116 } as React.CSSProperties} />
           {flowing && [0, 1, 2].map((k) => <circle key={k} cx="2" cy="6" r="2.6" fill="currentColor" className="bridge-dot" style={{ animationDelay: `${k * 0.35}s` }} />)}
         </svg>
-        <span className="grid min-w-0 flex-1 place-items-center rounded-xl border border-primary/50 bg-primary/8 px-2 py-3 text-center">
+        <span
+          className={`relative grid min-w-0 flex-1 place-items-center rounded-xl border border-primary/50 bg-primary/8 px-2 py-3 text-center ${flowing ? 'beam-run' : ''}`}
+          style={{ '--beam-fill': 'color-mix(in srgb, var(--color-primary) 8%, var(--color-surface))' } as React.CSSProperties}
+        >
           <span className="truncate text-sm font-semibold">CryptoJournal</span>
           <span className="text-xs text-muted">{b.journal}</span>
         </span>
@@ -556,7 +591,7 @@ function Bridge({
                 <span className={`size-4 rounded-full border-2 border-border ${at + 1 === i || (i === 2 && stage === 'syncing') ? 'animate-spin border-t-primary' : ''}`} aria-hidden />
               )}
             </span>
-            <span className={s.failed ? 'text-loss' : s.done ? '' : 'text-muted'}>{s.text}</span>
+            <span className={s.failed ? 'text-loss' : s.done ? '' : 'text-muted'}>{i === 2 && stage === 'syncing' ? <Shimmer>{s.text}</Shimmer> : s.text}</span>
           </li>
         ))}
       </ol>

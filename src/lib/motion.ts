@@ -154,3 +154,52 @@ export function useShake<T extends HTMLElement>(): [RefObject<T | null>, () => v
 export function pause(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, prefersReducedMotion() ? 0 : ms))
 }
+
+/**
+ * №4 «Блик и наклон» (образец — 21st.dev glare-card): карточка [data-glare] внутри контейнера наклоняется к курсору (±max°),
+ * по ней проезжает блик (.glare-shine, --gx). Уходит курсор — плавно встаёт на место. Только мышь и без «уменьшить движение».
+ */
+export function useGlare(ref: RefObject<HTMLElement | null>, max = 5) {
+  useEffect(() => {
+    const box = ref.current
+    if (!box || prefersReducedMotion() || !hasFinePointer()) return
+    let active: HTMLElement | null = null
+    let frame = 0
+    const reset = (el: HTMLElement | null) => {
+      if (!el) return
+      el.style.transform = ''
+      el.style.removeProperty('--gx')
+      delete el.dataset.glareOn
+    }
+    const move = (e: PointerEvent) => {
+      const el = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-glare]') ?? null
+      if (el !== active) {
+        reset(active)
+        active = el
+      }
+      if (!el) return
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const r = el.getBoundingClientRect()
+        const px = (e.clientX - r.left) / r.width - 0.5
+        const py = (e.clientY - r.top) / r.height - 0.5
+        el.dataset.glareOn = ''
+        el.style.transform = `perspective(900px) rotateX(${(-py * 2 * max).toFixed(2)}deg) rotateY(${(px * 2 * max).toFixed(2)}deg) translateY(-2px)`
+        el.style.setProperty('--gx', `${(px * 70).toFixed(1)}%`)
+      })
+    }
+    const leave = () => {
+      cancelAnimationFrame(frame)
+      reset(active)
+      active = null
+    }
+    box.addEventListener('pointermove', move)
+    box.addEventListener('pointerleave', leave)
+    return () => {
+      cancelAnimationFrame(frame)
+      box.removeEventListener('pointermove', move)
+      box.removeEventListener('pointerleave', leave)
+      reset(active)
+    }
+  }, [ref, max])
+}

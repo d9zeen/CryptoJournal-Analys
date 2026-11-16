@@ -10,6 +10,8 @@ import { fmt, plural, useT } from '@/i18n'
 import { formatNumber } from '@/lib/format'
 import { clearFinished, useActivities, type Activity } from '@/lib/activity'
 import { CheckMark } from './CheckMark'
+import { Shimmer } from './fx/Shimmer'
+import { DigitTicker } from './fx/DigitTicker'
 
 /** Через сколько закрыть окошко, когда всё загрузилось */
 const HIDE_AFTER = 8000
@@ -37,7 +39,7 @@ export function ActivityToast() {
       data-activity
       aria-live="polite"
       aria-label={a.label}
-      className="activity-toast fixed inset-x-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 overflow-hidden rounded-xl border border-border bg-surface text-text shadow-2xl md:inset-x-auto md:right-6 md:bottom-6 md:w-[340px]"
+      className={`activity-toast ${running.length ? 'beam-run' : ''} fixed inset-x-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 overflow-hidden rounded-xl border border-border bg-surface text-text shadow-2xl md:inset-x-auto md:right-6 md:bottom-6 md:w-[340px]`}
     >
       <header className="flex items-center justify-between gap-2 border-b border-border px-4 py-2.5">
         <h2 className="truncate text-sm font-semibold">{running.length ? plural(running.length, a.running) : a.allDone}</h2>
@@ -100,7 +102,9 @@ function Row({ item }: { item: Activity }) {
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium">{item.kind === 'sync' ? fmt(a.syncLabel, { name: item.label }) : item.label}</span>
-        <span className={`block truncate text-xs ${item.status === 'error' ? 'text-loss' : 'text-muted'}`}>{sub}</span>
+        <span className={`block truncate text-xs ${item.status === 'error' ? 'text-loss' : 'text-muted'}`}>
+          {item.status === 'running' ? <Shimmer>{sub}</Shimmer> : item.status === 'done' ? <DigitTicker text={sub} /> : sub}
+        </span>
       </span>
       <Ring item={item} />
     </li>

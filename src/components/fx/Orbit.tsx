@@ -1,0 +1,45 @@
+/**
+ * №5 «Орбита» (образец — 21st.dev orbiting-circles): вокруг логотипа дневника на двух орбитах медленно кружат биржи.
+ * Кольцо вращается (transform rotate), значки — в обратную сторону, поэтому всегда стоят ровно. Без мигания.
+ * Для пустых состояний: «Биржи» без подключений, первый вход.
+ */
+const OUTER = ['BY', 'BN', 'OK', 'BX', 'BG']
+const INNER = ['HL', 'PM', 'MX']
+
+function Ring({ items, radius, reverse }: { items: string[]; radius: number; reverse?: boolean }) {
+  return (
+    <div className={`orbit-ring absolute inset-0 ${reverse ? 'orbit-reverse' : ''}`}>
+      {items.map((m, i) => {
+        const a = (i / items.length) * Math.PI * 2
+        return (
+          <div
+            key={m}
+            className="absolute top-1/2 left-1/2 -mt-5 -ml-5 size-10"
+            style={{ transform: `translate(${Math.cos(a) * radius}px, ${Math.sin(a) * radius}px)` }}
+          >
+            <div className="orbit-sat num grid size-10 place-items-center rounded-xl border border-border bg-surface-2 text-xs font-bold text-muted">{m}</div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+export function Orbit({ size = 260 }: { size?: number }) {
+  const outer = size / 2 - 16
+  const inner = outer * 0.68
+  return (
+    <div aria-hidden className="relative shrink-0" style={{ width: size, height: size }}>
+      <div className="absolute top-1/2 left-1/2 -translate-1/2 rounded-full border border-dashed border-border" style={{ width: outer * 2, height: outer * 2 }} />
+      <div className="absolute top-1/2 left-1/2 -translate-1/2 rounded-full border border-dashed border-border" style={{ width: inner * 2, height: inner * 2 }} />
+      <Ring items={OUTER} radius={outer} />
+      <Ring items={INNER} radius={inner} reverse />
+      <div className="absolute top-1/2 left-1/2 grid size-13 -translate-1/2 place-items-center rounded-2xl border border-primary/50 bg-primary/12 text-primary">
+        <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 17l5-5 4 4 8-9" />
+          <path d="M14 7h6v6" />
+        </svg>
+      </div>
+    </div>
+  )
+}

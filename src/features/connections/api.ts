@@ -130,6 +130,12 @@ const subscribeSyncing = (cb: () => void) => {
   return () => void syncListeners.delete(cb)
 }
 
+/** Какие подключения синхронизируются прямо сейчас (id через запятую — стабильная строка для useSyncExternalStore) */
+export function useSyncingIds(): Set<string> {
+  const ids = useSyncExternalStore(subscribeSyncing, () => [...inFlight.keys()].sort().join(','))
+  return new Set(ids ? ids.split(',') : [])
+}
+
 /** Идёт ли синхронизация этого подключения прямо сейчас (кнопка «Обновить», первая после подключения или автосинхронизация) */
 export function useSyncing(id: string): boolean {
   return useSyncExternalStore(subscribeSyncing, () => inFlight.has(id))
