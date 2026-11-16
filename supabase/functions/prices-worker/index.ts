@@ -8,7 +8,7 @@
  *  1. Цены (CoinGecko /coins/markets): топ-500 + монеты, которые кто-то держит, но они не в топе (held_coin_ids).
  *  2. Новые монеты: символы, которые держат, а монеты в coins нет (held_missing_symbols), — ищет у CoinGecko (/search),
  *     берёт только ранжированную монету с точно таким символом (мусорные токены не подхватит); не нашёл — coin_misses (сутки не ищем).
- *  3. Иконки (до 40 за запуск): логотип TradingView (SVG, после проверки safeSvg) → наш Storage coin-icons; цвет монеты — из логотипа.
+ *  3. Иконки (до 100 за запуск): логотип TradingView (SVG, после проверки safeSvg) → наш Storage coin-icons; цвет монеты — из логотипа.
  *     Нет логотипа у TradingView — картинка CoinGecko (PNG / JPEG / WebP). Браузер иконки берёт только с нашего Supabase:
  *     CSP не трогаем, сторонние сайты не узнают, у кого какие монеты.
  *
@@ -21,7 +21,7 @@ import { safeSvg, svgColor, tradingViewLogo } from './svg.ts'
 const CG = 'https://api.coingecko.com/api/v3'
 const PAGES = 2
 const SEARCH_PER_RUN = 3
-const ICONS_PER_RUN = 40
+const ICONS_PER_RUN = 100
 const ICON_MAX = 200 * 1024
 const ICON_HOSTS = ['coin-images.coingecko.com', 'assets.coingecko.com']
 const RASTER: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }
@@ -165,7 +165,8 @@ Deno.serve(async (req) => {
       let file: string | null = null
       let color: string | null = null
       const tv = await fetch(tradingViewLogo(c.symbol))
-      const svg = tv.ok && (tv.headers.get('content-type') ?? '').includes('svg') ? safeSvg(await tv.text()) : null
+      // S3 у TradingView может отдать SVG с типом binary/octet-stream — решаем по содержимому (safeSvg)
+      const svg = tv.ok ? safeSvg(await tv.text()) : null
       if (svg && svg.length <= ICON_MAX) {
         file = `${c.id}.svg`
         color = svgColor(svg)

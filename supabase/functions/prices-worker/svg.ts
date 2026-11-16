@@ -20,7 +20,8 @@ const BAD = [
 export function safeSvg(text: string): string | null {
   const t = text.trim()
   if (!t || t.length > 200_000) return null
-  if (!/^(<\?xml[^>]*\?>\s*)?<svg[\s>]/i.test(t)) return null
+  // TradingView начинает файл с комментария <!-- by TradingView -->
+  if (!/^(<\?xml[^>]*\?>\s*)?(<!--[\s\S]*?-->\s*)*<svg[\s>]/i.test(t)) return null
   if (BAD.some((re) => re.test(t))) return null
   return t
 }

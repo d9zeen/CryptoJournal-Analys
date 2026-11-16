@@ -7,6 +7,8 @@ describe('логотипы TradingView', () => {
   it('обычный логотип проходит', () => {
     expect(safeSvg(btc)).toBe(btc)
     expect(safeSvg(`<?xml version="1.0"?>\n${btc}`)).not.toBeNull()
+    // так начинаются настоящие файлы TradingView (сверено 16.11.2026)
+    expect(safeSvg(`<!-- by TradingView -->${btc}`)).not.toBeNull()
     const grad = '<svg viewBox="0 0 1 1"><defs><linearGradient id="g"><stop stop-color="#9945FF"/><stop offset="1" stop-color="#14F195"/></linearGradient></defs><path fill="url(#g)" d="M0 0h1v1H0z"/></svg>'
     expect(safeSvg(grad)).toBe(grad)
   })
