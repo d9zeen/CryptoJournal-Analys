@@ -96,6 +96,15 @@ describe('Bitget', () => {
     expect(await checkBitgetKey(async () => ({ code: '00000', data: { permType: 'read-only' } }))).toEqual({ readOnly: true })
     expect(await checkBitgetKey(async () => ({ code: '00000', data: { permType: 'read-and-write' } }))).toEqual({ readOnly: false })
     await expect(checkBitgetKey(async () => ({ code: '40037', msg: 'Apikey does not exist' }))).rejects.toMatchObject({ kind: 'KEY_INVALID' })
+    // классический аккаунт: v3 отвечает ошибкой, права — из /api/v2/spot/account/info
+    const classic = (authorities: unknown) => async (path: string) =>
+      path === '/api/v3/account/info' ? { code: '40084', msg: 'not uta' } : path === '/api/v2/spot/account/info' ? { code: '00000', data: { authorities } } : { code: '00000', data: { list: [] } }
+    expect(await checkBitgetKey(classic(['readonly']))).toEqual({ readOnly: true })
+    expect(await checkBitgetKey(classic(['trade', 'readonly']))).toEqual({ readOnly: false })
+    expect(await checkBitgetKey(classic(['readonly', 'withdraw']))).toEqual({ readOnly: false })
+    expect(await checkBitgetKey(classic([]))).toEqual({ readOnly: false })
+    // прав не прислали — ключ рабочий, принимаем
+    expect(await checkBitgetKey(classic(undefined))).toEqual({ readOnly: true })
   })
 })
 

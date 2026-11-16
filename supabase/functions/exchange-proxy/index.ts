@@ -7,10 +7,11 @@
  * Защита:
  *  - вызвать может только вошедший пользователь (JWT проверяет Supabase + getUser ниже);
  *  - подключение читается С ЕГО ПРАВАМИ (RLS + 2FA): чужое подключение просто не найдётся;
- *  - к бирже (Bybit, BingX, OKX, Bitget, Binance) — только GET на адреса для чтения (READ_PATHS в sign.ts) и только разрешённые параметры;
+ *  - к бирже (Bybit, BingX, OKX, Bitget, Binance) — только адреса для чтения (READ_PATHS в sign.ts: история, права ключа, балансы)
+ *    и только разрешённые параметры; метод GET (кроме баланса фандинга Binance — POST_PATHS, это тоже чтение);
  *    секрет (и кодовая фраза OKX / Bitget) — из Vault, наружу не отдаётся; ответ биржи с ошибкой ключа (4xx) возвращается как есть —
  *    его разбирает модуль биржи на сайте (понятный текст ошибки), 5xx и не-JSON — EXCHANGE_HTTP;
- *  - Polymarket: только закрытые позиции адреса из подключения (чужой адрес не подставить; браузер не упирается в CORS);
+ *  - Polymarket: только позиции адреса из подключения — закрытые или открытые (чужой адрес не подставить; браузер не упирается в CORS);
  *    демо ({ demo: true }) — одна страница закрытых позиций фиксированного публичного кошелька;
  *  - тариф: как в базе (connection_active, 0016): Polymarket — Pro Plus, биржи и кошельки — Pro (1) и Pro Plus (до 5); демо — всем;
  *  - ключ с правом торговли отклоняет сайт при подключении и при каждой синхронизации (права ключа у биржи → readOnly).
@@ -76,11 +77,13 @@ Deno.serve(async (req) => {
     const { data: active } = await asUser.rpc('connection_active', { p_id: conn.id })
     if (active !== true) return json({ error: 'PLAN_REQUIRED' }, 403)
 
-    // Polymarket: публичные данные, ключа нет — только закрытые позиции адреса этого подключения
+    // Polymarket: публичные данные, ключа нет — только позиции адреса этого подключения:
+    // закрытые (сделки) или открытые (портфель, 0019)
     if (conn.exchange === 'polymarket') {
       if (path !== '/v2/positions') return json({ error: 'NOT_ALLOWED' }, 403)
       const p = (typeof body.params === 'object' && body.params) || {}
-      const q = new URLSearchParams({ user: conn.api_key, status: 'CLOSED', limit: String(Math.min(Math.max(Number(p.limit) || 50, 1), 100)) })
+      const status = p.status === 'OPEN' ? 'OPEN' : 'CLOSED'
+      const q = new URLSearchParams({ user: conn.api_key, status, limit: String(Math.min(Math.max(Number(p.limit) || 50, 1), 100)) })
       if (typeof p.cursor === 'string' && p.cursor.length > 0 && p.cursor.length < 500) q.set('cursor', p.cursor)
       const res = await fetch(`${POLYMARKET}/v2/positions?${q}`)
       const text = await res.text()

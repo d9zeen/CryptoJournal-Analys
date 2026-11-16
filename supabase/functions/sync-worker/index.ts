@@ -6,11 +6,13 @@
  * Права service_role: подключение, секрет ключа (Vault) и запись сделок — от имени владельца подключения (user_id явно).
  * Лимиты и проверки данных по-прежнему делает база (триггеры на trades).
  *
+ * После сделок — балансы подключения для «Портфеля» (replace_holdings_for) и снимок стоимости (portfolio_snapshot_for, 0019).
+ * Режим { mode: 'balances' } (cron cj-balances каждый час) — только балансы и снимок, без сделок.
  * Логика синхронизации — общая с браузером: engine.js собирается из src/lib/sync (npm run build:functions).
  * Выкладка: Supabase → Edge Functions → sync-worker (файлы index.ts + engine.js), verify_jwt = false.
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { READ_PATHS, callExchange, isCex, parseSecret, runSync } from './engine.js'
+import { READ_PATHS, callExchange, fetchBalances, isCex, parseSecret, runSync } from './engine.js'
 
 const ID_CHUNK = 150
 const CHUNK = 500
@@ -62,6 +64,22 @@ Deno.serve(async (req) => {
   }
 
   const update = (patch: Row) => admin.from('exchange_connections').update(patch).eq('id', conn.id)
+
+  // Портфель (0019): балансы этого подключения и снимок стоимости. Ошибка здесь сделки не ломает:
+  // старые балансы остаются (график не «падает»), следующий запуск попробует снова
+  const syncBalances = async (): Promise<number | null> => {
+    try {
+      const items = await fetchBalances({ exchange: conn.exchange as string, api_key: conn.api_key as string }, { cexCall })
+      const { data, error } = await admin.rpc('replace_holdings_for', { p_user: userId, p_connection: conn.id, p_items: items })
+      if (error) return null
+      await admin.rpc('portfolio_snapshot_for', { p_user: userId })
+      return data as number
+    } catch {
+      return null
+    }
+  }
+  // каждый час (cron cj-balances, mode = balances): только балансы, без сделок
+  if (body?.mode === 'balances') return json({ holdings: await syncBalances() })
 
   try {
     const result = await runSync(
@@ -121,7 +139,7 @@ Deno.serve(async (req) => {
         },
       },
     )
-    return json(result)
+    return json({ ...result, holdings: await syncBalances() })
   } catch (e) {
     // ошибка уже записана в подключение (last_error) — сайт её покажет
     return json({ error: (e as { code?: string }).code ?? 'UNKNOWN' })

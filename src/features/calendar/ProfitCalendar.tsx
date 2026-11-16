@@ -9,12 +9,12 @@
  * ?day=YYYY-MM-DD в адресе (мини-календарь на «Статистике») — сразу этот месяц и панель дня.
  */
 import { intlLocale } from '@/lib/locale'
-import { useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useSearchParams } from 'react-router'
 import { fmt, plural, useT } from '@/i18n'
 import { useTrades } from '@/features/trades/api'
 import { closedTrades } from '@/lib/calc/stats'
-import { calendarSpan, compactPnl, monthSummary, monthWeeks, profitCalendar, type CalCell, type CalDay } from '@/lib/calc/calendar'
+import { calendarSpan, compactPnl, monthPairs, monthSummary, monthWeeks, profitCalendar, type CalCell, type CalDay, type MonthPairs } from '@/lib/calc/calendar'
 import { formatDay, formatPercent, formatPnl, formatPnlShort } from '@/lib/format'
 import { parseYmd, ymd } from '@/lib/period'
 import { useMediaQuery } from '@/lib/useMediaQuery'
@@ -75,7 +75,9 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
   useGlare(panelRef) // №4 «Блик и наклон» на «Итоге месяца»
   if (!isLoading && !isPlaceholderData) shownMonth.current = monthKey
 
-  const cal = useMemo(() => profitCalendar(closedTrades(trades.map((tr) => ({ ...tr, tagIds: [] }))), view.y, view.m, timeZone), [trades, view, timeZone])
+  const closed = useMemo(() => closedTrades(trades.map((tr) => ({ ...tr, tagIds: [] }))), [trades])
+  const cal = useMemo(() => profitCalendar(closed, view.y, view.m, timeZone), [closed, view, timeZone])
+  const pairs = useMemo(() => monthPairs(closed, view.y, view.m, timeZone), [closed, view, timeZone])
   const sum = useMemo(() => monthSummary(cal), [cal])
   const shift = (n: number) => setView((v) => ({ y: new Date(v.y, v.m + n, 1).getFullYear(), m: new Date(v.y, v.m + n, 1).getMonth() }))
   const today = ymd(now)
@@ -92,7 +94,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
 
   return (
     // широкий экран (выбор владельца — вариант 2): высота ~86 % экрана, по краям небольшие поля (до 2000 px по центру);
-    // панели итогов справа — колонка 320px до низа календаря (последняя карточка тянется) — остальное место у календаря
+    // панели итогов справа — колонка 320px до низа календаря (последняя карточка «Пары месяца» тянется) — остальное место у календаря
     <div data-shot="calendar" className="mx-auto grid w-full max-w-[2000px] gap-4 xl:min-h-[max(680px,86dvh)] xl:grid-cols-[minmax(0,1fr)_320px]">
       <section className="rise flex flex-col rounded-lg border border-border bg-surface p-4 sm:p-5 xl:h-full">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -287,7 +289,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
     const wdMax = Math.max(1e-9, ...sum.weekdays.map((w) => Math.abs(w.pnl)))
     const dayShare = sum.upDays + sum.downDays ? sum.upDays / (sum.upDays + sum.downDays) : 0
     return (
-      <aside ref={panelRef} data-shot="calendar-panel" className="flex flex-col gap-3 xl:gap-4">
+      <aside ref={panelRef} data-shot="calendar-panel" className="flex flex-col gap-3">
         {side && <MonthTotalCard />}
         {m.count === 0 && (
           <section style={{ '--i': 1 } as CSSProperties} className="rise rounded-lg border border-border bg-surface p-4">
@@ -329,11 +331,11 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
               </div>
             </section>
 
-            {/* последняя карточка тянется до низа календаря (вариант A владельца, 16.11.2026): график растёт вместе с ней, не меньше 176px */}
-            <section style={{ '--i': 4 } as CSSProperties} className="rise flex flex-col rounded-lg border border-border bg-surface p-4 xl:flex-1">
+            {/* график дней недели фиксированной высоты (176px) */}
+            <section style={{ '--i': 4 } as CSSProperties} className="rise rounded-lg border border-border bg-surface p-4">
               <h2 className="text-xs text-muted">{c.byWeekday}</h2>
               {/* линия нуля посередине: прибыль вверх, убыток вниз, сумма над / под столбиком; дни без сделок — «—» */}
-              <div data-shot="weekday-chart" className="relative mt-3 grid h-44 grid-cols-7 gap-1.5 xl:h-auto xl:min-h-44 xl:flex-1">
+              <div data-shot="weekday-chart" className="relative mt-3 grid h-44 grid-cols-7 gap-1.5">
                 <i aria-hidden className="pointer-events-none absolute inset-x-0 top-[calc(50%-0.625rem)] border-t border-border" />
                 {sum.weekdays.map((w, i) => {
                   const h = w.count ? `${Math.max(4, (Math.abs(w.pnl) / wdMax) * 70)}%` : 0
@@ -368,11 +370,100 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
                 })}
               </div>
             </section>
+
+            <PairsCard data={pairs} fill={side} />
           </>
         )}
       </aside>
     )
   }
+}
+
+/**
+ * «Пары месяца» + «Серия» (выбор владельца 16.11.2026 вместо растянутого графика): последняя карточка правой колонки.
+ * fill (xl): карточка добирает высоту до низа календаря — у списка пар 3 строки всегда, а если колонке есть куда расти,
+ * строк столько, сколько помещается (остальные — «ещё N пар»); серия прижата к низу. Образцы — 21st.dev rank-bars, streak-field-stats.
+ */
+const PAIR_ROW = 26 // строка 16px + промежуток 10px
+const PAIR_MIN = 3
+const PAIR_HEAD = 24 // заголовок 16px + отступ 8px
+
+function PairsCard({ data, fill }: { data: MonthPairs; fill: boolean }) {
+  const t = useT()
+  const c = t.dashboard.calendar
+  const f = t.dashboard.kpi.form
+  const listRef = useRef<HTMLDivElement>(null)
+  const [fit, setFit] = useState(4)
+  useLayoutEffect(() => {
+    const el = listRef.current
+    if (!fill || !el) return setFit(4)
+    const update = () => setFit(Math.floor((el.clientHeight + 10) / PAIR_ROW))
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [fill])
+  const all = data.pairs
+  // не меньше 3 строк всегда (иначе карточка пустая), больше — если колонке есть куда расти
+  const minRows = Math.min(all.length, PAIR_MIN)
+  const rows = Math.max(minRows, fit)
+  const shown = all.length > rows ? all.slice(0, rows - 1) : all
+  const rest = all.slice(shown.length)
+  const max = Math.max(1e-9, ...all.map((p) => Math.abs(p.pnl)))
+  const restPnl = rest.reduce((a, p) => a + p.pnl, 0)
+  const cur = data.current
+  const word = (v: number) => (v > 0 ? f.win : v < 0 ? f.loss : f.even)
+  return (
+    <section data-shot="month-pairs" style={{ '--i': 5 } as CSSProperties} className="rise flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 xl:flex-1">
+      {/* на xl блок пар влияет на высоту колонки только тремя строками (minHeight), остальное — из свободного места */}
+      <div className="flex flex-col xl:flex-1 xl:basis-0 xl:overflow-hidden" style={fill ? { minHeight: PAIR_HEAD + minRows * PAIR_ROW - 10 } : undefined}>
+        <h2 className="text-xs text-muted">{c.pairs}</h2>
+        <div ref={listRef} data-pairs className="mt-2 flex flex-col gap-2.5 xl:min-h-0 xl:flex-1">
+          {shown.map((p) => (
+            <div key={p.symbol} title={`${p.symbol}: ${plural(p.count, c.tradesN)}`} className="grid h-4 shrink-0 grid-cols-[88px_minmax(0,1fr)_auto] items-center gap-2 text-xs">
+              <span className="truncate font-medium">{p.symbol}</span>
+              <Bar value={p.pnl} max={max} />
+              <span className={`num w-20 text-right font-semibold ${p.pnl < 0 ? 'text-down' : ''}`}>{formatPnl(p.pnl)}</span>
+            </div>
+          ))}
+          {rest.length > 0 && (
+            <div className="grid h-4 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-xs text-muted">
+              <span>{plural(rest.length, c.pairsMore)}</span>
+              <span className="num w-20 text-right">{formatPnl(restPnl)}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div data-shot="month-streak" className="border-t border-border pt-3">
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="text-xs text-muted">{plural(data.recent.length, f.title)}</h2>
+          <span className="text-xs text-muted">{f.order}</span>
+        </div>
+        <ol className="mt-2 grid grid-cols-[repeat(10,minmax(0,1fr))] gap-1">
+          {data.recent.map((v, i) => (
+            <li
+              key={i}
+              title={`${word(v)}: ${formatPnl(v)}`}
+              aria-label={`${word(v)}: ${formatPnl(v)}`}
+              className={`num flex aspect-square items-center justify-center rounded-md text-xs font-bold ${
+                v > 0 ? 'bg-up/15 text-up' : v < 0 ? 'bg-down/15 text-down' : 'border border-dashed border-border text-muted'
+              }`}
+            >
+              {v > 0 ? f.winLetter : v < 0 ? f.lossLetter : f.evenLetter}
+            </li>
+          ))}
+        </ol>
+        {/* текущая серия слева, самые длинные серии месяца справа — одной строкой */}
+        <div className="mt-2 flex items-baseline justify-between gap-2 text-xs">
+          <span className={cur ? (cur.win ? 'text-up' : 'text-down') : 'text-muted'}>{cur ? plural(cur.n, cur.win ? f.streakWin : f.streakLoss) : ''}</span>
+          <span data-streak-record title={`${c.longestWin}: ${data.bestWin} · ${c.longestLoss}: ${data.worstLoss}`} className="num shrink-0 text-muted">
+            {c.record} <span className="font-semibold text-up">{data.bestWin} {f.winLetter}</span> · <span className="font-semibold text-down">{data.worstLoss} {f.lossLetter}</span>
+          </span>
+        </div>
+      </div>
+    </section>
+  )
 }
 
 function Row({ label, sub, value, down = false, up = false }: { label: string; sub?: string; value: string; down?: boolean; up?: boolean }) {

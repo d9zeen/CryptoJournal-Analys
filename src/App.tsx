@@ -41,6 +41,7 @@ const ImportPage = lazyPage(() => import('@/features/import/ImportPage'), 'Impor
 const SettingsPage = lazyPage(() => import('@/features/settings/SettingsPage'), 'SettingsPage')
 const PlansPage = lazyPage(() => import('@/features/plans/PlansPage'), 'PlansPage')
 const CalendarPage = lazyPage(() => import('@/features/calendar/CalendarPage'), 'CalendarPage')
+const PortfolioPage = lazyPage(() => import('@/features/portfolio/PortfolioPage'), 'PortfolioPage')
 const LandingPage = lazyPage(() => import('@/features/landing/LandingPage'), 'LandingPage')
 const PrivacyPage = lazyPage(() => import('@/features/privacy/PrivacyPage'), 'PrivacyPage')
 
@@ -83,6 +84,7 @@ const router = createBrowserRouter(
             { path: '/trades/new', element: <TradeFormPage /> },
             { path: '/trades/:id', element: <TradeFormPage /> },
             { path: '/calendar', element: <CalendarPage /> },
+            { path: '/portfolio', element: <PortfolioPage /> },
             { path: '/analysis', element: <AnalysisPage /> },
             { path: '/import', element: <ImportPage /> },
             { path: '/settings', element: <SettingsPage /> },

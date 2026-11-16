@@ -648,6 +648,90 @@ select pg_temp.check((select not plan_trial and plan = 'pro' and plan_until > no
 reset request.jwt.claims;
 reset role;
 
+-- Портфель (0019): монеты, балансы, цены входа, снимки
+insert into coins (id, symbol, name, rank, price, change_24h, image_src) values
+  ('bitcoin', 'BTC', 'Bitcoin', 1, 100000, 1.5, 'https://example.com/btc.png'),
+  ('ethereum', 'ETH', 'Ethereum', 2, 3000, -2, null),
+  ('fake-btc', 'BTC', 'Fake Bitcoin', 900, 5, 0, null);
+insert into auth.users (id, email) values ('eeeeeeee-0000-0000-0000-000000000005', 'e@test');
+update profiles set plan = 'pro_plus', plan_until = null, plan_trial = false where id = 'eeeeeeee-0000-0000-0000-000000000005';
+set role authenticated;
+set request.jwt.claim.sub = 'eeeeeeee-0000-0000-0000-000000000005';
+select pg_temp.check((select count(*) from coins) = 3, 'монеты видны всем вошедшим');
+select pg_temp.expect_error($$select image_src from coins$$, 'permission denied');
+select pg_temp.check(true, 'откуда качается иконка — браузеру не видно');
+select pg_temp.expect_error($$update coins set price = 1$$, 'permission denied');
+select pg_temp.check(true, 'цены монет не изменить из браузера');
+select pg_temp.expect_error($$insert into coins (id, symbol, name) values ('x', 'X', 'X')$$, 'permission denied');
+select pg_temp.check(true, 'монету не добавить из браузера');
+-- вручную
+insert into holdings (account, symbol, amount) values ('manual', 'BTC', 0.5);
+select pg_temp.check((select count(*) from holdings) = 1, 'монета вручную добавлена');
+select pg_temp.expect_error($$insert into holdings (account, symbol, amount) values ('spot', 'ETH', 1)$$, 'row-level security');
+select pg_temp.check(true, 'вручную нельзя выдать монету за баланс биржи');
+select pg_temp.expect_error($$insert into holdings (account, symbol, amount) values ('manual', 'BTC', -1)$$, 'holdings_amount_check');
+select pg_temp.check(true, 'отрицательное количество не записать');
+select pg_temp.expect_error($$insert into holdings (account, symbol, amount) values ('manual', 'bt c<script>', 1)$$, 'holdings_symbol_check');
+select pg_temp.check(true, 'символ монеты — только буквы и цифры');
+-- баланс биржи: только через replace_holdings и только своё подключение
+select add_exchange_connection('hyperliquid', '0x6666666666666666666666666666666666666666') as e_conn \gset
+select pg_temp.check(replace_holdings(:'e_conn', '[{"account":"spot","symbol":"eth","amount":2},{"account":"perp","symbol":"USDC","amount":0}]') = 1, 'балансы биржи записаны (нули отброшены, символ — заглавными)');
+select pg_temp.check((select symbol from holdings where connection_id = :'e_conn') = 'ETH', 'символ из ответа биржи приведён к заглавным');
+select replace_holdings(:'e_conn', '[{"account":"spot","symbol":"ETH","amount":3}]');
+select pg_temp.check((select count(*) from holdings where connection_id = :'e_conn') = 1 and (select amount from holdings where connection_id = :'e_conn') = 3, 'новые балансы биржи заменяют старые');
+select pg_temp.expect_error($$insert into holdings (connection_id, account, symbol, amount) values ('$$ || :'e_conn' || $$', 'spot', 'ETH', 99)$$, 'row-level security');
+select pg_temp.check(true, 'баланс биржи напрямую не подделать');
+update holdings set amount = 999 where connection_id is not null;
+delete from holdings where connection_id is not null;
+select pg_temp.check((select amount from holdings where connection_id = :'e_conn') = 3, 'баланс биржи не изменить и не удалить напрямую');
+-- цена входа
+insert into asset_costs (symbol, avg_price) values ('BTC', 80000);
+select pg_temp.expect_error($$insert into asset_costs (symbol, avg_price) values ('ETH', 0)$$, 'asset_costs_avg_price_check');
+select pg_temp.check(true, 'цена входа — больше нуля');
+-- снимок: BTC по цене настоящего биткоина (rank 1), а не «Fake Bitcoin»
+select pg_temp.check(portfolio_snapshot() = 59000, 'снимок: 0,5 BTC × 100 000 + 3 ETH × 3 000 = 59 000');
+select pg_temp.check((select parts = '{"BTC": 50000.00, "ETH": 9000.00}'::jsonb and btc_price = 100000 from portfolio_snapshots), 'в снимке — разбивка по монетам и цена BTC');
+select pg_temp.check(portfolio_snapshot() is null, 'второй снимок сразу — не пишется');
+select pg_temp.check((select count(*) from portfolio_snapshots) = 1, 'снимок не чаще раза в 50 минут');
+select pg_temp.expect_error($$insert into portfolio_snapshots (user_id, total_usd) values ('eeeeeeee-0000-0000-0000-000000000005', 1000000)$$, 'permission denied');
+select pg_temp.check(true, 'историю стоимости не подделать');
+-- чужое
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
+select pg_temp.check((select count(*) from holdings) = 0 and (select count(*) from asset_costs) = 0 and (select count(*) from portfolio_snapshots) = 0, 'B не видит портфель E');
+select pg_temp.expect_error($$select replace_holdings('$$ || :'e_conn' || $$', '[{"account":"spot","symbol":"BTC","amount":100}]')$$, 'NOT_FOUND|PLAN_REQUIRED');
+select pg_temp.check(true, 'B не может записать балансы в подключение E');
+reset role;
+set role anon;
+set request.jwt.claim.sub = '';
+select pg_temp.expect_error($$select * from holdings$$, 'permission denied');
+select pg_temp.expect_error($$select * from coins$$, 'permission denied');
+select pg_temp.expect_error($$select portfolio_snapshot()$$, 'permission denied');
+select pg_temp.check(true, 'аноним не видит портфель и цены');
+reset role;
+select pg_temp.check((select public from storage.buckets where id = 'coin-icons'), 'иконки монет — публичный bucket');
+-- само, без открытого сайта (0019)
+set role authenticated;
+set request.jwt.claim.sub = 'eeeeeeee-0000-0000-0000-000000000005';
+select pg_temp.expect_error($$select portfolio_snapshot_all()$$, 'permission denied');
+select pg_temp.expect_error($$select dispatch_balances()$$, 'permission denied');
+select pg_temp.expect_error($$select held_missing_symbols(10)$$, 'permission denied');
+select pg_temp.expect_error($$select * from coin_misses$$, 'permission denied');
+select pg_temp.check(true, 'служебные функции портфеля из браузера не вызвать');
+insert into holdings (account, symbol, amount) values ('manual', 'NEWCOIN', 5);
+reset role;
+select pg_temp.check((select array_agg(x) from held_missing_symbols(10) x) = array['NEWCOIN'], 'сервер знает, какие монеты держат, а цены нет');
+insert into coin_misses (symbol) values ('NEWCOIN');
+select pg_temp.check((select count(*) from held_missing_symbols(10)) = 0, 'монету, которую не нашли, сутки не ищем снова');
+select pg_temp.check((select array_agg(x order by x) from held_coin_ids() x) = array['bitcoin', 'ethereum'], 'цены держимых монет — по монете с лучшим rank');
+delete from net.calls;
+select dispatch_balances();
+select pg_temp.check((select count(*) from net.calls where body ->> 'mode' = 'balances' and body ->> 'connectionId' = :'e_conn') = 1, 'балансы Pro Plus — каждый час сервером');
+update portfolio_snapshots set at = now() - interval '2 hours';
+select pg_temp.check(portfolio_snapshot_all() >= 1, 'снимок раз в час — сам');
+select pg_temp.check((select count(*) from portfolio_snapshots where user_id = 'eeeeeeee-0000-0000-0000-000000000005') = 2, 'снимок раз в час — у всех с монетами');
+delete from auth.users where id = 'eeeeeeee-0000-0000-0000-000000000005';
+select pg_temp.check((select count(*) from holdings) = 0 and (select count(*) from asset_costs) = 0 and (select count(*) from portfolio_snapshots) = 0, 'удаление аккаунта удаляет портфель');
+
 -- Удаление аккаунта чистит всё
 set role authenticated;
 set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';

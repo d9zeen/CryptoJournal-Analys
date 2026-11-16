@@ -4,7 +4,7 @@
  * (через engine.js) и проверяют тесты Vitest (sign.test.ts).
  *
  * Защита: к бирже уходят только адреса из READ_PATHS и только параметры из PARAMS.
- * Метод — всегда GET (у всех пяти бирж история и права ключа — GET), тела запроса нет.
+ * Метод — GET (у всех пяти бирж история, права ключа и балансы — GET), тела запроса нет; единственное исключение — POST_PATHS.
  */
 
 export type CexId = 'bybit' | 'bingx' | 'okx' | 'bitget' | 'binance'
@@ -16,20 +16,42 @@ export type Cred = { apiKey: string; secret: string; passphrase: string | null }
 
 /** Адреса, к которым пускаем: история сделок и права ключа. Ни торговли, ни вывода, ни переводов */
 export const READ_PATHS: Record<CexId, ReadonlySet<string>> = {
-  bybit: new Set(['/v5/position/closed-pnl', '/v5/user/query-api', '/v5/execution/list']),
-  bingx: new Set(['/openApi/swap/v2/trade/positionHistory', '/openApi/swap/v2/user/income', '/openApi/v1/account/apiPermissions']),
-  okx: new Set(['/api/v5/account/positions-history', '/api/v5/account/config', '/api/v5/public/instruments']),
-  bitget: new Set(['/api/v2/mix/position/history-position', '/api/v3/position/history-position', '/api/v3/account/settings', '/api/v3/account/info']),
-  binance: new Set(['/fapi/v1/income', '/fapi/v1/userTrades', '/sapi/v1/account/apiRestrictions']),
+  bybit: new Set([
+    '/v5/position/closed-pnl', '/v5/user/query-api', '/v5/execution/list',
+    // портфель (0019): балансы единого счёта, фандинга (это запрос, не перевод) и Earn
+    '/v5/account/wallet-balance', '/v5/asset/transfer/query-account-coins-balance', '/v5/earn/position',
+  ]),
+  bingx: new Set([
+    '/openApi/swap/v2/trade/positionHistory', '/openApi/swap/v2/user/income', '/openApi/v1/account/apiPermissions',
+    '/openApi/spot/v1/account/balance', '/openApi/swap/v2/user/balance',
+  ]),
+  okx: new Set([
+    '/api/v5/account/positions-history', '/api/v5/account/config', '/api/v5/public/instruments',
+    '/api/v5/account/balance', '/api/v5/asset/balances', '/api/v5/finance/savings/balance',
+  ]),
+  bitget: new Set([
+    '/api/v2/mix/position/history-position', '/api/v3/position/history-position', '/api/v3/account/settings', '/api/v3/account/info', '/api/v2/spot/account/info',
+    '/api/v3/account/assets', '/api/v2/spot/account/assets', '/api/v2/mix/account/accounts',
+  ]),
+  binance: new Set([
+    '/fapi/v1/income', '/fapi/v1/userTrades', '/sapi/v1/account/apiRestrictions',
+    '/api/v3/account', '/sapi/v1/asset/get-funding-asset', '/fapi/v2/balance', '/sapi/v1/simple-earn/flexible/position', '/sapi/v1/simple-earn/locked/position',
+  ]),
 }
+
+/**
+ * Единственное исключение из «только GET»: баланс фандинга Binance отдаётся только на POST (это чтение, USER_DATA).
+ * Подпись и параметры — в адресе, тело пустое, как у GET.
+ */
+export const POST_PATHS: ReadonlySet<string> = new Set(['/sapi/v1/asset/get-funding-asset'])
 
 /** Какие параметры можно передать бирже (всё остальное отбрасываем) */
 const PARAMS: Record<CexId, ReadonlySet<string>> = {
-  bybit: new Set(['category', 'symbol', 'startTime', 'endTime', 'limit', 'cursor']),
+  bybit: new Set(['category', 'symbol', 'startTime', 'endTime', 'limit', 'cursor', 'accountType', 'coin']),
   bingx: new Set(['symbol', 'currency', 'incomeType', 'startTime', 'endTime', 'limit', 'pageIndex', 'pageSize']),
   okx: new Set(['instType', 'instId', 'after', 'before', 'limit']),
   bitget: new Set(['productType', 'category', 'symbol', 'startTime', 'endTime', 'limit', 'idLessThan', 'cursor']),
-  binance: new Set(['symbol', 'incomeType', 'startTime', 'endTime', 'limit', 'fromId']),
+  binance: new Set(['symbol', 'incomeType', 'startTime', 'endTime', 'limit', 'fromId', 'omitZeroBalances', 'size', 'current']),
 }
 
 /** Значения параметров (кроме курсора Bybit) — только безопасные символы: подпись совпадает с адресом без кодирования */
@@ -47,7 +69,7 @@ export function hostsFor(exchange: CexId, path: string): string[] {
     case 'bitget':
       return ['https://api.bitget.com']
     case 'binance':
-      return [path.startsWith('/sapi/') ? 'https://api.binance.com' : 'https://fapi.binance.com']
+      return [path.startsWith('/sapi/') || path.startsWith('/api/') ? 'https://api.binance.com' : 'https://fapi.binance.com']
   }
 }
 
@@ -189,7 +211,7 @@ export async function callExchange(
   let reply: ExchangeReply | null = null
   for (const host of hosts) {
     const { url, headers } = await signRequest(exchange, cred, path, params, host)
-    const res = await fetchFn(url, { method: 'GET', headers })
+    const res = await fetchFn(url, { method: POST_PATHS.has(path) ? 'POST' : 'GET', headers })
     const text = await res.text()
     let json: unknown = null
     try {

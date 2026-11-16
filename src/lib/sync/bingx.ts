@@ -38,7 +38,7 @@ function bingxError(r: { code?: number; msg?: string } | null): ExchangeError {
   return new ExchangeError('EXCHANGE', detail)
 }
 
-async function bingxGet<T>(call: CexCall, path: string, params: Record<string, string | number>): Promise<T> {
+export async function bingxGet<T>(call: CexCall, path: string, params: Record<string, string | number>): Promise<T> {
   const r = (await call(path, params)) as BingxReply<T> | null
   if (!r || (r.code !== undefined && r.code !== 0)) throw bingxError(r)
   return (r.data ?? r) as T

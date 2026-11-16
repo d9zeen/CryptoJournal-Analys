@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createHmac } from 'node:crypto'
-import { BYBIT_READ_PATHS, READ_PATHS, buildQuery, bybitSignature, callExchange, hostsFor, parseSecret, pickParams, signRequest, type Cred } from './sign'
+import { BYBIT_READ_PATHS, POST_PATHS, READ_PATHS, buildQuery, bybitSignature, callExchange, hostsFor, parseSecret, pickParams, signRequest, type Cred } from './sign'
 
 const cred: Cred = { apiKey: 'KEY12345678', secret: 'SECRET1234567890', passphrase: 'Phrase#1' }
 const NOW = 1730000000000
@@ -34,6 +34,25 @@ describe('прокси бирж: только чтение у всех', () => {
   it('торговля, вывод и переводы закрыты', () => {
     const forbidden = ['/v5/order/create', '/openApi/swap/v2/trade/order', '/api/v5/trade/order', '/api/v5/asset/withdrawal', '/api/v2/mix/order/place-order', '/fapi/v1/order', '/sapi/v1/capital/withdraw/apply']
     for (const set of Object.values(READ_PATHS)) for (const p of forbidden) expect(set.has(p)).toBe(false)
+  })
+  it('портфель: балансы читаем, а переводы между счетами и вывод — закрыты', () => {
+    const transfers = ['/v5/asset/transfer/inter-transfer', '/v5/asset/transfer/universal-transfer', '/sapi/v1/asset/transfer', '/api/v5/asset/transfer', '/api/v2/spot/wallet/transfer', '/openApi/api/asset/v1/transfer', '/sapi/v1/simple-earn/flexible/redeem']
+    for (const set of Object.values(READ_PATHS)) for (const p of transfers) expect(set.has(p)).toBe(false)
+    expect(READ_PATHS.bybit.has('/v5/account/wallet-balance')).toBe(true)
+    expect(READ_PATHS.binance.has('/api/v3/account')).toBe(true)
+    // POST — только баланс фандинга Binance (это чтение)
+    expect([...POST_PATHS]).toEqual(['/sapi/v1/asset/get-funding-asset'])
+    expect(hostsFor('binance', '/api/v3/account')).toEqual(['https://api.binance.com'])
+  })
+  it('Binance: баланс фандинга уходит POST-запросом, остальное — GET', async () => {
+    const methods: string[] = []
+    const fake = (async (_url: string, init?: RequestInit) => {
+      methods.push(init?.method ?? 'GET')
+      return new Response('[]', { status: 200 })
+    }) as typeof fetch
+    await callExchange('binance', cred, '/sapi/v1/asset/get-funding-asset', {}, fake)
+    await callExchange('binance', cred, '/api/v3/account', { omitZeroBalances: 'true' }, fake)
+    expect(methods).toEqual(['POST', 'GET'])
   })
   it('чужой адрес не подписываем', async () => {
     await expect(signRequest('okx', cred, '/api/v5/trade/order', {})).rejects.toThrow('NOT_ALLOWED')
