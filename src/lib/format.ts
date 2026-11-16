@@ -20,6 +20,13 @@ export function formatUsd(n: number | null | undefined): string {
   return n === null || n === undefined ? '—' : usd().format(n)
 }
 
+/** Цена монеты в $: от 1 $ — с центами (95 000,00 $), дешевле — 4 значащими цифрами (0,00001234 $) */
+export function formatUsdPrice(n: number | null | undefined): string {
+  if (n === null || n === undefined) return '—'
+  if (Math.abs(n) >= 1) return usd().format(n)
+  return nf({ style: 'currency', currency: 'USD', maximumSignificantDigits: 4 }).format(n)
+}
+
 /** +1 234,56 $ / −12,00 $ */
 export function formatPnl(n: number | null | undefined): string {
   if (n === null || n === undefined) return '—'

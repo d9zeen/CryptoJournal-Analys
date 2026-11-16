@@ -73,7 +73,7 @@ export function useConnections() {
 }
 
 /** Запрос к бирже через серверную функцию (подпись ключом пользователя; только адреса для чтения) */
-function cexCall(connectionId: string): CexCall {
+export function cexCall(connectionId: string): CexCall {
   return async (path, params) => {
     const { data, error } = await supabase.functions.invoke('exchange-proxy', {
       body: { connectionId, path, params },
@@ -95,7 +95,7 @@ function cexCall(connectionId: string): CexCall {
 }
 
 /** Polymarket Data API через серверную функцию (у Polymarket нет разрешения на запросы со сторонних сайтов) */
-function polymarketGet(connectionId: string): PmGet {
+export function polymarketGet(connectionId: string): PmGet {
   return async (path, params) => {
     const { data, error } = await supabase.functions.invoke('exchange-proxy', { body: { connectionId, path, params } })
     if (error) throw new SyncError('EXCHANGE_DOWN', 'PROXY')

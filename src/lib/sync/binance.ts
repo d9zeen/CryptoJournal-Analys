@@ -35,7 +35,7 @@ function binanceError(r: { code?: number; msg?: string }): ExchangeError {
   return new ExchangeError('EXCHANGE', detail)
 }
 
-async function binanceGet<T>(call: CexCall, path: string, params: Record<string, string | number>): Promise<T> {
+export async function binanceGet<T>(call: CexCall, path: string, params: Record<string, string | number>): Promise<T> {
   const r = (await call(path, params)) as unknown
   if (r && typeof r === 'object' && !Array.isArray(r) && typeof (r as { code?: unknown }).code === 'number' && (r as { code: number }).code < 0) {
     throw binanceError(r as { code: number; msg?: string })

@@ -39,7 +39,7 @@ function okxError(r: { code?: string; msg?: string } | null): ExchangeError {
   return new ExchangeError('EXCHANGE', detail)
 }
 
-async function okxGet<T>(call: CexCall, path: string, params: Record<string, string | number>): Promise<T[]> {
+export async function okxGet<T>(call: CexCall, path: string, params: Record<string, string | number>): Promise<T[]> {
   const r = (await call(path, params)) as OkxReply<T> | null
   if (!r || r.code !== '0') throw okxError(r)
   return r.data ?? []

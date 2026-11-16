@@ -1936,14 +1936,24 @@ function bitgetPositionToTrade(p, product) {
 	};
 }
 /**
-* Ключ: «только чтение» (permType = read-only). У классического аккаунта этот адрес может не ответить —
-* тогда ключ принимаем: сайт всё равно ходит к Bitget только за историей (список адресов в exchange-proxy).
+* Ключ: «только чтение».
+*  - единый аккаунт (UTA): /api/v3/account/info → permType = read-only;
+*  - классический: /api/v2/spot/account/info → authorities (права ключа, например ["readonly"] или ["trade", "readonly"]):
+*    любое право на торговлю / перевод / вывод — отказ, как у остальных бирж (дыра №1 из плана портфеля, 16.11.2026).
+*    Если Bitget не прислал список прав вовсе — ключ принимаем, проверив, что он рабочий: сайт всё равно ходит к Bitget
+*    только по адресам для чтения (список в exchange-proxy).
 */
+const WRITE_RIGHT = /trade|transfer|withdraw|write|order/i;
 async function checkBitgetKey(call) {
 	const r = await call("/api/v3/account/info", {});
 	if (r?.code === "00000") return { readOnly: r.data?.permType === "read-only" };
 	const err = bitgetError(r);
 	if (err.kind !== "EXCHANGE") throw err;
+	const info = await call("/api/v2/spot/account/info", {});
+	if (info?.code === "00000" && Array.isArray(info.data?.authorities)) {
+		const rights = info.data.authorities.map(String);
+		return { readOnly: rights.length > 0 && !rights.some((a) => WRITE_RIGHT.test(a)) };
+	}
 	await bitgetGet(call, "/api/v2/mix/position/history-position", {
 		productType: "USDT-FUTURES",
 		limit: 1
@@ -2341,30 +2351,52 @@ const READ_PATHS = {
 	bybit: /* @__PURE__ */ new Set([
 		"/v5/position/closed-pnl",
 		"/v5/user/query-api",
-		"/v5/execution/list"
+		"/v5/execution/list",
+		"/v5/account/wallet-balance",
+		"/v5/asset/transfer/query-account-coins-balance",
+		"/v5/earn/position"
 	]),
 	bingx: /* @__PURE__ */ new Set([
 		"/openApi/swap/v2/trade/positionHistory",
 		"/openApi/swap/v2/user/income",
-		"/openApi/v1/account/apiPermissions"
+		"/openApi/v1/account/apiPermissions",
+		"/openApi/spot/v1/account/balance",
+		"/openApi/swap/v2/user/balance"
 	]),
 	okx: /* @__PURE__ */ new Set([
 		"/api/v5/account/positions-history",
 		"/api/v5/account/config",
-		"/api/v5/public/instruments"
+		"/api/v5/public/instruments",
+		"/api/v5/account/balance",
+		"/api/v5/asset/balances",
+		"/api/v5/finance/savings/balance"
 	]),
 	bitget: /* @__PURE__ */ new Set([
 		"/api/v2/mix/position/history-position",
 		"/api/v3/position/history-position",
 		"/api/v3/account/settings",
-		"/api/v3/account/info"
+		"/api/v3/account/info",
+		"/api/v2/spot/account/info",
+		"/api/v3/account/assets",
+		"/api/v2/spot/account/assets",
+		"/api/v2/mix/account/accounts"
 	]),
 	binance: /* @__PURE__ */ new Set([
 		"/fapi/v1/income",
 		"/fapi/v1/userTrades",
-		"/sapi/v1/account/apiRestrictions"
+		"/sapi/v1/account/apiRestrictions",
+		"/api/v3/account",
+		"/sapi/v1/asset/get-funding-asset",
+		"/fapi/v2/balance",
+		"/sapi/v1/simple-earn/flexible/position",
+		"/sapi/v1/simple-earn/locked/position"
 	])
 };
+/**
+* Единственное исключение из «только GET»: баланс фандинга Binance отдаётся только на POST (это чтение, USER_DATA).
+* Подпись и параметры — в адресе, тело пустое, как у GET.
+*/
+const POST_PATHS = /* @__PURE__ */ new Set(["/sapi/v1/asset/get-funding-asset"]);
 /** Какие параметры можно передать бирже (всё остальное отбрасываем) */
 const PARAMS = {
 	bybit: /* @__PURE__ */ new Set([
@@ -2373,7 +2405,9 @@ const PARAMS = {
 		"startTime",
 		"endTime",
 		"limit",
-		"cursor"
+		"cursor",
+		"accountType",
+		"coin"
 	]),
 	bingx: /* @__PURE__ */ new Set([
 		"symbol",
@@ -2408,7 +2442,10 @@ const PARAMS = {
 		"startTime",
 		"endTime",
 		"limit",
-		"fromId"
+		"fromId",
+		"omitZeroBalances",
+		"size",
+		"current"
 	])
 };
 /** Значения параметров (кроме курсора Bybit) — только безопасные символы: подпись совпадает с адресом без кодирования */
@@ -2424,7 +2461,7 @@ function hostsFor(exchange, path) {
 			"https://us.okx.com"
 		];
 		case "bitget": return ["https://api.bitget.com"];
-		case "binance": return [path.startsWith("/sapi/") ? "https://api.binance.com" : "https://fapi.binance.com"];
+		case "binance": return [path.startsWith("/sapi/") || path.startsWith("/api/") ? "https://api.binance.com" : "https://fapi.binance.com"];
 	}
 }
 /** Параметры → строка запроса Bybit (в том же порядке, в котором её подписываем) */
@@ -2554,7 +2591,7 @@ async function callExchange(exchange, cred, path, params, fetchFn = fetch) {
 	for (const host of hosts) {
 		const { url, headers } = await signRequest(exchange, cred, path, params, host);
 		const res = await fetchFn(url, {
-			method: "GET",
+			method: POST_PATHS.has(path) ? "POST" : "GET",
 			headers
 		});
 		const text = await res.text();
@@ -2575,4 +2612,244 @@ async function callExchange(exchange, cred, path, params, fetchFn = fetch) {
 	return reply;
 }
 
-export { READ_PATHS, SyncError, buildQuery, bybitSignature, callExchange, isCex, parseSecret, runSync, toSyncError };
+// src/lib/portfolio/balances.ts
+/**
+* Портфель: балансы подключённой биржи / кошелька → строки holdings (0019).
+* Общий код для браузера (через exchange-proxy) и сервера (sync-worker, Pro Plus): запросы приходят снаружи (deps).
+*
+* Правила (дыры №5 и №6 из плана, 16.11.2026):
+*  - складываем все счета биржи (спот, фандинг, фьючерсы, Earn), но не задваиваем: у Binance активы «LD…» в споте —
+*    это Simple Earn, их берём из Earn; фьючерсный счёт — по equity (с нереализованным PnL), позиции отдельно не считаем;
+*  - основной счёт не ответил — ошибка (старые балансы остаются, график не «падает»); дополнительный (Earn, фьючерсы) не ответил —
+*    просто без него;
+*  - символы — заглавными, только буквы / цифры; нули и отрицательные (заём) отбрасываем.
+*/
+const n = (v) => {
+	const x = typeof v === "number" ? v : typeof v === "string" && v !== "" ? Number(v) : NaN;
+	return Number.isFinite(x) ? x : 0;
+};
+const arr = (v) => Array.isArray(v) ? v : [];
+/** Обёртки Hyperliquid (UBTC, UETH…) — это те же монеты */
+const ALIASES = {
+	UBTC: "BTC",
+	UETH: "ETH",
+	USOL: "SOL",
+	USDT0: "USDT"
+};
+/** Символ биржи → наш (BTC); мусор — null */
+function cleanSymbol(raw) {
+	if (typeof raw !== "string") return null;
+	const s = raw.trim().toUpperCase();
+	const out = ALIASES[s] ?? s;
+	return /^[A-Z0-9._-]{1,24}$/.test(out) ? out : null;
+}
+/** Одинаковые (счёт, монета) — в одну строку; нули и заём — прочь */
+function mergeBalances(list) {
+	const map = /* @__PURE__ */ new Map();
+	for (const b of list) {
+		const symbol = cleanSymbol(b.symbol);
+		if (!symbol) continue;
+		const key = `${b.account}|${symbol}`;
+		const prev = map.get(key);
+		if (prev) {
+			prev.amount += b.amount;
+			if (b.value_usd != null) prev.value_usd = (prev.value_usd ?? 0) + b.value_usd;
+		} else map.set(key, {
+			...b,
+			symbol
+		});
+	}
+	return [...map.values()].filter((b) => b.amount > 1e-12 || (b.value_usd ?? 0) > 0);
+}
+/** Дополнительный счёт: ошибка — пусто (основной уже ответил) */
+async function optional(fn) {
+	try {
+		return await fn();
+	} catch {
+		return [];
+	}
+}
+async function bybitResult(call, path, params) {
+	const r = await call(path, params);
+	if (!r || r.retCode !== 0) throw new BybitError(r?.retCode ?? -1, r?.retMsg ?? "no response");
+	return r.result;
+}
+async function bybitBalances(call) {
+	const c = call;
+	const unified = await bybitResult(c, "/v5/account/wallet-balance", { accountType: "UNIFIED" });
+	const out = arr(unified.list?.[0]?.coin).map((x) => ({
+		account: "spot",
+		symbol: String(x.coin),
+		amount: n(x.equity ?? x.walletBalance)
+	}));
+	out.push(...await optional(async () => {
+		const fund = await bybitResult(c, "/v5/asset/transfer/query-account-coins-balance", { accountType: "FUND" });
+		return arr(fund.balance).map((x) => ({
+			account: "fund",
+			symbol: String(x.coin),
+			amount: n(x.walletBalance)
+		}));
+	}));
+	for (const category of ["FlexibleSaving", "OnChain"]) out.push(...await optional(async () => {
+		const earn = await bybitResult(c, "/v5/earn/position", { category });
+		return arr(earn.list).map((x) => ({
+			account: "earn",
+			symbol: String(x.coin),
+			amount: n(x.amount)
+		}));
+	}));
+	return mergeBalances(out);
+}
+async function binanceBalances(call) {
+	const spot = await binanceGet(call, "/api/v3/account", { omitZeroBalances: "true" });
+	const out = arr(spot.balances).filter((x) => !/^LD[A-Z0-9]{2,}$/.test(String(x.asset))).map((x) => ({
+		account: "spot",
+		symbol: String(x.asset),
+		amount: n(x.free) + n(x.locked)
+	}));
+	out.push(...await optional(async () => arr(await binanceGet(call, "/sapi/v1/asset/get-funding-asset", {})).map((x) => ({
+		account: "fund",
+		symbol: String(x.asset),
+		amount: n(x.free) + n(x.locked) + n(x.freeze) + n(x.withdrawing)
+	}))), ...await optional(async () => arr(await binanceGet(call, "/fapi/v2/balance", {})).map((x) => ({
+		account: "futures",
+		symbol: String(x.asset),
+		amount: n(x.balance) + n(x.crossUnPnl)
+	}))), ...await optional(async () => arr((await binanceGet(call, "/sapi/v1/simple-earn/flexible/position", { size: 100 })).rows).map((x) => ({
+		account: "earn",
+		symbol: String(x.asset),
+		amount: n(x.totalAmount)
+	}))), ...await optional(async () => arr((await binanceGet(call, "/sapi/v1/simple-earn/locked/position", { size: 100 })).rows).map((x) => ({
+		account: "earn",
+		symbol: String(x.asset),
+		amount: n(x.amount)
+	}))));
+	return mergeBalances(out);
+}
+async function okxBalances(call) {
+	const trading = await okxGet(call, "/api/v5/account/balance", {});
+	const out = arr(trading[0]?.details).map((x) => ({
+		account: "spot",
+		symbol: String(x.ccy),
+		amount: n(x.eq)
+	}));
+	out.push(...await optional(async () => (await okxGet(call, "/api/v5/asset/balances", {})).map((x) => ({
+		account: "fund",
+		symbol: String(x.ccy),
+		amount: n(x.bal)
+	}))), ...await optional(async () => (await okxGet(call, "/api/v5/finance/savings/balance", {})).map((x) => ({
+		account: "earn",
+		symbol: String(x.ccy),
+		amount: n(x.amt)
+	}))));
+	return mergeBalances(out);
+}
+async function bitgetBalances(call) {
+	const uta = await call("/api/v3/account/assets", {});
+	if (uta?.code === "00000") return mergeBalances(arr(uta.data?.assets).map((x) => ({
+		account: "spot",
+		symbol: String(x.coin),
+		amount: n(x.equity ?? x.balance)
+	})));
+	const spot = await bitgetGet(call, "/api/v2/spot/account/assets", {});
+	const out = arr(spot).map((x) => ({
+		account: "spot",
+		symbol: String(x.coin),
+		amount: n(x.available) + n(x.frozen) + n(x.locked)
+	}));
+	for (const productType of ["USDT-FUTURES", "USDC-FUTURES"]) out.push(...await optional(async () => arr(await bitgetGet(call, "/api/v2/mix/account/accounts", { productType })).map((x) => ({
+		account: "futures",
+		symbol: String(x.marginCoin),
+		amount: n(x.accountEquity ?? x.usdtEquity)
+	}))));
+	return mergeBalances(out);
+}
+async function bingxBalances(call) {
+	const spot = await bingxGet(call, "/openApi/spot/v1/account/balance", {});
+	const out = arr(spot.balances).map((x) => ({
+		account: "spot",
+		symbol: String(x.asset),
+		amount: n(x.free) + n(x.locked)
+	}));
+	out.push(...await optional(async () => {
+		const d = await bingxGet(call, "/openApi/swap/v2/user/balance", {});
+		return (Array.isArray(d) ? d : Array.isArray(d.balance) ? d.balance : d.balance ? [d.balance] : []).map((x) => ({
+			account: "futures",
+			symbol: String(x.asset),
+			amount: n(x.equity ?? x.balance)
+		}));
+	}));
+	return mergeBalances(out);
+}
+async function hyperliquidBalances(address, fetchFn = fetch) {
+	const post = async (type) => {
+		const res = await fetchFn(HL_API, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				type,
+				user: address
+			})
+		});
+		if (!res.ok) throw new Error(`HL_HTTP_${res.status} network`);
+		return await res.json();
+	};
+	const spot = await post("spotClearinghouseState");
+	const out = arr(spot.balances).map((x) => ({
+		account: "spot",
+		symbol: String(x.coin),
+		amount: n(x.total)
+	}));
+	const perp = await post("clearinghouseState");
+	const value = n(perp.marginSummary?.accountValue);
+	if (value > 0) out.push({
+		account: "perp",
+		symbol: "USDC",
+		amount: value
+	});
+	return mergeBalances(out);
+}
+/** Открытые позиции по текущей цене исхода — одной строкой «POLYMARKET» со стоимостью в $ */
+async function polymarketBalances(get, address) {
+	let total = 0;
+	let cursor = "";
+	for (let page = 0; page < 20; page++) {
+		const res = await get("/v2/positions", {
+			user: address,
+			status: "OPEN",
+			limit: 100,
+			...cursor ? { cursor } : {}
+		});
+		const r = res ?? {};
+		const items = Array.isArray(res) ? res : arr(r.data ?? r.positions);
+		for (const p of items) {
+			const value = n(p.current_value ?? p.currentValue);
+			total += value > 0 ? value : n(p.total_size ?? p.size) * n(p.cur_price ?? p.curPrice);
+		}
+		const pag = r.pagination ?? {};
+		const next = typeof pag.next_cursor === "string" ? pag.next_cursor : "";
+		if (!next || !items.length) break;
+		cursor = next;
+	}
+	return total > 0 ? [{
+		account: "prediction",
+		symbol: "POLYMARKET",
+		amount: total,
+		value_usd: Math.round(total * 100) / 100
+	}] : [];
+}
+/** Балансы одного подключения */
+async function fetchBalances(conn, deps) {
+	switch (conn.exchange) {
+		case "bybit": return bybitBalances(deps.cexCall);
+		case "binance": return binanceBalances(deps.cexCall);
+		case "okx": return okxBalances(deps.cexCall);
+		case "bitget": return bitgetBalances(deps.cexCall);
+		case "bingx": return bingxBalances(deps.cexCall);
+		case "hyperliquid": return hyperliquidBalances(conn.api_key, deps.fetchFn);
+		case "polymarket": return polymarketBalances(deps.polymarketGet ?? pmDirectGet(deps.fetchFn), conn.api_key);
+		default: return [];
+	}
+}
+
+export { READ_PATHS, SyncError, buildQuery, bybitSignature, callExchange, fetchBalances, isCex, parseSecret, runSync, toSyncError };

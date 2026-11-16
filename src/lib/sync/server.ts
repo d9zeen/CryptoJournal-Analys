@@ -4,3 +4,4 @@
  */
 export { runSync, SyncError, toSyncError, type SyncConnection, type SyncDeps, type SyncResult } from './run'
 export { buildQuery, bybitSignature, callExchange, isCex, parseSecret, READ_PATHS } from '../../../supabase/functions/exchange-proxy/sign'
+export { fetchBalances, type Balance } from '../portfolio/balances'

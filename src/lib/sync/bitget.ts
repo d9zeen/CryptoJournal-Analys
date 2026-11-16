@@ -48,7 +48,7 @@ function bitgetError(r: { code?: string; msg?: string } | null): ExchangeError {
   return new ExchangeError('EXCHANGE', detail)
 }
 
-async function bitgetGet<T>(call: CexCall, path: string, params: Record<string, string | number>): Promise<T> {
+export async function bitgetGet<T>(call: CexCall, path: string, params: Record<string, string | number>): Promise<T> {
   const r = (await call(path, params)) as BitgetReply<T> | null
   if (!r || r.code !== '00000') throw bitgetError(r)
   return r.data as T
@@ -94,15 +94,26 @@ export function bitgetPositionToTrade(p: BitgetPosition, product: Product): Impo
 }
 
 /**
- * Ключ: «только чтение» (permType = read-only). У классического аккаунта этот адрес может не ответить —
- * тогда ключ принимаем: сайт всё равно ходит к Bitget только за историей (список адресов в exchange-proxy).
+ * Ключ: «только чтение».
+ *  - единый аккаунт (UTA): /api/v3/account/info → permType = read-only;
+ *  - классический: /api/v2/spot/account/info → authorities (права ключа, например ["readonly"] или ["trade", "readonly"]):
+ *    любое право на торговлю / перевод / вывод — отказ, как у остальных бирж (дыра №1 из плана портфеля, 16.11.2026).
+ *    Если Bitget не прислал список прав вовсе — ключ принимаем, проверив, что он рабочий: сайт всё равно ходит к Bitget
+ *    только по адресам для чтения (список в exchange-proxy).
  */
+const WRITE_RIGHT = /trade|transfer|withdraw|write|order/i
 export async function checkBitgetKey(call: CexCall): Promise<KeyInfo> {
   const r = (await call('/api/v3/account/info', {})) as BitgetReply<{ permType?: string }> | null
   if (r?.code === '00000') return { readOnly: r.data?.permType === 'read-only' }
   const err = bitgetError(r)
   if (err.kind !== 'EXCHANGE') throw err // неверный ключ, IP, частота — сразу
-  // классический аккаунт: проверяем, что ключ вообще работает
+  // классический аккаунт: права ключа из информации о споте
+  const info = (await call('/api/v2/spot/account/info', {})) as BitgetReply<{ authorities?: unknown }> | null
+  if (info?.code === '00000' && Array.isArray(info.data?.authorities)) {
+    const rights = info.data.authorities.map(String)
+    return { readOnly: rights.length > 0 && !rights.some((a) => WRITE_RIGHT.test(a)) }
+  }
+  // прав не прислали: проверяем, что ключ вообще работает
   await bitgetGet(call, '/api/v2/mix/position/history-position', { productType: 'USDT-FUTURES', limit: 1 })
   return { readOnly: true }
 }

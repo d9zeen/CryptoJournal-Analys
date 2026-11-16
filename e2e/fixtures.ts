@@ -44,7 +44,17 @@ export type FakeDb = {
   /** изменения и удаления сделок (массовые действия): метод, тело, ?id=in.(…) */
   tradeWrites?: { method: string; body: unknown; ids: string[] }[]
   noteWrites?: { method: string; body: unknown }[]
+  /** портфель (0019): монеты с ценами, балансы, цены входа, снимки; вызовы replace_holdings / portfolio_snapshot */
+  coins?: Row[]
+  holdings?: Row[]
+  costs?: Row[]
+  snapshots?: Row[]
+  portfolioCalls?: { fn: string; body: Record<string, unknown> }[]
+  costWrites?: { method: string; body: unknown }[]
 }
+
+/** Картинка 1×1 (иконка монеты из Storage) */
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64')
 
 export function makeTrade(i: number, over: Row = {}): Row {
   const entry = new Date(Date.UTC(2026, 8, 1 + i, 10)).toISOString()
@@ -95,6 +105,50 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
       ;(db.adminCalls ??= []).push({ fn: path.split('/').pop()!, body: body() })
       return route.fulfill({ status: 204 })
     }
+    // ---------- портфель (0019) ----------
+    if (path.startsWith('/storage/v1/object/public/coin-icons/')) return route.fulfill({ status: 200, contentType: 'image/png', body: PNG })
+    if (path === '/rest/v1/coins') return json(db.coins ?? [])
+    if (path === '/rest/v1/portfolio_snapshots') return json(db.snapshots ?? [])
+    if (path === '/rest/v1/holdings') {
+      const list = (db.holdings ??= [])
+      if (method === 'POST') {
+        const b = body() as Row
+        list.push({ id: `m${list.length + 1}`, connection_id: null, value_usd: null, note: null, updated_at: new Date().toISOString(), ...b })
+        return json(null, 201)
+      }
+      if (method === 'DELETE') {
+        const id = (url.searchParams.get('id') ?? '').replace(/^eq\./, '')
+        db.holdings = list.filter((h) => h.id !== id)
+        return route.fulfill({ status: 204, body: '' })
+      }
+      return json(list)
+    }
+    if (path === '/rest/v1/asset_costs') {
+      const list = (db.costs ??= [])
+      if (method === 'POST' || method === 'DELETE') {
+        ;(db.costWrites ??= []).push({ method, body: body() })
+        if (method === 'POST') {
+          const b = body() as Row
+          db.costs = [...list.filter((c) => c.symbol !== b.symbol), { symbol: b.symbol, avg_price: b.avg_price }]
+        } else {
+          const sym = (url.searchParams.get('symbol') ?? '').replace(/^eq\./, '')
+          db.costs = list.filter((c) => c.symbol !== sym)
+        }
+        return route.fulfill({ status: method === 'POST' ? 201 : 204, body: '' })
+      }
+      return json(list)
+    }
+    if (path.endsWith('/rpc/replace_holdings') || path.endsWith('/rpc/portfolio_snapshot')) {
+      const b = (body() ?? {}) as Record<string, unknown>
+      ;(db.portfolioCalls ??= []).push({ fn: path.split('/').pop()!, body: b })
+      if (path.endsWith('/rpc/portfolio_snapshot')) return json(null)
+      const items = (b.p_items ?? []) as Row[]
+      db.holdings = [
+        ...(db.holdings ?? []).filter((h) => h.connection_id !== b.p_connection),
+        ...items.map((it, i) => ({ id: `x${i}`, connection_id: b.p_connection, value_usd: null, note: null, updated_at: new Date().toISOString(), ...it, symbol: String(it.symbol).toUpperCase() })),
+      ]
+      return json(items.length)
+    }
     if (path === '/rest/v1/exchange_connections') return json(db.connections ?? [])
     if (path.endsWith('_exchange_connection') || path === '/functions/v1/exchange-proxy') {
       const b = (body() ?? {}) as Record<string, unknown>
@@ -130,6 +184,11 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
         const pos = { instId: 'BTC-USDT-SWAP', posId: 'okx-1', direction: 'long', type: '2', openAvgPx: '60000', closeAvgPx: '61000', closeTotalPos: '3', realizedPnl: '29.1', fee: '-0.72', fundingFee: '-0.18', lever: '10', cTime: t, uTime: t }
         return json({ code: '0', msg: '', data: Number(params.after) > Date.now() - 60_000 ? [pos] : [] })
       }
+      // exchange-proxy: балансы Bybit (портфель)
+      if (b.path === '/v5/account/wallet-balance')
+        return json({ retCode: 0, retMsg: 'OK', result: { list: [{ coin: [{ coin: 'BTC', equity: '0.25' }, { coin: 'USDT', equity: '1200.5' }, { coin: 'SHIB', equity: '10' }] }] } })
+      if (b.path === '/v5/asset/transfer/query-account-coins-balance') return json({ retCode: 0, retMsg: 'OK', result: { balance: [{ coin: 'ETH', walletBalance: '2' }] } })
+      if (b.path === '/v5/earn/position') return json({ retCode: 0, retMsg: 'OK', result: { list: [] } })
       // exchange-proxy: ответы Bybit
       if (b.path === '/v5/user/query-api') return json({ retCode: 0, retMsg: 'OK', result: { readOnly: db.bybitReadOnly ?? 1 } })
       const recent = params.category === 'linear' && Number(params.endTime) > Date.now() - 7 * 86_400_000 && !params.cursor
