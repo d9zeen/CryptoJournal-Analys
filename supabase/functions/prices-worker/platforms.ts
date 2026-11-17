@@ -29,3 +29,16 @@ export function pickPlatforms(list: unknown, ids: Iterable<string>): Map<string,
   }
   return out
 }
+
+/** Стейблкоины (как STABLES в lib/calc/portfolio.ts): цена входа у них 1 $ */
+export const STABLE_SYMBOLS: ReadonlySet<string> = new Set(['USDT', 'USDC', 'DAI', 'FDUSD', 'TUSD', 'USDE', 'PYUSD', 'USDD', 'BUSD', 'USD1', 'RLUSD'])
+
+/**
+ * Цена стейблкоина, который держит привязку (отклонение меньше 0,5 %), — ровно 1 $, изменение — 0.
+ * Иначе 12 983 USDT по 0,9992 $ показывались как 12 973 $ и «убыток −10 $» при цене входа 1 $ — путаница на ровном месте.
+ * Отвязался (0,97 $) — показываем настоящую цену: это важно знать.
+ */
+export function pegged<T extends { symbol: string; price: number | null; change_24h: number | null; change_7d: number | null }>(row: T): T {
+  if (!STABLE_SYMBOLS.has(row.symbol) || row.price === null || Math.abs(row.price - 1) >= 0.005) return row
+  return { ...row, price: 1, change_24h: 0, change_7d: 0 }
+}

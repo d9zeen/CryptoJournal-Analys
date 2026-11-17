@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { pickPlatforms } from './platforms'
+import { pegged, pickPlatforms } from './platforms'
 
 describe('адреса контрактов монет', () => {
   it('только наши монеты и наши сети; EVM — в нижнем регистре, Solana — как есть; мусор отброшен', () => {
@@ -13,5 +13,14 @@ describe('адреса контрактов монет', () => {
     expect(p.get('bitcoin')).toEqual({})
     expect(p.get('ethereum')).toEqual({}) // нет в списке — пусто, чтобы не спрашивать снова каждый запуск
     expect(p.has('scam')).toBe(false)
+  })
+})
+
+describe('стейблкоины — 1 $, пока держат привязку', () => {
+  const row = (symbol: string, price: number) => ({ symbol, price, change_24h: -0.02, change_7d: 0.01 })
+  it('USDT по 0,9992 $ — ровно 1 $ без изменения; отвязавшийся (0,97 $) — как есть; не стейблкоин — как есть', () => {
+    expect(pegged(row('USDT', 0.9992))).toEqual({ symbol: 'USDT', price: 1, change_24h: 0, change_7d: 0 })
+    expect(pegged(row('USDC', 0.97))).toEqual(row('USDC', 0.97))
+    expect(pegged(row('BTC', 1.001))).toEqual(row('BTC', 1.001))
   })
 })
