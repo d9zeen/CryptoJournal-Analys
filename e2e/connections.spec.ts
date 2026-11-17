@@ -332,7 +332,9 @@ test('Анимации «Бирж»: без подключений — «Орб�
   await expect(page.locator('[data-empty-orbit]')).toHaveCount(0)
   const curve = page.locator('[data-arrivals-curve]')
   await expect(curve.locator('[data-curve-source="bybit"]')).toBeVisible()
-  await expect(curve.locator('[data-curve-next]')).toHaveCount(1)
+  // в блоке только подключённые — «можно подключить» нет (это в сетке ниже)
+  await expect(curve.locator('[data-curve-next]')).toHaveCount(0)
+  await expect(curve.locator('[data-curve-source]')).toHaveCount(1)
   // «Обновить»: пока идёт синхронизация — луч по рамке карточки и «Ищем новые сделки…»
   await page.route('**/functions/v1/exchange-proxy', async (route) => {
     await new Promise((r) => setTimeout(r, 800))
@@ -385,7 +387,7 @@ test('«Сделки собирают кривую»: сделок с бирж �
   await expect(curve.locator('canvas')).toHaveCount(0)
 })
 
-test('«Сделки собирают кривую»: пять бирж — все в списке с числом сделок, без «можно подключить»; три — ещё одна «можно подключить»', async ({ page, db }) => {
+test('«Сделки собирают кривую»: пять бирж — все в списке с числом сделок, без «можно подключить»', async ({ page, db }) => {
   db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
   const all = ['bybit', 'binance', 'okx', 'bitget', 'bingx']
   db.connections = all.map((e, i) => ({ id: `c${i}`, exchange: e, label: null, api_key: `AbCdEf12345${i}`, last_sync_at: new Date().toISOString(), cursor_at: new Date().toISOString(), last_error: null, created_at: `2026-11-0${i + 1}T00:00:00Z` }))
@@ -458,4 +460,51 @@ test('«Сделки собирают кривую»: 400 сделок за не
   await page.route('**/functions/v1/exchange-proxy', (route) => route.fulfill({ status: 500, body: '' }))
   await page.goto('import')
   await expect(page.locator('[data-arrivals-curve] [data-curve-sum]')).toHaveText(/\+400,00/, { timeout: 11_000 })
+})
+
+/**
+ * Владелец 17.11.2026: «подключил Bybit — у тебя Bybit, подключил Binance — Binance… подключил одну — именно она».
+ * В блоке «Сделки собирают кривую» — ровно подключённые биржи, ни одной лишней («можно подключить» — только в сетке ниже).
+ * Lighter подключить пока нельзя («Скоро»), кошельки EVM / Solana сделок не дают — в блоке их нет никогда.
+ */
+const TRADE_EXCHANGES = ['bybit', 'binance', 'okx', 'bingx', 'bitget', 'hyperliquid', 'polymarket'] as const
+const keyFor = (ex: string, i = 0) => (ex === 'hyperliquid' || ex === 'polymarket' ? '0x' + String(i + 1).repeat(40) : `AbCdEf12345${i}`)
+const connRow = (ex: string, i = 0) => ({ id: `c-${ex}`, exchange: ex, label: null, api_key: keyFor(ex, i), last_sync_at: new Date().toISOString(), cursor_at: new Date().toISOString(), last_error: null, created_at: `2026-11-0${i + 1}T00:00:00Z` })
+
+for (const ex of TRADE_EXCHANGES)
+  test(`«Сделки собирают кривую»: подключена только ${ex} — в блоке именно она и больше ничего`, async ({ page, db }) => {
+    db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
+    db.connections = [connRow(ex)]
+    // сделки и у других бирж — в блок они не попадают
+    db.trades = [
+      makeTrade(1, { exchange: ex, pnl: 10, source: 'api', entry_at: '2026-10-01T10:00:00Z', exit_at: '2026-10-01T11:00:00Z', external_id: 'a:1' }),
+      makeTrade(2, { exchange: ex === 'binance' ? 'bybit' : 'binance', pnl: 99, source: 'import', entry_at: '2026-10-02T10:00:00Z', exit_at: '2026-10-02T11:00:00Z', external_id: 'b:2' }),
+    ]
+    await fakeSupabase(page, db)
+    await page.route('**/functions/v1/exchange-proxy', (route) => route.fulfill({ status: 500, body: '' }))
+    await page.route('https://api.hyperliquid.xyz/**', (route) => route.fulfill({ status: 500, body: '' }))
+    await page.goto('import')
+    const curve = page.locator('[data-arrivals-curve]')
+    await expect(curve.locator('[data-curve-source]')).toHaveCount(1)
+    await expect(curve.locator(`[data-curve-source="${ex}"]`)).toBeVisible()
+    await expect(curve.locator('[data-curve-next]')).toHaveCount(0)
+    // кривая — только из сделок этой биржи
+    await expect(curve).toContainText('сделок: 1')
+    await expect(curve.locator('[data-curve-sum]')).toHaveText(/\+10,00/, { timeout: 10_000 })
+  })
+
+test('«Сделки собирают кривую»: две биржи — ровно эти две; добавили кошелёк — в блоке по-прежнему две', async ({ page, db }) => {
+  db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
+  db.connections = [connRow('okx', 0), connRow('hyperliquid', 1), { ...connRow('evm', 2), api_key: '0x' + 'c'.repeat(40) }]
+  await fakeSupabase(page, db)
+  await page.route('**/functions/v1/exchange-proxy', (route) => route.fulfill({ status: 500, body: '' }))
+  await page.route('https://api.hyperliquid.xyz/**', (route) => route.fulfill({ status: 500, body: '' }))
+  await page.route('https://*.publicnode.com/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }))
+  await page.goto('import')
+  const sources = page.locator('[data-arrivals-curve] [data-curve-source]')
+  await expect(sources).toHaveCount(2)
+  expect((await sources.evaluateAll((els) => els.map((e) => e.getAttribute('data-curve-source')))).sort()).toEqual(['hyperliquid', 'okx'])
+  // кошелёк — отдельным чипом, не в блоке; Lighter нигде не подключён
+  await expect(page.locator('[data-wallets] [data-wallet="evm"]')).toBeVisible()
+  await expect(page.locator('[data-arrivals-curve] [data-curve-source="lighter"]')).toHaveCount(0)
 })

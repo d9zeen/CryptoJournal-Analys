@@ -1,6 +1,6 @@
 /**
  * «Сделки собирают кривую» на странице «Биржи» (17.11.2026, вариант S3, вместо «Потока в дневник»):
- * слева — подключённые биржи (до 5; при 1–3 — ещё одна, которую можно подключить), из логотипа биржи каждой сделки летят частицы и собирают
+ * слева — ТОЛЬКО подключённые биржи (до 5; «можно подключить» — не здесь, а в сетке бирж ниже), из логотипа биржи каждой сделки летят частицы и собирают
  * кривую из ВСЕХ сделок подключённых бирж за всё время (по API и файлом; владелец 17.11.2026); справа сверху — итог, набегает по мере сборки.
  * Строки бирж — кнопки: панель биржи с подключением (статус, ошибка, «Обновить», «Отключить»).
  * Собирается один раз при заходе на страницу и заново — когда синхронизация принесла новые сделки (если вкладку видно), иначе стоит.
@@ -20,7 +20,6 @@ import { buildCurve } from '@/lib/calc/curve'
 import { ExchangeLogo } from '@/components/ExchangeLogo'
 import { ParticleCurve } from '@/components/fx/ParticleCurve'
 import { Shimmer } from '@/components/fx/Shimmer'
-import { EXCHANGE_CARDS } from './ExchangeGrid'
 import { PORTFOLIO_ONLY, useSyncingIds, type Connection } from './api'
 import { useMediaQuery } from '@/lib/useMediaQuery'
 
@@ -53,10 +52,9 @@ export function ArrivalsCurve({ conns, active, onOpen }: { conns: Connection[]; 
   fromRef.current = curve.from
   const perExchange = curve.perExchange
   const count = curve.count
-  // много подключений (4+) — без строки «можно подключить» и плотнее; видно до 5 бирж, остальные — «+N»
+  // только подключённые биржи (владелец 17.11.2026: «Binance тут лишний» — подключить можно в сетке ниже); 4+ — плотнее, видно до 5, остальные — «+N»
   const many = mine.length >= 4
   const shown = mine.slice(0, 5)
-  const next = many ? undefined : EXCHANGE_CARDS.find((x) => x.methods.includes('api') && !mine.includes(x.id))
   const logos = useRef(new Map<string, HTMLElement>())
   const source = useCallback((i: number) => logos.current.get(fromRef.current[i]) ?? logos.current.values().next().value ?? null, [])
   const [landed, setLanded] = useState(0)
@@ -98,17 +96,6 @@ export function ArrivalsCurve({ conns, active, onOpen }: { conns: Connection[]; 
           )
         })}
         {mine.length > shown.length && <li className="pl-1 text-xs text-muted">+{mine.length - shown.length}</li>}
-        {next && (
-          <li data-curve-next={next.id} className="opacity-60 hover:opacity-100">
-            <button type="button" onClick={() => onOpen(next.id)} className="-mx-2 flex items-center gap-2.5 rounded-lg px-2 py-1 text-left transition-colors hover:bg-surface-2/70 focus-visible:outline-2 focus-visible:outline-primary">
-              <ExchangeLogo id={next.id} className="size-9 rounded-lg" />
-              <span className="hidden sm:block">
-                <span className="block text-sm font-semibold">{exchangeName(next.id, '')}</span>
-                <span className="block text-xs text-muted">{c.canConnect}</span>
-              </span>
-            </button>
-          </li>
-        )}
       </ul>
       <div className="absolute top-4 right-5 left-20 text-right sm:left-auto">
         {count >= 1 ? (
