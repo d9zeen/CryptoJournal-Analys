@@ -27,8 +27,8 @@ import type { Plan } from '@/types/db'
 import { PolymarketDemoDialog } from './PolymarketDemoDialog'
 import { PasswordInput } from '@/components/PasswordInput'
 import { CheckMark } from '@/components/CheckMark'
-import { EXCHANGE_CARDS, ExchangeGrid, ExchangePanel } from './ExchangeGrid'
-import { BeamHub, type HubNode } from '@/components/fx/BeamHub'
+import { ExchangeGrid, ExchangePanel } from './ExchangeGrid'
+import { ArrivalsCurve } from './ArrivalsCurve'
 import { Orbit } from '@/components/fx/Orbit'
 import { useMediaQuery } from '@/lib/useMediaQuery'
 import { Shimmer } from '@/components/fx/Shimmer'
@@ -46,7 +46,6 @@ import {
   useDeleteConnection,
   useSyncConnection,
   useSyncing,
-  useSyncingIds,
   type ConnectableId,
   type Connection,
   type SyncResult,
@@ -94,20 +93,6 @@ export function ConnectionsCard({ onPickFile }: { onPickFile?: (exchange: string
   const wide = useMediaQuery('(min-width: 1280px)')
   const mid = useMediaQuery('(min-width: 768px)')
   const orbitSize = wide ? 340 : mid ? 280 : 220
-  const syncingIds = useSyncingIds()
-  // №1 «Поток в дневник»: сначала подключённые биржи, остальные места — неподключённые (серые), всего до 6
-  const hubNodes = useMemo<HubNode[]>(() => {
-    const api = EXCHANGE_CARDS.filter((x) => x.methods.includes('api') || x.methods.includes('wallet'))
-    const mine = api.filter((x) => conns.some((cn) => cn.exchange === x.id))
-    const rest = api.filter((x) => !mine.includes(x))
-    return [...mine, ...rest].slice(0, 6).map((x) => ({
-      id: x.id,
-      mono: x.mono,
-      name: exchangeName(x.id, ''),
-      on: mine.includes(x),
-      fast: conns.some((cn) => cn.exchange === x.id && syncingIds.has(cn.id)),
-    }))
-  }, [conns, syncingIds])
 
   const onSynced = (r: SyncResult) =>
     setNotice({
@@ -180,10 +165,8 @@ export function ConnectionsCard({ onPickFile }: { onPickFile?: (exchange: string
         </div>
       ) : (
         <>
-        {/* №1 «Поток в дневник»: по линиям подключённых бирж бегут огоньки, у синхронизируемой — быстрее */}
-        <div className="rounded-xl border border-border bg-surface px-3 py-4 sm:px-6">
-          <BeamHub nodes={hubNodes} caption={fmt(c.hubCaption, { n: new Set(conns.map((cn) => cn.exchange)).size })} />
-        </div>
+        {/* «Сделки собирают кривую» (вариант S3, 17.11.2026): частицы из логотипа биржи собирают кривую из сделок по API за неделю */}
+        <ArrivalsCurve conns={conns} />
         {/* каждое подключение — своя карточка: 1 колонка на телефоне, 2 — от sm, 3 — от xl */}
         <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {conns.map((conn) => (

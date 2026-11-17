@@ -21,3 +21,5 @@ playwright-report/
 
 # образцы с 21st.dev (scripts/find-21st.cjs) — не коммитить
 21st-*
+# референсы Refero / recent.design (scripts/find-refs.cjs) — не коммитить
+ref-*.png

@@ -1128,6 +1128,12 @@ export const en: Dict = {
       { title: 'Create a read-only key', text: 'It cannot trade or withdraw. OKX and Bitget also need a passphrase; Hyperliquid and Polymarket just an address.' },
       { title: 'Trades come in by themselves', text: 'First the history of recent months, then new trades while the site is open, and every 3 hours on Pro Plus.' },
     ],
+    curve: {
+      works: 'working',
+      canConnect: 'can be connected',
+      caption: 'arrived on its own this week · API trades: {n}',
+      empty: 'Trades from your exchanges will form a curve here as soon as the first ones arrive.',
+    },
     hubCaption: 'Exchanges connected: {n} · the lights are trades flowing into your journal',
     searching: 'Looking for new trades…',
     passphraseHint: 'The one you picked when creating the key. Stored encrypted together with the secret.',

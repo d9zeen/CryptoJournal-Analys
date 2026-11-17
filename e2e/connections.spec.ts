@@ -1,5 +1,5 @@
 /** Подключения бирж: Hyperliquid по адресу кошелька, Bybit и OKX по ключу «только чтение» (у OKX — с кодовой фразой) */
-import { test, expect, fakeSupabase } from './fixtures'
+import { test, expect, fakeSupabase, makeTrade } from './fixtures'
 
 const WALLET = '0xAbCdEf0123456789abcdef0123456789ABCDEF01'
 
@@ -294,13 +294,13 @@ test('Мост: подключение Bybit из карточки — шаги 
   await expect(page.locator('[data-exchange="bybit"]')).toContainText('Подключена')
 })
 
-test('Анимации «Бирж»: без подключений — «Орбита», с подключением — «Поток в дневник», синхронизация — луч по рамке и мерцающий текст', async ({ page, db }) => {
+test('Анимации «Бирж»: без подключений — «Орбита», с подключением — «Сделки собирают кривую», синхронизация — луч по рамке и мерцающий текст', async ({ page, db }) => {
   db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
   await fakeSupabase(page, db)
   await page.goto('import')
   await expect(page.locator('[data-empty-orbit]')).toContainText('Подключи первую биржу')
-  await expect(page.locator('[data-beam-hub]')).toHaveCount(0)
-  // подключаем Bybit — появляется «Поток в дневник», Bybit горит
+  await expect(page.locator('[data-arrivals-curve]')).toHaveCount(0)
+  // подключаем Bybit — появляется блок кривой: Bybit «работает», ниже биржа, которую можно подключить
   await page.locator('[data-exchange="bybit"]').click()
   const panel = page.getByRole('dialog', { name: 'Bybit' })
   await panel.getByLabel('API Key').fill('AbCdEf123456')
@@ -309,8 +309,9 @@ test('Анимации «Бирж»: без подключений — «Орб�
   await expect(panel.locator('[data-bridge]')).toHaveAttribute('data-stage', 'done', { timeout: 20_000 })
   await page.keyboard.press('Escape')
   await expect(page.locator('[data-empty-orbit]')).toHaveCount(0)
-  await expect(page.locator('[data-beam-hub] [data-hub-node="bybit"]')).toHaveAttribute('data-on', 'true')
-  await expect(page.locator('[data-beam-hub] [data-hub-node="okx"]')).not.toHaveAttribute('data-on', 'true')
+  const curve = page.locator('[data-arrivals-curve]')
+  await expect(curve.locator('[data-curve-source="bybit"]')).toBeVisible()
+  await expect(curve.locator('[data-curve-next]')).toHaveCount(1)
   // «Обновить»: пока идёт синхронизация — луч по рамке карточки и «Ищем новые сделки…»
   await page.route('**/functions/v1/exchange-proxy', async (route) => {
     await new Promise((r) => setTimeout(r, 800))
@@ -321,4 +322,42 @@ test('Анимации «Бирж»: без подключений — «Орб�
   await expect(tile).toHaveClass(/beam-run/)
   await expect(tile).toContainText('Ищем новые сделки…')
   await expect(tile).not.toHaveClass(/beam-run/, { timeout: 20_000 })
+})
+
+test('«Сделки собирают кривую»: сделки по API за неделю — кривая и итог набегает до суммы и остаётся; из файла — не считаются', async ({ page, db }) => {
+  test.setTimeout(45_000)
+  db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
+  db.connections = [{ id: 'c1', exchange: 'bybit', label: null, api_key: 'AbCdEf123456', last_sync_at: new Date().toISOString(), cursor_at: new Date().toISOString(), last_error: null, created_at: '' }]
+  const at = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString()
+  db.trades = [
+    makeTrade(1, { pnl: 100, source: 'api', entry_at: at(30), exit_at: at(29), external_id: 'o:1' }),
+    makeTrade(2, { pnl: -40, source: 'api', entry_at: at(20), exit_at: at(19), external_id: 'o:2' }),
+    makeTrade(3, { pnl: 60.5, source: 'api', entry_at: at(10), exit_at: at(9), external_id: 'o:3' }),
+    // из файла — не на кривой
+    makeTrade(4, { pnl: 999, source: 'import', entry_at: at(5), exit_at: at(4), external_id: 'f:4' }),
+  ]
+  await fakeSupabase(page, db)
+  await page.goto('import')
+  const curve = page.locator('[data-arrivals-curve]')
+  await expect(curve.locator('canvas')).toBeVisible()
+  await expect(curve).toContainText('сделок по API: 3')
+  // итог набегает по мере сборки и останавливается на сумме сделок по API
+  await expect(curve.locator('[data-curve-sum]')).toHaveText(/\+120,50/, { timeout: 15_000 })
+  // собралась один раз и стоит — не гаснет и не собирается заново (владелец 17.11.2026)
+  await page.waitForTimeout(8000)
+  await expect(curve.locator('[data-curve-sum]')).toHaveText(/\+120,50/)
+  await page.setViewportSize({ width: 390, height: 844 })
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+  expect(overflow).toBeLessThanOrEqual(0)
+})
+
+test('«Сделки собирают кривую»: сделок с бирж ещё нет — без кривой, понятная строка', async ({ page, db }) => {
+  db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
+  db.connections = [{ id: 'c1', exchange: 'bybit', label: null, api_key: 'AbCdEf123456', last_sync_at: new Date().toISOString(), cursor_at: new Date().toISOString(), last_error: null, created_at: '' }]
+  await fakeSupabase(page, db)
+  await page.route('**/functions/v1/exchange-proxy', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ retCode: 0, result: { list: [] } }) }))
+  await page.goto('import')
+  const curve = page.locator('[data-arrivals-curve]')
+  await expect(curve).toContainText('соберутся здесь в кривую')
+  await expect(curve.locator('canvas')).toHaveCount(0)
 })
