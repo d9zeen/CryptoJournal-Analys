@@ -1130,6 +1130,7 @@ export const en: Dict = {
     ],
     curve: {
       works: 'working',
+      worksN: 'working · trades: {n}',
       canConnect: 'can be connected',
       caption: 'arrived on its own this week · API trades: {n}',
       empty: 'Trades from your exchanges will form a curve here as soon as the first ones arrive.',
