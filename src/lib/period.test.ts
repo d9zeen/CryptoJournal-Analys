@@ -84,3 +84,28 @@ describe('previousRange — прошлый период той же длины',
     expect(previousRange('custom', { from: '2026-11-05', to: '' }, now)).toBeNull()
   })
 })
+
+describe('границы — в поясе пользователя (как дни календаря)', () => {
+  it('месяц в Москве: 23:30 UTC 30 ноября — там уже 1 декабря', () => {
+    const r = rangeFor('month', empty, new Date('2026-11-30T22:30:00Z'), 'Europe/Moscow')
+    expect(r).toEqual({ from: '2026-11-30T21:00:00.000Z', to: '2026-12-31T21:00:00.000Z' })
+  })
+  it('неделя в Токио — с понедельника по местному времени', () => {
+    // вс 8 ноября 20:00 UTC = пн 9 ноября 05:00 в Токио
+    const r = rangeFor('week', empty, new Date('2026-11-08T20:00:00Z'), 'Asia/Tokyo')
+    expect(r.from).toBe('2026-11-08T15:00:00.000Z')
+    expect(r.to).toBe('2026-11-15T15:00:00.000Z')
+  })
+  it('день из календаря (?day=) — ровно сутки пояса, даже в день перехода на летнее время', () => {
+    expect(rangeFor('custom', { from: '2026-03-29', to: '2026-03-29' }, new Date(), 'Europe/Berlin')).toEqual({ from: '2026-03-28T23:00:00.000Z', to: '2026-03-29T22:00:00.000Z' })
+    expect(rangeFor('custom', { from: '2026-11-04', to: '2026-11-04' }, new Date(), 'UTC')).toEqual({ from: '2026-11-04T00:00:00.000Z', to: '2026-11-05T00:00:00.000Z' })
+  })
+  it('прошлый месяц для сравнения — тоже в поясе', () => {
+    const p = previousRange('month', empty, new Date('2026-11-30T22:30:00Z'), 'Europe/Moscow')!
+    expect(p.range).toEqual({ from: '2026-10-31T21:00:00.000Z', to: '2026-11-30T21:00:00.000Z' })
+    expect(p.month).toBe(10)
+  })
+  it('«сегодня» в быстрых вариантах — по поясу', () => {
+    expect(quickRange('today', new Date('2026-11-30T22:30:00Z'), 'Europe/Moscow')).toEqual({ from: '2026-12-01', to: '2026-12-01' })
+  })
+})

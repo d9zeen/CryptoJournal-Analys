@@ -47,3 +47,42 @@ export function zonedParts(iso: string, timeZone: string): ZonedParts {
 export function browserTimeZone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
 }
+
+/** Сдвиг пояса в момент t: местное время пояса минус UTC, мс */
+function offsetMs(t: number, timeZone: string): number {
+  let f = offsetCache.get(timeZone)
+  if (!f) {
+    const opts: Intl.DateTimeFormatOptions = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }
+    try {
+      f = new Intl.DateTimeFormat('en-US', { ...opts, timeZone })
+    } catch {
+      f = new Intl.DateTimeFormat('en-US', { ...opts, timeZone: 'UTC' })
+    }
+    offsetCache.set(timeZone, f)
+  }
+  const p = Object.fromEntries(f.formatToParts(new Date(t)).map((x) => [x.type, x.value]))
+  const wall = Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day), Number(p.hour) % 24, Number(p.minute), Number(p.second))
+  return wall - Math.floor(t / 1000) * 1000
+}
+const offsetCache = new Map<string, Intl.DateTimeFormat>()
+
+/**
+ * Полночь дня 'YYYY-MM-DD' в поясе пользователя → момент (UTC).
+ * Границы «этой недели», «этого месяца», своего диапазона и «дня из календаря» — по тому же поясу, что и сами дни
+ * (zonedParts): иначе сделка около полуночи попадала бы в календаре в один день, а в списке и «Статистике» — в другой.
+ */
+export function zonedMidnight(day: string, timeZone: string): Date {
+  const [y, m, d] = day.split('-').map(Number)
+  const guess = Date.UTC(y, m - 1, d)
+  const first = offsetMs(guess, timeZone)
+  let t = guess - first
+  const second = offsetMs(t, timeZone)
+  if (second !== first) t = guess - second // переход на летнее / зимнее время в эти сутки
+  return new Date(t)
+}
+
+/** 'YYYY-MM-DD' + n дней (календарная арифметика, без часовых поясов) */
+export function addDays(day: string, n: number): string {
+  const [y, m, d] = day.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10)
+}

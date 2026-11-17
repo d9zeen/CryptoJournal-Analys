@@ -10,6 +10,7 @@ import { useBulkDelete, useBulkSetSetup, useTrades } from './api'
 import { applyFilters, durationMs, EMPTY_FILTERS, fromParams, hasActiveFilters, hiddenFiltersCount, sortTrades, toParams, type Sort, type SortKey, type TradeFilters } from './filters'
 import { useList, useUsage } from '@/features/settings/api'
 import { PeriodFilter } from '@/components/PeriodFilter'
+import { useTimeZone } from '@/lib/useTimeZone'
 import { rangeFor, type CustomRange, type PeriodPreset } from '@/lib/period'
 import { SelectField } from '@/components/ui/Field'
 import { Button } from '@/components/ui/Button'
@@ -43,7 +44,8 @@ export function TradesPage() {
     update(filters, sort.key === key ? { key, dir: sort.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: key === 'symbol' ? 'asc' : 'desc' })
   const [showFilters, setShowFilters] = useState(() => hiddenFiltersCount(filters) > 0)
 
-  const range = useMemo(() => rangeFor(preset, custom), [preset, custom])
+  const tz = useTimeZone()
+  const range = useMemo(() => rangeFor(preset, custom, new Date(), tz), [preset, custom, tz])
   const { data: trades, isLoading, error, isPlaceholderData } = useTrades(range)
   const ready = !isLoading && !isPlaceholderData
   const periodKey = `${preset}|${custom.from}|${custom.to}`

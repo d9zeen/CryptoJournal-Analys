@@ -14,7 +14,7 @@ import { closedTrades } from '@/lib/calc/stats'
 import { calendarSpan, profitCalendar } from '@/lib/calc/calendar'
 import { formatDay, formatDayShort, formatPnl, pnlClass } from '@/lib/format'
 import { intlLocale } from '@/lib/locale'
-import { parseYmd, ymd } from '@/lib/period'
+import { parseYmd } from '@/lib/period'
 import { zonedParts } from '@/lib/tz'
 import type { TradeWithTags } from '@/types/db'
 
@@ -62,9 +62,10 @@ const monthTitle = () => new Intl.DateTimeFormat(intlLocale(), { month: 'long', 
 export function MiniCalendar({ timeZone, i = 0 }: { timeZone: string; i?: number }) {
   const t = useT()
   const m = t.dashboard.mini
-  const now = new Date()
-  const y = now.getFullYear()
-  const mo = now.getMonth()
+  // «сегодня» — в поясе пользователя, как и дни календаря
+  const today = zonedParts(new Date().toISOString(), timeZone).date
+  const y = Number(today.slice(0, 4))
+  const mo = Number(today.slice(5, 7)) - 1
   const span = calendarSpan(y, mo)
   // как в календаре: сделка могла открыться раньше месяца — грузим с запасом 60 дней
   const range = useMemo(() => {
@@ -76,7 +77,6 @@ export function MiniCalendar({ timeZone, i = 0 }: { timeZone: string; i?: number
   }, [span.first, span.last])
   const { data: trades = [] } = useTrades(range)
   const cal = useMemo(() => profitCalendar(closedTrades(trades.map((tr) => ({ ...tr, tagIds: [] }))), y, mo, timeZone), [trades, y, mo, timeZone])
-  const today = ymd(now)
   const title = monthTitle().format(new Date(y, mo, 1)).replace(/\s*г\.?$/, '')
 
   return (

@@ -15,9 +15,22 @@ function nf(opts: Intl.NumberFormatOptions): Intl.NumberFormat {
 }
 const usd = () => nf({ style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
+/** То, что после округления до digits знаков — ноль, считаем нулём: никаких «−0,00 $» и «-0 %» */
+const zeroed = (n: number, digits: number) => (Math.round(Math.abs(n) * 10 ** digits) === 0 ? 0 : n)
+
+/**
+ * Часовой пояс для показа дат и времени — пояс из профиля (lib/useTimeZone ставит его, когда профиль загрузился),
+ * иначе — браузера. Тот же пояс, что у дней в календаре и «Статистике»: время сделки и её день не расходятся.
+ */
+let displayTz: string | undefined
+export function setDisplayTimeZone(tz: string | undefined): void {
+  displayTz = tz || undefined
+}
+export const displayTimeZone = () => displayTz
+
 /** 1 234,56 $ (ru) · $1,234.56 (en) */
 export function formatUsd(n: number | null | undefined): string {
-  return n === null || n === undefined ? '—' : usd().format(n)
+  return n === null || n === undefined ? '—' : usd().format(zeroed(n, 2))
 }
 
 /** Цена монеты в $: от 1 $ — с центами (95 000,00 $), дешевле — 4 значащими цифрами (0,00001234 $) */
@@ -30,8 +43,9 @@ export function formatUsdPrice(n: number | null | undefined): string {
 /** +1 234,56 $ / −12,00 $ */
 export function formatPnl(n: number | null | undefined): string {
   if (n === null || n === undefined) return '—'
-  const s = usd().format(Math.abs(n))
-  return n > 0 ? `+${s}` : n < 0 ? `−${s}` : s
+  const v = zeroed(n, 2)
+  const s = usd().format(Math.abs(v))
+  return v > 0 ? `+${s}` : v < 0 ? `−${s}` : s
 }
 
 /**
@@ -70,14 +84,15 @@ export function formatNumber(n: number | null | undefined, maxDigits = 2): strin
 /** +1,25R */
 export function formatR(n: number | null | undefined): string {
   if (n === null || n === undefined) return '—'
-  const s = nf({ minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(n))
-  return `${n > 0 ? '+' : n < 0 ? '−' : ''}${s}R`
+  const v = zeroed(n, 2)
+  const s = nf({ minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(v))
+  return `${v > 0 ? '+' : v < 0 ? '−' : ''}${s}R`
 }
 
-/** 03.11.2026, 14:05 (в часовом поясе браузера) */
+/** 03.11.2026, 14:05 (в часовом поясе пользователя — displayTimeZone) */
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return '—'
-  return new Intl.DateTimeFormat(intlLocale(), { dateStyle: 'short', timeStyle: 'short' }).format(new Date(iso))
+  return new Intl.DateTimeFormat(intlLocale(), { dateStyle: 'short', timeStyle: 'short', timeZone: displayTz }).format(new Date(iso))
 }
 
 /**
@@ -103,24 +118,51 @@ export function formatTimeIn(iso: string, timeZone: string): string {
   return new Intl.DateTimeFormat(intlLocale(), { timeZone, timeStyle: 'short' }).format(new Date(iso))
 }
 
-/** Дата без времени: 12.12.2026 (в часовом поясе браузера) */
+/** Дата без времени: 12.12.2026 (в часовом поясе пользователя) */
 export function formatDateShort(d: Date | string): string {
-  return new Intl.DateTimeFormat(intlLocale(), { dateStyle: 'short' }).format(typeof d === 'string' ? new Date(d) : d)
+  return new Intl.DateTimeFormat(intlLocale(), { dateStyle: 'short', timeZone: displayTz }).format(typeof d === 'string' ? new Date(d) : d)
 }
 
-/** ISO → значение для <input type="datetime-local"> в локальном времени */
+/** ISO → значение для <input type="datetime-local"> — время в поясе пользователя (как в списке и календаре) */
 export function isoToLocalInput(iso: string | null | undefined): string {
   if (!iso) return ''
   const d = new Date(iso)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  if (Number.isNaN(d.getTime())) return ''
+  if (!displayTz) {
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', { timeZone: displayTz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(d)
+      .map((x) => [x.type, x.value]),
+  )
+  return `${p.year}-${p.month}-${p.day}T${String(Number(p.hour) % 24).padStart(2, '0')}:${p.minute}`
 }
 
-/** <input type="datetime-local"> → ISO (UTC) */
+/** <input type="datetime-local"> (время в поясе пользователя) → ISO (UTC) */
 export function localInputToIso(value: string): string | null {
   if (!value) return null
-  const d = new Date(value)
-  return Number.isNaN(d.getTime()) ? null : d.toISOString()
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(value)
+  if (!displayTz || !m) {
+    const d = new Date(value)
+    return Number.isNaN(d.getTime()) ? null : d.toISOString()
+  }
+  // местное время пояса → UTC: полночь дня в поясе + часы и минуты (смещение пояса — на этот момент)
+  const wall = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]))
+  const guess = wall - tzOffset(wall, displayTz)
+  const t = wall - tzOffset(guess, displayTz)
+  return new Date(t).toISOString()
+}
+
+/** Смещение пояса в момент t (местное − UTC), мс */
+function tzOffset(t: number, timeZone: string): number {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
+      .formatToParts(new Date(t))
+      .map((x) => [x.type, x.value]),
+  )
+  return Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day), Number(p.hour) % 24, Number(p.minute), Number(p.second)) - Math.floor(t / 1000) * 1000
 }
 
 /** Класс цвета для PnL */
@@ -132,7 +174,7 @@ export function pnlClass(n: number | null | undefined): string {
 /** 0.523 → 52,3 % */
 export function formatPercent(n: number | null | undefined, digits = 1): string {
   if (n === null || n === undefined) return '—'
-  return nf({ style: 'percent', maximumFractionDigits: digits }).format(n)
+  return nf({ style: 'percent', maximumFractionDigits: digits }).format(zeroed(n, digits + 2))
 }
 
 /** Profit factor: 1,85 · ∞ · — */

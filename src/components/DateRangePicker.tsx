@@ -6,6 +6,7 @@
 import { intlLocale } from '@/lib/locale'
 import { useEffect, useMemo, useState, type RefObject } from 'react'
 import { fmt, useT } from '@/i18n'
+import { useTimeZone } from '@/lib/useTimeZone'
 import { daysInRange, monthGrid, parseYmd, QUICK_RANGES, quickRange, ymd, type CustomRange } from '@/lib/period'
 import { useMediaQuery } from '@/lib/useMediaQuery'
 import { Button } from '@/components/ui/Button'
@@ -42,7 +43,8 @@ export function DateRangePicker({ value, onApply, onClose, anchor }: Props) {
   const t = useT()
   const p = t.period
   const two = useMediaQuery('(min-width: 640px)')
-  const today = ymd(new Date())
+  const tz = useTimeZone()
+  const today = quickRange('today', new Date(), tz).to
   const [draft, setDraft] = useState<CustomRange>(value)
   const [hover, setHover] = useState<string | null>(null)
   // первый показанный месяц: тот, где конец диапазона (на двух месяцах — предыдущий рядом)
@@ -88,7 +90,7 @@ export function DateRangePicker({ value, onApply, onClose, anchor }: Props) {
   // что показать внизу: пока конец не выбран — предварительный диапазон под мышью
   const shown = lo ? { from: lo, to: hi || lo } : null
   const activeQuick = QUICK_RANGES.find((k) => {
-    const q = quickRange(k)
+    const q = quickRange(k, new Date(), tz)
     return applied && q.from === applied.from && q.to === applied.to
   })
 
@@ -108,7 +110,7 @@ export function DateRangePicker({ value, onApply, onClose, anchor }: Props) {
               key={k}
               type="button"
               onClick={() => {
-                const q = quickRange(k)
+                const q = quickRange(k, new Date(), tz)
                 setDraft(q)
                 const base = parseYmd(q.to)
                 setView(new Date(base.getFullYear(), base.getMonth() - (two ? 1 : 0), 1))

@@ -13,6 +13,7 @@
  *     Нет логотипа у TradingView — картинка CoinGecko (PNG / JPEG / WebP). Браузер иконки берёт только с нашего Supabase:
  *     CSP не трогаем, сторонние сайты не узнают, у кого какие монеты.
  *
+ *  Стейблкоины, которые держат привязку (±0,5 %), — ровно 1 $ (platforms.ts → pegged): без «убытка −10 $» на USDT по 0,9992 $.
  *  4. Адреса контрактов монет по сетям (0021, coins.platforms) — раз в сутки или когда появились новые монеты:
  *     по ним «Портфель» читает балансы кошельков EVM / Solana только у настоящих монет (platforms.ts).
  *
@@ -21,7 +22,7 @@
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { parseTvScan, pickLogoId, safeSvg, svgColor, tradingViewLogo, type TvCoin } from './svg.ts'
-import { pickPlatforms } from './platforms.ts'
+import { pegged, pickPlatforms } from './platforms.ts'
 
 const CG = 'https://api.coingecko.com/api/v3'
 const PAGES = 2
@@ -51,6 +52,10 @@ const sig = (v: number) => Number(v.toPrecision(6))
 
 /** Ответ CoinGecko → строка таблицы coins (мусор — null) */
 function toCoin(m: Market) {
+  const row = rawCoin(m)
+  return row ? pegged(row) : null
+}
+function rawCoin(m: Market) {
   const id = typeof m.id === 'string' ? m.id : ''
   const symbol = typeof m.symbol === 'string' ? m.symbol.toUpperCase() : ''
   if (!/^[a-z0-9-]{1,80}$/.test(id) || !/^[A-Z0-9._-]{1,24}$/.test(symbol)) return null
@@ -79,7 +84,7 @@ function toCoin(m: Market) {
     updated_at: new Date().toISOString(),
   }
 }
-type CoinRow = NonNullable<ReturnType<typeof toCoin>>
+type CoinRow = NonNullable<ReturnType<typeof rawCoin>>
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'METHOD' }, 405)

@@ -109,9 +109,14 @@ export function toParams(base: URLSearchParams, f: TradeFilters, sort: Sort): UR
 /* ---------- Сортировка ---------- */
 
 /** Время в сделке, мс; открытая сделка — null */
+/**
+ * Сколько длилась сделка. null — неизвестно: сделка открыта или время открытия не пришло
+ * (Bybit по API в «Закрытом P&L» отдаёт только время закрытия — открытие = закрытие; показывать «< 1 мин» было бы неправдой).
+ */
 export function durationMs(tr: Pick<TradeWithTags, 'entry_at' | 'exit_at'>): number | null {
   if (!tr.exit_at) return null
-  return Math.max(0, Date.parse(tr.exit_at) - Date.parse(tr.entry_at))
+  const ms = Date.parse(tr.exit_at) - Date.parse(tr.entry_at)
+  return Number.isFinite(ms) && ms > 0 ? ms : null
 }
 
 const sortValue = (tr: TradeWithTags, key: SortKey): number | string | null => {

@@ -33,6 +33,7 @@ export type Holding = {
 export type Snapshot = { at: string; total_usd: number; btc_price: number | null }
 
 /** Стейблкоины: цена входа по умолчанию — 1 $ */
+/** Стейблкоины (тот же список — STABLE_SYMBOLS в prices-worker/platforms.ts: держат привязку ±0,5 % — цена ровно 1 $) */
 export const STABLES: ReadonlySet<string> = new Set(['USDT', 'USDC', 'DAI', 'FDUSD', 'TUSD', 'USDE', 'PYUSD', 'USDD', 'BUSD', 'USD1', 'RLUSD'])
 
 /** Монеты дешевле этого — «мелочь» (скрываются переключателем) */

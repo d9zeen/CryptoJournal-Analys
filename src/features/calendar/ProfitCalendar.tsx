@@ -16,7 +16,7 @@ import { useTrades } from '@/features/trades/api'
 import { closedTrades } from '@/lib/calc/stats'
 import { calendarSpan, compactPnl, monthPairs, monthSummary, monthWeeks, profitCalendar, type CalCell, type CalDay, type MonthPairs } from '@/lib/calc/calendar'
 import { formatDay, formatPercent, formatPnl, formatPnlShort } from '@/lib/format'
-import { parseYmd, ymd } from '@/lib/period'
+import { parseYmd } from '@/lib/period'
 import { useMediaQuery } from '@/lib/useMediaQuery'
 import { AnimatedNumber } from '@/components/AnimatedNumber'
 import { CalendarSkeleton } from '@/components/Skeleton'
@@ -47,7 +47,9 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
   const wide = useMediaQuery('(min-width: 768px)')
   // широкий экран (xl): «Итог месяца» — в правой колонке, над «Торговые дни»; уже — строкой под сеткой
   const side = useMediaQuery('(min-width: 1280px)')
-  const now = new Date()
+  // «сегодня» и текущий месяц — в поясе пользователя, как и сами дни (иначе сегодняшние сделки могли оказаться в «будущем» дне)
+  const todayZ = zonedParts(new Date().toISOString(), timeZone).date
+  const now = { getFullYear: () => Number(todayZ.slice(0, 4)), getMonth: () => Number(todayZ.slice(5, 7)) - 1 }
   // ?day=2026-11-04 — открыть этот месяц и панель дня (клик в мини-календаре на «Статистике»)
   const [params, setParams] = useSearchParams()
   const dayParam = /^\d{4}-\d{2}-\d{2}$/.test(params.get('day') ?? '') ? params.get('day')! : null
@@ -80,7 +82,7 @@ export function ProfitCalendar({ timeZone }: { timeZone: string }) {
   const pairs = useMemo(() => monthPairs(closed, view.y, view.m, timeZone), [closed, view, timeZone])
   const sum = useMemo(() => monthSummary(cal), [cal])
   const shift = (n: number) => setView((v) => ({ y: new Date(v.y, v.m + n, 1).getFullYear(), m: new Date(v.y, v.m + n, 1).getMonth() }))
-  const today = ymd(now)
+  const today = todayZ
   const m = cal.month
   // сделки открытого дня — для панели (день — дата закрытия в часовом поясе пользователя, как в клетках)
   const dayTrades: DayTrade[] = openDay
