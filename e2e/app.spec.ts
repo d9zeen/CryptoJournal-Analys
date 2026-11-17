@@ -1253,3 +1253,13 @@ test.describe('скриншот графика из буфера обмена', 
     await expect(page.getByRole('status')).toHaveCount(0)
   })
 })
+
+test('сделка из файла: у плеча подсказка «в файле биржи плеча нет», у ручной — нет', async ({ page, db }) => {
+  db.trades = [makeTrade(1, { source: 'import', leverage: 1 }), makeTrade(2, { source: 'manual', leverage: 1 })]
+  await fakeSupabase(page, db)
+  await page.goto(`trades/${db.trades[0].id}`)
+  await expect(page.getByText('В файле биржи плеча нет')).toBeVisible()
+  await page.goto(`trades/${db.trades[1].id}`)
+  await expect(page.getByRole('button', { name: 'Сохранить сделку' })).toBeVisible()
+  await expect(page.getByText('В файле биржи плеча нет')).toHaveCount(0)
+})

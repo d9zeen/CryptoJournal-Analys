@@ -51,6 +51,8 @@ test('портфель: балансы Bybit приходят сами, икон
   const table = page.locator('[data-portfolio-table]')
   await expect(table.locator('[data-coin="BTC"]')).toContainText('25 000,00 $')
   await expect(table.locator('[data-coin="BTC"]')).toContainText('Bybit')
+  // у Bybit «спот» — это единый счёт (спот и фьючерсы, с открытыми позициями) — так и подписано
+  await expect(table.locator('[data-coin="BTC"] [title*="единый счёт"]')).toHaveCount(1)
   // иконка — с нашего Storage, а не с CoinGecko
   const icon = table.locator('[data-coin="BTC"] img')
   await expect(icon).toHaveAttribute('src', /\/storage\/v1\/object\/public\/coin-icons\/bitcoin\.png$/)
