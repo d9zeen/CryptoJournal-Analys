@@ -30,3 +30,22 @@ export function niceAxis(values: number[], { pad = 0.08, ticks = 4 }: { pad?: nu
   for (let k = Math.ceil(lo0 / step - 1e-9); k <= Math.floor(hi0 / step + 1e-9); k++) out.push(k * step + 0)
   return { lo: lo0, hi: hi0, ticks: out }
 }
+
+/** Ось Y по данным, не от нуля (портфель, цена в сделке): колебания в 1–2 % должны быть видны; деления — «круглые» */
+export function fitAxis(values: number[]): Axis {
+  const finite = values.filter(Number.isFinite)
+  let lo = finite.length ? Math.min(...finite) : 0
+  let hi = finite.length ? Math.max(...finite) : 1
+  if (hi === lo) {
+    const d = Math.abs(hi) * 0.05 || 1
+    lo -= d
+    hi += d
+  }
+  const pad = (hi - lo) * 0.12
+  const step = niceStep((hi - lo + 2 * pad) / 4)
+  const a = Math.floor((lo - pad) / step) * step
+  const b = Math.ceil((hi + pad) / step) * step
+  const ticks: number[] = []
+  for (let x = a; x <= b + step / 2; x += step) ticks.push(Math.round(x * 1e8) / 1e8)
+  return { lo: a, hi: b, ticks }
+}

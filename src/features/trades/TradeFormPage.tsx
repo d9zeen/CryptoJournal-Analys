@@ -2,7 +2,7 @@ import { UpgradeLine } from '@/components/UpgradeLine'
 import { SaveButton, type SaveState } from '@/components/SaveButton'
 import { FormError } from '@/components/FormError'
 import { pause, useShake } from '@/lib/motion'
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { fmt, useT } from '@/i18n'
 import { useDeleteTrade, useSaveTrade, useTrade } from './api'
@@ -23,6 +23,9 @@ import { isStopOnWrongSide, marginUsd, qtyCoins } from '@/lib/calc/trade'
 import { formatNumber, formatPnl, formatR, formatUsd, isoToLocalInput, pnlClass } from '@/lib/format'
 import { dbErrorMessage } from '@/lib/errors'
 import type { MarketType, Side } from '@/lib/calc/trade'
+
+// график сделки тянет Recharts — грузим лениво, отдельным файлом
+const TradeChart = lazy(() => import('./TradeChart').then((m) => ({ default: m.TradeChart })))
 
 const LAST_KEY = 'cj:lastTradeDefaults'
 
@@ -334,6 +337,13 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
           </Section>
         </div>
       </div>
+
+      {/* график сделки — по сохранённой сделке (свечи биржи, MAE / MFE); у новой — после сохранения */}
+      {existing && (
+        <Suspense fallback={null}>
+          <TradeChart trade={existing} />
+        </Suspense>
+      )}
 
       <Section title={t.tradeForm.sections.review}>
         <div className="grid gap-4 lg:grid-cols-2 lg:items-start">

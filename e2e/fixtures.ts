@@ -56,6 +56,9 @@ export type FakeDb = {
   costWrites?: { method: string; body: unknown }[]
   /** этап 2 (0020): история спотовых покупок / продаж */
   spotFills?: Row[]
+  /** график сделки: какие биржи отдают свечи (по умолчанию все); куда ходил сайт */
+  candleHosts?: string[]
+  candleCalls?: string[]
 }
 
 /** Картинка 1×1 (иконка монеты из Storage) */
@@ -332,6 +335,27 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
       return route.fulfill({ status: method === 'POST' ? 201 : 204, body: '' })
     }
     return json([])
+  })
+  // свечи для графика сделки (lib/candles.ts): цена около 100 на любое окно; биржа не из candleHosts — 503
+  await page.route(/^https:\/\/(api\.bybit\.com|api\.binance\.com|fapi\.binance\.com|www\.okx\.com)\//, async (route) => {
+    const url = new URL(route.request().url())
+    ;(db.candleCalls ??= []).push(url.href)
+    if (db.candleHosts && !db.candleHosts.includes(url.hostname)) return route.fulfill({ status: 503, body: '' })
+    const q = url.searchParams
+    const ivMs: Record<string, number> = { '1': 6e4, '1m': 6e4, '5': 3e5, '5m': 3e5, '15': 9e5, '15m': 9e5, '60': 36e5, '1h': 36e5, '1H': 36e5, '240': 144e5, '4h': 144e5, '4H': 144e5, D: 864e5, '1d': 864e5, '1Dutc': 864e5 }
+    const ms = ivMs[q.get('interval') ?? q.get('bar') ?? '1m'] ?? 6e4
+    const from = Number(q.get('start') ?? q.get('startTime') ?? 0)
+    const to = Number(q.get('end') ?? q.get('endTime') ?? q.get('after') ?? 0)
+    const rows: string[][] = []
+    for (let t = Math.ceil(from / ms) * ms; t < to && rows.length < 1000; t += ms) {
+      // похоже на рынок: сумма волн разной длины (детерминированно по времени — одинаково на любом окне)
+      const p = (x: number) => 100 + Math.sin(x / 9) * 1.2 + Math.sin(x / 2.7 + 1) * 0.45 + Math.sin(x / 1.1 + 2) * 0.2
+      const o = p(t / ms)
+      const c = p(t / ms + 1)
+      rows.push([String(t), o.toFixed(2), (Math.max(o, c) + 0.3).toFixed(2), (Math.min(o, c) - 0.3).toFixed(2), c.toFixed(2)])
+    }
+    const body = url.hostname === 'api.bybit.com' ? { retCode: 0, result: { list: rows.reverse() } } : url.hostname === 'www.okx.com' ? { code: '0', data: [] } : rows
+    return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(body) })
   })
   if (signedIn) await page.addInitScript((s) => localStorage.setItem('sb-fake-auth-token', JSON.stringify(s)), session(db))
 }
