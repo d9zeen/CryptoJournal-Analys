@@ -14,13 +14,15 @@ function securityMeta(supabaseUrl: string): Plugin {
   const origin = supabaseUrl ? new URL(supabaseUrl).origin : ''
   const wss = origin.replace(/^https:/, 'wss:')
   const WALLET_RPC_HOSTS = ['ethereum', 'arbitrum-one', 'base', 'optimism', 'bsc', 'polygon-bor', 'solana'].map((n) => `https://${n}-rpc.publicnode.com`)
+  const CANDLE_HOSTS = ['https://api.bybit.com', 'https://api.binance.com', 'https://fapi.binance.com', 'https://www.okx.com']
   const csp = [
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
     `img-src 'self' data: blob: ${origin}`,
     // кошельки (0021): публичные узлы сетей PublicNode — только чтение балансов (lib/portfolio/wallets.ts)
-    `connect-src 'self' ${origin} ${wss} https://api.hyperliquid.xyz ${WALLET_RPC_HOSTS.join(' ')}`,
+    // график сделки (17.11.2026): свечи — публичные API бирж без ключа (lib/candles.ts)
+    `connect-src 'self' ${origin} ${wss} https://api.hyperliquid.xyz ${WALLET_RPC_HOSTS.join(' ')} ${CANDLE_HOSTS.join(' ')}`,
     "font-src 'self'",
     "object-src 'none'",
     "base-uri 'self'",

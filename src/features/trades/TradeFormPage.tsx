@@ -10,6 +10,7 @@ import { buildTrade, computeDerived, emptyForm, formFromTrade, type FormErrors, 
 import { ListSelect } from './ListSelect'
 import { MistakePicker } from './MistakePicker'
 import { ScreenshotsField } from './ScreenshotsField'
+import { TradeChart } from './TradeChart'
 import type { TradeScreenshot } from '@/types/db'
 import { useUsage } from '@/features/settings/api'
 import { Card } from '@/components/ui/Card'
@@ -334,6 +335,9 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
           </Section>
         </div>
       </div>
+
+      {/* график сделки — по сохранённой сделке (свечи биржи, MAE / MFE); у новой — после сохранения */}
+      {existing && <TradeChart trade={existing} />}
 
       <Section title={t.tradeForm.sections.review}>
         <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
