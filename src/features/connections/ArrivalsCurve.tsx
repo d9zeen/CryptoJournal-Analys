@@ -1,7 +1,8 @@
 /**
  * «Сделки собирают кривую» на странице «Биржи» (17.11.2026, вариант S3, вместо «Потока в дневник»):
  * слева — подключённые биржи (до 5; при 1–3 — ещё одна, которую можно подключить), из логотипа биржи каждой сделки летят частицы и собирают
- * кривую из сделок, пришедших по API за 7 дней; справа сверху — итог, набегает по мере сборки.
+ * кривую из ВСЕХ сделок подключённых бирж за всё время (по API и файлом; владелец 17.11.2026); справа сверху — итог, набегает по мере сборки.
+ * Строки бирж — кнопки: панель биржи с подключением (статус, ошибка, «Обновить», «Отключить»).
  * Собирается один раз при заходе на страницу и заново — когда синхронизация принесла новые сделки (если вкладку видно), иначе стоит.
  *
  * Все состояния (владелец 17.11.2026: «все варианты продуманы»):
@@ -14,7 +15,8 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { fmt, useT } from '@/i18n'
 import { useTrades } from '@/features/trades/api'
 import { exchangeName } from '@/lib/exchanges'
-import { formatPnl, pnlClass } from '@/lib/format'
+import { formatDateShort, formatPnl, pnlClass } from '@/lib/format'
+import { buildCurve } from '@/lib/calc/curve'
 import { ExchangeLogo } from '@/components/ExchangeLogo'
 import { ParticleCurve } from '@/components/fx/ParticleCurve'
 import { Shimmer } from '@/components/fx/Shimmer'
@@ -24,17 +26,12 @@ import { useMediaQuery } from '@/lib/useMediaQuery'
 
 type State = 'syncing' | 'error' | 'paused' | 'ok'
 
-export function ArrivalsCurve({ conns, active }: { conns: Connection[]; active: Set<string> }) {
+export function ArrivalsCurve({ conns, active, onOpen }: { conns: Connection[]; active: Set<string>; onOpen: (exchange: string) => void }) {
   const t = useT()
   const c = t.connections.curve
   const syncing = useSyncingIds()
-  // то же окно, что у столбиков на карточках (useRecentPnl): один запрос на двоих
-  const [range] = useState(() => {
-    const d = new Date()
-    d.setHours(0, 0, 0, 0)
-    d.setDate(d.getDate() - 7)
-    return { from: d.toISOString(), to: null }
-  })
+  // за всё время (владелец 17.11.2026) — тот же запрос, что у «Статистики» за «Всё время»
+  const [range] = useState({ from: null, to: null })
   const tradeConns = useMemo(() => conns.filter((cn) => !PORTFOLIO_ONLY.has(cn.exchange)), [conns])
   const { data: trades } = useTrades(range, tradeConns.length > 0)
   const mine = useMemo(() => [...new Set(tradeConns.map((cn) => cn.exchange))], [tradeConns])
@@ -47,25 +44,15 @@ export function ArrivalsCurve({ conns, active }: { conns: Connection[]; active: 
     if (on.every((cn) => cn.last_error)) return 'error'
     return 'ok'
   }
-  const series = useMemo(() => {
-    const list = (trades ?? [])
-      .filter((tr) => tr.source === 'api' && tr.exit_at && tr.pnl !== null && mine.includes(tr.exchange))
-      .sort((a, z) => Date.parse(a.exit_at!) - Date.parse(z.exit_at!))
-    let eq = 0
-    // точка 0 — начало (0 $), точка i — после i-й сделки; у каждой точки — биржа, откуда пришла сделка
-    return { values: [0, ...list.map((tr) => (eq += Number(tr.pnl)))], from: [list[0]?.exchange ?? '', ...list.map((tr) => tr.exchange)] }
-  }, [trades, mine])
+  // все закрытые сделки подключённых бирж (по API и файлом — двойники «файл + API» склеены в пользу файла), не больше 300 точек
+  const curve = useMemo(() => buildCurve(trades ?? [], mine), [trades, mine])
   // кривая собирается заново только когда пришли НОВЫЕ сделки (другой набор), а не при каждом перезапросе тех же данных
-  const sig = series.values.join(',') + '|' + series.from.join(',')
-  const values = useMemo(() => series.values, [sig])
+  const sig = curve.values.join(',') + '|' + curve.from.join(',')
+  const values = useMemo(() => curve.values, [sig])
   const fromRef = useRef<string[]>([])
-  fromRef.current = series.from
-  const perExchange = useMemo(() => {
-    const m = new Map<string, number>()
-    for (const ex of series.from.slice(1)) m.set(ex, (m.get(ex) ?? 0) + 1)
-    return m
-  }, [series])
-  const count = values.length - 1
+  fromRef.current = curve.from
+  const perExchange = curve.perExchange
+  const count = curve.count
   // много подключений (4+) — без строки «можно подключить» и плотнее; видно до 5 бирж, остальные — «+N»
   const many = mine.length >= 4
   const shown = mine.slice(0, 5)
@@ -83,33 +70,43 @@ export function ArrivalsCurve({ conns, active }: { conns: Connection[]; active: 
           const st = stateOf(ex)
           const n = perExchange.get(ex)
           return (
-            <li key={ex} data-curve-source={ex} data-state={st} className={`flex items-center gap-2.5 ${st === 'paused' ? 'opacity-60' : ''}`}>
-              <span
-                ref={(el) => {
-                  if (el) logos.current.set(ex, el)
-                  else logos.current.delete(ex)
-                }}
+            <li key={ex} data-curve-source={ex} data-state={st} className={st === 'paused' ? 'opacity-60' : ''}>
+              {/* нажатие — панель биржи: статус, ошибка, «Обновить», «Отключить», подключить ещё */}
+              <button
+                type="button"
+                onClick={() => onOpen(ex)}
+                aria-label={fmt(c.open, { name: exchangeName(ex, '') })}
+                className="-mx-2 flex items-center gap-2.5 rounded-lg px-2 py-1 text-left transition-colors hover:bg-surface-2/70 focus-visible:outline-2 focus-visible:outline-primary"
               >
-                <ExchangeLogo id={ex} className={`rounded-lg ${many ? 'size-8' : 'size-9'}`} />
-              </span>
-              <span className="hidden sm:block">
-                <span className="block text-sm font-semibold">{exchangeName(ex, '')}</span>
-                <span className="flex items-center gap-1.5 text-xs text-muted">
-                  <i aria-hidden className={`size-1.5 rounded-full ${st === 'ok' ? 'bg-up' : st === 'error' ? 'bg-down' : st === 'syncing' ? 'bg-primary' : 'bg-muted'}`} />
-                  {st === 'syncing' ? <Shimmer>{t.connections.status.syncing}</Shimmer> : st === 'ok' ? (n ? fmt(c.worksN, { n }) : c.works) : t.connections.status[st]}
+                <span
+                  ref={(el) => {
+                    if (el) logos.current.set(ex, el)
+                    else logos.current.delete(ex)
+                  }}
+                >
+                  <ExchangeLogo id={ex} className={`rounded-lg ${many ? 'size-8' : 'size-9'}`} />
                 </span>
-              </span>
+                <span className="hidden sm:block">
+                  <span className="block text-sm font-semibold">{exchangeName(ex, '')}</span>
+                  <span className="flex items-center gap-1.5 text-xs text-muted">
+                    <i aria-hidden className={`size-1.5 rounded-full ${st === 'ok' ? 'bg-up' : st === 'error' ? 'bg-down' : st === 'syncing' ? 'bg-primary' : 'bg-muted'}`} />
+                    {st === 'syncing' ? <Shimmer>{t.connections.status.syncing}</Shimmer> : st === 'ok' ? (n ? fmt(c.worksN, { n }) : c.works) : t.connections.status[st]}
+                  </span>
+                </span>
+              </button>
             </li>
           )
         })}
         {mine.length > shown.length && <li className="pl-1 text-xs text-muted">+{mine.length - shown.length}</li>}
         {next && (
-          <li data-curve-next={next.id} className="flex items-center gap-2.5 opacity-60">
-            <ExchangeLogo id={next.id} className="size-9 rounded-lg" />
-            <span className="hidden sm:block">
-              <span className="block text-sm font-semibold">{exchangeName(next.id, '')}</span>
-              <span className="block text-xs text-muted">{c.canConnect}</span>
-            </span>
+          <li data-curve-next={next.id} className="opacity-60 hover:opacity-100">
+            <button type="button" onClick={() => onOpen(next.id)} className="-mx-2 flex items-center gap-2.5 rounded-lg px-2 py-1 text-left transition-colors hover:bg-surface-2/70 focus-visible:outline-2 focus-visible:outline-primary">
+              <ExchangeLogo id={next.id} className="size-9 rounded-lg" />
+              <span className="hidden sm:block">
+                <span className="block text-sm font-semibold">{exchangeName(next.id, '')}</span>
+                <span className="block text-xs text-muted">{c.canConnect}</span>
+              </span>
+            </button>
           </li>
         )}
       </ul>
@@ -119,7 +116,7 @@ export function ArrivalsCurve({ conns, active }: { conns: Connection[]; active: 
             <div className={`num text-2xl font-semibold ${pnlClass(sum)}`} data-curve-sum>
               {formatPnl(sum)}
             </div>
-            <div className="text-xs text-muted">{fmt(c.caption, { n: count })}</div>
+            <div className="text-xs text-muted">{fmt(c.caption, { n: count, since: formatDateShort(curve.since!) })}</div>
           </>
         ) : (
           <div className="ml-auto max-w-[16rem] text-sm text-muted">{c.empty}</div>

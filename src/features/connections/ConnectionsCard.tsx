@@ -72,7 +72,7 @@ export function connectionError(e: unknown, t: Dict): string {
   return dbErrorMessage(e, t)
 }
 
-/** Блок «Биржи»: подключённые (карточки со статусом) и сетка всех бирж; onPickFile — «Файлом» из панели биржи (выбор файла на странице) */
+/** Блок «Биржи»: подключённые (кривая со строками бирж, кошельки, строки проблем; управление — в панели биржи) и сетка всех бирж; onPickFile — «Файлом» из панели биржи (выбор файла на странице) */
 export function ConnectionsCard({ onPickFile }: { onPickFile?: (exchange: string) => void } = {}) {
   const t = useT()
   const c = t.connections
@@ -102,6 +102,27 @@ export function ConnectionsCard({ onPickFile }: { onPickFile?: (exchange: string
         .join(' '),
     })
 
+  // «Обновить» в шапке — все работающие подключения разом (раньше — кнопка на каждой карточке)
+  const syncer = useSyncConnection()
+  const [syncingAll, setSyncingAll] = useState(false)
+  const activeConns = conns.filter((cn) => active.has(cn.id))
+  async function refreshAll() {
+    setSyncingAll(true)
+    const res = await Promise.allSettled(activeConns.map((cn) => syncer.mutateAsync(cn)))
+    setSyncingAll(false)
+    const failed = res.find((r): r is PromiseRejectedResult => r.status === 'rejected')
+    const done = res.filter((r): r is PromiseFulfilledResult<SyncResult> => r.status === 'fulfilled').map((r) => r.value)
+    if (failed && !done.length) return setNotice({ tone: 'error', text: connectionError(failed.reason, t) })
+    onSynced(done.reduce((a, r) => ({ found: a.found + r.found, inserted: a.inserted + r.inserted, overLimit: a.overLimit + r.overLimit }), { found: 0, inserted: 0, overLimit: 0 }))
+  }
+  // что нужно увидеть без нажатий: ключ не работает, ключ скоро истечёт / истёк — строкой под блоком, по нажатию — панель биржи
+  const issues = conns
+    .map((cn) => ({ conn: cn, issue: active.has(cn.id) ? connIssue(cn, now, t) : null }))
+    .filter((x): x is { conn: Connection; issue: Issue } => x.issue !== null)
+  const wallets = conns.filter((cn) => PORTFOLIO_ONLY.has(cn.exchange))
+  // панель биржи, которая уже подключена: сверху её подключения (статус, «Обновить», «Отключить»)
+  const panelConns = panel && panel !== 'picker' ? conns.filter((cn) => cn.exchange === panel) : []
+
   return (
     <section aria-labelledby="connections-title" className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
@@ -111,9 +132,16 @@ export function ConnectionsCard({ onPickFile }: { onPickFile?: (exchange: string
           </h2>
           <p className="mt-0.5 text-xs text-muted">{pro ? c.hintPro : c.hintFree}</p>
         </div>
-        <Button variant="secondary" className="shrink-0 !px-3 !py-1.5 text-xs whitespace-nowrap" onClick={() => setPanel('picker')}>
-          {c.add}
-        </Button>
+        <div className="flex shrink-0 gap-2">
+          {activeConns.length > 0 && (
+            <Button variant="ghost" data-sync-all className="!px-3 !py-1.5 text-xs whitespace-nowrap" loading={syncingAll} onClick={refreshAll}>
+              {c.sync}
+            </Button>
+          )}
+          <Button variant="secondary" className="!px-3 !py-1.5 text-xs whitespace-nowrap" onClick={() => setPanel('picker')}>
+            {c.add}
+          </Button>
+        </div>
       </div>
 
       {notice && <Alert tone={notice.tone}>{notice.text}</Alert>}
@@ -125,6 +153,24 @@ export function ConnectionsCard({ onPickFile }: { onPickFile?: (exchange: string
           admin={admin}
           onClose={() => setPanel(null)}
           onPickFile={onPickFile}
+          manage={
+            panelConns.length > 0 ? (
+              <ul className="flex flex-col gap-3">
+                {panelConns.map((conn) => (
+                  <ConnectionTile
+                    key={conn.id}
+                    conn={conn}
+                    pro={pro}
+                    paused={!active.has(conn.id)}
+                    plan={plan}
+                    now={now}
+                    onSynced={onSynced}
+                    onError={(text) => setNotice({ tone: 'error', text })}
+                  />
+                ))}
+              </ul>
+            ) : undefined
+          }
         />
       )}
 
@@ -165,24 +211,48 @@ export function ConnectionsCard({ onPickFile }: { onPickFile?: (exchange: string
         </div>
       ) : (
         <>
-        {/* «Сделки собирают кривую» (вариант S3, 17.11.2026): частицы из логотипа биржи собирают кривую из сделок по API за неделю */}
+        {/* «Сделки собирают кривую» (вариант S3, 17.11.2026): частицы из логотипа биржи собирают кривую из всех сделок подключённых бирж.
+            Отдельных карточек подключений больше нет (владелец 17.11.2026): статус — в строке биржи, управление — в панели биржи (нажатие на строку или карточку в сетке) */}
         {/* кошельки (EVM / Solana) сделок не дают — если подключены только они, блока нет */}
-        {conns.some((cn) => !PORTFOLIO_ONLY.has(cn.exchange)) && <ArrivalsCurve conns={conns} active={active} />}
-        {/* каждое подключение — своя карточка: 1 колонка на телефоне, 2 — от sm, 3 — от xl */}
-        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {conns.map((conn) => (
-            <ConnectionTile
-              key={conn.id}
-              conn={conn}
-              pro={pro}
-              paused={!active.has(conn.id)}
-              plan={plan}
-              now={now}
-              onSynced={onSynced}
-              onError={(text) => setNotice({ tone: 'error', text })}
-            />
-          ))}
-        </ul>
+        {conns.some((cn) => !PORTFOLIO_ONLY.has(cn.exchange)) && <ArrivalsCurve conns={conns} active={active} onOpen={setPanel} />}
+        {/* кошельки — только портфель: компактно, нажатие — панель кошелька */}
+        {wallets.length > 0 && (
+          <div data-wallets className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted">{c.walletsTitle}</span>
+            {wallets.map((w) => {
+              const st = !active.has(w.id) ? 'paused' : w.last_error ? 'error' : 'ok'
+              return (
+                <button key={w.id} type="button" data-wallet={w.exchange} onClick={() => setPanel(w.exchange)} className="flex items-center gap-2 rounded-full border border-border bg-surface py-1 pr-3 pl-1 text-xs hover:bg-surface-2">
+                  <ExchangeLogo id={w.exchange} className="size-6 rounded-full" />
+                  <span className="font-medium">{exchangeName(w.exchange, '')}</span>
+                  <span className="num text-muted">{shortKey(w.api_key)}</span>
+                  <i aria-hidden className={`size-1.5 rounded-full ${st === 'ok' ? 'bg-up' : st === 'error' ? 'bg-down' : 'bg-muted'}`} />
+                </button>
+              )
+            })}
+          </div>
+        )}
+        {/* ключ не работает / скоро истечёт — видно сразу, без нажатий */}
+        {issues.length > 0 && (
+          <ul className="flex flex-col gap-1.5">
+            {issues.map(({ conn, issue }) => (
+              <li key={conn.id}>
+                <button
+                  type="button"
+                  data-issue={conn.exchange}
+                  onClick={() => setPanel(conn.exchange)}
+                  className="flex w-full items-center gap-2.5 rounded-lg border border-border bg-surface px-3 py-2 text-left text-sm hover:bg-surface-2"
+                >
+                  <ExchangeLogo id={conn.exchange} className="size-6 rounded-md" />
+                  <span className={issue.tone}>
+                    <b className="font-semibold">{exchangeName(conn.exchange, t.exchange.other)}</b>: {issue.text}
+                  </span>
+                  <span className="ml-auto shrink-0 text-xs text-muted">{c.issueOpen} →</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
         </>
       )}
 
@@ -247,6 +317,19 @@ function pausedText(t: Dict, exchange: string, plan: Plan | undefined): string {
 }
 
 const DAY_MS = 86_400_000
+
+type Issue = { tone: string; text: string }
+/** что с подключением не так и видно без нажатий: ключ не работает (текст ошибки), ключ Bybit истёк / истекает за 14 дней */
+function connIssue(conn: Connection, now: number, t: Dict): Issue | null {
+  const c = t.connections
+  const code = errorCodeOf(conn.last_error)
+  if (code) return { tone: 'text-loss', text: (c.errors as Record<string, string>)[code] ?? c.errors.UNKNOWN }
+  const exp = conn.key_expires_at ? Date.parse(conn.key_expires_at) : null
+  if (exp === null) return null
+  if (exp < now) return { tone: 'text-loss', text: c.keyExpired }
+  if (exp - now < 14 * DAY_MS) return { tone: 'text-warning', text: fmt(c.keyExpiresSoon, { date: dateOnly().format(new Date(exp)) }) }
+  return null
+}
 /** сервер Pro Plus синхронизирует раз в 3 часа */
 const SERVER_EVERY_MS = 3 * 3_600_000
 const dateOnly = () => new Intl.DateTimeFormat(intlLocale(), { day: 'numeric', month: 'long' })
