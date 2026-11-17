@@ -92,6 +92,10 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
     const json = (body: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
     const body = () => { try { return JSON.parse(req.postData() ?? 'null') } catch { return null } }
 
+    if (path === '/auth/v1/user' && method === 'PUT') {
+      ;(db.authCalls ??= []).push({ path, body: body() })
+      return json(session(db).user)
+    }
     if (path === '/auth/v1/user') return json(session(db).user)
     if (['/auth/v1/token', '/auth/v1/signup', '/auth/v1/resend', '/auth/v1/recover'].includes(path)) (db.authCalls ??= []).push({ path, body: body() })
     if (path === '/auth/v1/token' && db.loginFails)

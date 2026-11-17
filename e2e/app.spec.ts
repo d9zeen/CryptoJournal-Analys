@@ -82,6 +82,8 @@ test.describe('вход', () => {
     await resend.click()
     await expect(box.getByText('Отправили ещё раз.')).toBeVisible()
     expect(db.authCalls?.some((c) => c.path === '/auth/v1/resend')).toBe(true)
+    // язык писем: шаблоны Supabase выбирают текст по user_metadata.lang (docs/email-templates)
+    expect(db.authCalls?.find((c) => c.path === '/auth/v1/signup')?.body).toMatchObject({ data: { lang: 'ru' } })
   })
 
   test('регистрация без подтверждения почты: сразу в дневник', async ({ page, db }) => {
@@ -1262,4 +1264,14 @@ test('сделка из файла: у плеча подсказка «в фай
   await page.goto(`trades/${db.trades[1].id}`)
   await expect(page.getByRole('button', { name: 'Сохранить сделку' })).toBeVisible()
   await expect(page.getByText('В файле биржи плеча нет')).toHaveCount(0)
+})
+
+test('язык писем: вошедший сменил язык на английский — он запоминается в аккаунте', async ({ page, db }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await fakeSupabase(page, db)
+  await page.goto('dashboard')
+  // сайт на русском, а в аккаунте языка ещё нет — записывает ru
+  await expect.poll(() => db.authCalls?.filter((c) => c.path === '/auth/v1/user').map((c) => (c.body as { data?: { lang?: string } }).data?.lang)).toContain('ru')
+  await page.getByRole('radio', { name: 'EN' }).first().click()
+  await expect.poll(() => db.authCalls?.filter((c) => c.path === '/auth/v1/user').map((c) => (c.body as { data?: { lang?: string } }).data?.lang)).toContain('en')
 })

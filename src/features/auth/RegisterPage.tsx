@@ -1,3 +1,4 @@
+import { getLang } from '@/lib/locale'
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { supabase } from '@/lib/supabase'
@@ -47,7 +48,8 @@ export function RegisterPage() {
       options: {
         emailRedirectTo: appUrl('login'),
         // часовой пояс браузера → профиль (для статистики по часам)
-        data: { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+        // язык писем (подтверждение, сброс пароля): шаблоны Supabase смотрят .Data.lang — docs/email-templates
+        data: { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, lang: getLang() },
       },
     })
     setLoading(false)
