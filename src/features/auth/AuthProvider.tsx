@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { queryClient } from '@/lib/queryClient'
+import { getLang, subscribeLang } from '@/lib/locale'
 
 type AuthState = {
   session: Session | null
@@ -29,6 +30,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
     return () => data.subscription.unsubscribe()
   }, [])
+
+  // язык писем = язык сайта: шаблоны писем Supabase выбирают текст по user_metadata.lang (docs/email-templates).
+  // Вошёл или сменил язык — запоминаем в аккаунте (одним запросом, только если отличается)
+  const metaLang = session?.user?.user_metadata?.lang as string | undefined
+  const userId = session?.user?.id
+  useEffect(() => {
+    if (!userId) return
+    const sync = () => {
+      const lang = getLang()
+      if (lang !== metaLang) void supabase.auth.updateUser({ data: { lang } }).catch(() => undefined)
+    }
+    sync()
+    return subscribeLang(sync)
+  }, [userId, metaLang])
 
   const value: AuthState = {
     session,
