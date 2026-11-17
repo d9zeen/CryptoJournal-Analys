@@ -361,3 +361,24 @@ test('«Сделки собирают кривую»: сделок с бирж �
   await expect(curve).toContainText('соберутся здесь в кривую')
   await expect(curve.locator('canvas')).toHaveCount(0)
 })
+
+test('«Сделки собирают кривую»: пять бирж — все в списке с числом сделок, без «можно подключить»; три — ещё одна «можно подключить»', async ({ page, db }) => {
+  db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
+  const all = ['bybit', 'binance', 'okx', 'bitget', 'bingx']
+  db.connections = all.map((e, i) => ({ id: `c${i}`, exchange: e, label: null, api_key: `AbCdEf12345${i}`, last_sync_at: new Date().toISOString(), cursor_at: new Date().toISOString(), last_error: null, created_at: `2026-11-0${i + 1}T00:00:00Z` }))
+  const at = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString()
+  db.trades = [
+    makeTrade(1, { exchange: 'bybit', pnl: 10, source: 'api', entry_at: at(30), exit_at: at(29), external_id: 'o:1' }),
+    makeTrade(2, { exchange: 'okx', pnl: 20, source: 'api', entry_at: at(20), exit_at: at(19), external_id: 'o:2' }),
+    makeTrade(3, { exchange: 'okx', pnl: 30, source: 'api', entry_at: at(10), exit_at: at(9), external_id: 'o:3' }),
+  ]
+  await fakeSupabase(page, db)
+  await page.route('**/functions/v1/exchange-proxy', (route) => route.fulfill({ status: 500, body: '' }))
+  await page.goto('import')
+  const curve = page.locator('[data-arrivals-curve]')
+  await expect(curve.locator('[data-curve-source]')).toHaveCount(5)
+  await expect(curve.locator('[data-curve-next]')).toHaveCount(0)
+  await expect(curve.locator('[data-curve-source="okx"]')).toContainText('сделок: 2')
+  await expect(curve.locator('[data-curve-source="bybit"]')).toContainText('сделок: 1')
+  await expect(curve.locator('[data-curve-source="binance"]')).toContainText('работает')
+})

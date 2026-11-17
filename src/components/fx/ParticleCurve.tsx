@@ -1,6 +1,6 @@
 /**
  * «Сделки собирают кривую» (17.11.2026, вариант S3; образцы 21st.dev particles, particle-text-effect):
- * из логотипа подключённой биржи по дуге вылетают частицы-сделки и садятся на свои места, собирая кривую капитала;
+ * из логотипа биржи, откуда пришла сделка, по дуге вылетают частицы и садятся на свои места, собирая кривую капитала;
  * за ними слева направо тянется плавная фиолетовая линия с заливкой (как кривая капитала «Статистики»).
  * Владелец 17.11.2026: собирается ОДИН раз и дальше стоит; заново — при новом заходе на страницу (новый компонент)
  * и когда пришли новые сделки (values поменялись), но только если вкладку видно; вкладка в фоне или «уменьшить движение» — сразу готовая кривая.
@@ -14,8 +14,8 @@ const STEP = 220 // мс между точками кривой
 const FLY = 1800 // мс полёта частицы
 const TOP = 92 // место сверху под итог
 
-/** values — накопленный результат по сделкам; source — элемент-логотип, откуда летят частицы; onLanded — сколько точек уже на месте */
-export function ParticleCurve({ values, source, left, onLanded, className = '' }: { values: number[]; source: () => HTMLElement | null; left: number; onLanded?: (n: number) => void; className?: string }) {
+/** values — накопленный результат по сделкам; source(i) — логотип биржи, откуда летят частицы точки i (у каждой сделки — своя биржа); onLanded — сколько точек уже на месте */
+export function ParticleCurve({ values, source, left, onLanded, className = '' }: { values: number[]; source: (i: number) => HTMLElement | null; left: number; onLanded?: (n: number) => void; className?: string }) {
   const ref = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
     const cv = ref.current
@@ -47,14 +47,21 @@ export function ParticleCurve({ values, source, left, onLanded, className = '' }
       const x1 = W - 24
       const bottom = H - 28
       pts = values.map((v, i) => [x0 + (i / (n - 1)) * (x1 - x0), bottom - ((v - lo) / (hi - lo || 1)) * (bottom - TOP)])
-      const src = source()?.getBoundingClientRect()
       const box = cv.getBoundingClientRect()
-      const sx = src ? src.left - box.left + src.width / 2 : 20
-      const sy = src ? src.top - box.top + src.height / 2 : H / 2
+      const at = new Map<HTMLElement | null, [number, number]>()
+      const from = (i: number): [number, number] => {
+        const el = source(i)
+        if (!at.has(el)) {
+          const r = el?.getBoundingClientRect()
+          at.set(el, r ? [r.left - box.left + r.width / 2, r.top - box.top + r.height / 2] : [20, H / 2])
+        }
+        return at.get(el)!
+      }
       let seed = 7
       const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647
       parts = []
       pts.forEach(([x, y], i) => {
+        const [sx, sy] = from(i)
         for (let k = 0; k < PER_POINT; k++)
           parts.push({ sx, sy, tx: x + (rnd() - 0.5) * 4, ty: y + (rnd() - 0.5) * 4, d: i * STEP + k * 25, cx: (sx + x) / 2 + (rnd() - 0.5) * 80, cy: Math.min(sy, y) - 50 - rnd() * 60 })
       })
