@@ -332,7 +332,9 @@ test('Анимации «Бирж»: без подключений — «Орб�
   await expect(page.locator('[data-empty-orbit]')).toHaveCount(0)
   const curve = page.locator('[data-arrivals-curve]')
   await expect(curve.locator('[data-curve-source="bybit"]')).toBeVisible()
-  await expect(curve.locator('[data-curve-next]')).toHaveCount(1)
+  // в блоке только подключённые — «можно подключить» нет (это в сетке ниже)
+  await expect(curve.locator('[data-curve-next]')).toHaveCount(0)
+  await expect(curve.locator('[data-curve-source]')).toHaveCount(1)
   // «Обновить»: пока идёт синхронизация — луч по рамке карточки и «Ищем новые сделки…»
   await page.route('**/functions/v1/exchange-proxy', async (route) => {
     await new Promise((r) => setTimeout(r, 800))
@@ -385,7 +387,7 @@ test('«Сделки собирают кривую»: сделок с бирж �
   await expect(curve.locator('canvas')).toHaveCount(0)
 })
 
-test('«Сделки собирают кривую»: пять бирж — все в списке с числом сделок, без «можно подключить»; три — ещё одна «можно подключить»', async ({ page, db }) => {
+test('«Сделки собирают кривую»: пять бирж — все в списке с числом сделок, без «можно подключить»', async ({ page, db }) => {
   db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
   const all = ['bybit', 'binance', 'okx', 'bitget', 'bingx']
   db.connections = all.map((e, i) => ({ id: `c${i}`, exchange: e, label: null, api_key: `AbCdEf12345${i}`, last_sync_at: new Date().toISOString(), cursor_at: new Date().toISOString(), last_error: null, created_at: `2026-11-0${i + 1}T00:00:00Z` }))
