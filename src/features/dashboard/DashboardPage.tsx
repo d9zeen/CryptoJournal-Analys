@@ -9,8 +9,8 @@ import { PeriodFilter } from '@/components/PeriodFilter'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
+import { useTimeZone } from '@/lib/useTimeZone'
 import { previousRange, rangeFor, type CustomRange, type PeriodPreset } from '@/lib/period'
-import { browserTimeZone } from '@/lib/tz'
 import { formatPnl, formatUsd, pnlClass } from '@/lib/format'
 import { compareKpis, kpiSnapshot } from '@/lib/calc/compare'
 import { MiniCalendar, RecentTrades } from './Blocks'
@@ -33,11 +33,12 @@ export function DashboardPage() {
   const navigate = useNavigate()
   const [preset, setPreset] = useState<PeriodPreset>('all')
   const [custom, setCustom] = useState<CustomRange>({ from: '', to: '' })
-  const range = useMemo(() => rangeFor(preset, custom), [preset, custom])
+  const tz = useTimeZone()
+  const range = useMemo(() => rangeFor(preset, custom, new Date(), tz), [preset, custom, tz])
 
   const { data: trades, isLoading, error, isPlaceholderData } = useTrades(range)
   // прошлый период той же длины — для сравнения в верхнем ряду («Всё время» — без сравнения)
-  const prev = useMemo(() => previousRange(preset, custom), [preset, custom])
+  const prev = useMemo(() => previousRange(preset, custom, new Date(), tz), [preset, custom, tz])
   const { data: prevTrades, isPlaceholderData: prevPlaceholder } = useTrades(prev?.range ?? { from: null, to: null }, prev !== null)
   // ключ показанных данных: меняется, когда на экране сделки нового периода (а не прежние, пока грузятся) —
   // тогда числа прокручиваются (№13) и кривая рисуется заново (№9); новые сделки с биржи ключ не меняют (№12 — плавный пересчёт)
@@ -46,7 +47,6 @@ export function DashboardPage() {
   if (!isPlaceholderData && !isLoading) shownKey.current = periodKey
   const { data: profile } = useProfile()
 
-  const tz = profile?.timezone || browserTimeZone()
   const stats = useMemo(() => {
     const all: StatTrade[] = (trades ?? []).map((tr) => ({ ...tr, tagIds: tr.trade_mistakes.map((m) => m.tag_id) }))
     const closed = closedTrades(all)

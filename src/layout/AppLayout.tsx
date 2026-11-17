@@ -1,3 +1,4 @@
+import { useTimeZone } from '@/lib/useTimeZone'
 import { NavLink, Outlet, useMatch } from 'react-router'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { fmt, useT } from '@/i18n'
@@ -44,6 +45,8 @@ function Icon({ d }: { d: string }) {
 }
 
 export function AppLayout() {
+  // пояс профиля — для всех дат и времени в дневнике (formatDateTime, форма сделки), как у дней календаря
+  useTimeZone()
   const t = useT()
   const items = useNavItems()
   // нижнее меню телефона — 6 пунктов; настройки — шестерёнкой в шапке, админка — из настроек

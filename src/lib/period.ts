@@ -1,35 +1,41 @@
 import type { DateRange } from '@/features/trades/api'
+import { addDays, browserTimeZone, zonedMidnight, zonedParts } from '@/lib/tz'
 
 export type PeriodPreset = 'week' | 'month' | 'all' | 'custom'
 export type CustomRange = { from: string; to: string } // YYYY-MM-DD, включительно
 
-function startOfDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate())
-}
-
-/** Диапазон дат для пресета (в локальном времени браузера). to — не включительно. */
-export function rangeFor(preset: PeriodPreset, custom: CustomRange, now = new Date()): DateRange {
+/**
+ * Диапазон дат для пресета — в часовом поясе пользователя (профиль, иначе браузер): те же сутки, что в календаре
+ * и «PnL по дням» (zonedParts). to — не включительно.
+ */
+export function rangeFor(preset: PeriodPreset, custom: CustomRange, now = new Date(), timeZone = browserTimeZone()): DateRange {
+  const at = (day: string) => zonedMidnight(day, timeZone).toISOString()
+  const today = zonedParts(now.toISOString(), timeZone)
   switch (preset) {
     case 'week': {
-      const day = (now.getDay() + 6) % 7 // понедельник = 0
-      const from = startOfDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - day))
-      const to = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 7)
-      return { from: from.toISOString(), to: to.toISOString() }
+      const from = addDays(today.date, -today.weekday) // понедельник
+      return { from: at(from), to: at(addDays(from, 7)) }
     }
     case 'month': {
-      const from = new Date(now.getFullYear(), now.getMonth(), 1)
-      const to = new Date(now.getFullYear(), now.getMonth() + 1, 1)
-      return { from: from.toISOString(), to: to.toISOString() }
+      const first = `${today.date.slice(0, 7)}-01`
+      return { from: at(first), to: at(nextMonth(first)) }
     }
-    case 'custom': {
-      const from = custom.from ? new Date(`${custom.from}T00:00`) : null
-      const toDay = custom.to ? new Date(`${custom.to}T00:00`) : null
-      const to = toDay ? new Date(toDay.getFullYear(), toDay.getMonth(), toDay.getDate() + 1) : null
-      return { from: from?.toISOString() ?? null, to: to?.toISOString() ?? null }
-    }
+    case 'custom':
+      return { from: custom.from ? at(custom.from) : null, to: custom.to ? at(addDays(custom.to, 1)) : null }
     default:
       return { from: null, to: null }
   }
+}
+
+/** '2026-12-01' → '2027-01-01' */
+function nextMonth(first: string): string {
+  const [y, m] = first.split('-').map(Number)
+  return m === 12 ? `${y + 1}-01-01` : `${y}-${pad(m + 1)}-01`
+}
+/** '2026-01-01' → '2025-12-01' */
+function prevMonth(first: string): string {
+  const [y, m] = first.split('-').map(Number)
+  return m === 1 ? `${y - 1}-12-01` : `${y}-${pad(m - 1)}-01`
 }
 
 /**
@@ -42,25 +48,26 @@ export function previousRange(
   preset: PeriodPreset,
   custom: CustomRange,
   now = new Date(),
+  timeZone = browserTimeZone(),
 ): { range: DateRange; vs: 'week' | 'month' | 'custom'; month: number } | null {
+  const at = (day: string) => zonedMidnight(day, timeZone).toISOString()
+  const today = zonedParts(now.toISOString(), timeZone)
+  const monthOf = (day: string) => Number(day.slice(5, 7)) - 1
   switch (preset) {
     case 'week': {
-      const cur = rangeFor('week', custom, now)
-      const from = new Date(cur.from!)
-      const prev = new Date(from.getFullYear(), from.getMonth(), from.getDate() - 7)
-      return { range: { from: prev.toISOString(), to: from.toISOString() }, vs: 'week', month: prev.getMonth() }
+      const from = addDays(today.date, -today.weekday)
+      const prev = addDays(from, -7)
+      return { range: { from: at(prev), to: at(from) }, vs: 'week', month: monthOf(prev) }
     }
     case 'month': {
-      const from = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-      const to = new Date(now.getFullYear(), now.getMonth(), 1)
-      return { range: { from: from.toISOString(), to: to.toISOString() }, vs: 'month', month: from.getMonth() }
+      const first = `${today.date.slice(0, 7)}-01`
+      const prev = prevMonth(first)
+      return { range: { from: at(prev), to: at(first) }, vs: 'month', month: monthOf(prev) }
     }
     case 'custom': {
       if (!custom.from || !custom.to) return null
-      const days = daysInRange(custom)
-      const start = parseYmd(custom.from)
-      const from = new Date(start.getFullYear(), start.getMonth(), start.getDate() - days)
-      return { range: { from: from.toISOString(), to: start.toISOString() }, vs: 'custom', month: from.getMonth() }
+      const from = addDays(custom.from, -daysInRange(custom))
+      return { range: { from: at(from), to: at(custom.from) }, vs: 'custom', month: monthOf(from) }
     }
     default:
       return null
@@ -85,10 +92,12 @@ export type QuickRange = 'today' | 'yesterday' | 'last7' | 'last30' | 'thisMonth
 export const QUICK_RANGES: QuickRange[] = ['today', 'yesterday', 'last7', 'last30', 'thisMonth', 'lastMonth', 'last90', 'thisYear']
 
 /** Быстрые варианты: «последние N дней» включают сегодня */
-export function quickRange(key: QuickRange, now = new Date()): CustomRange {
-  const y = now.getFullYear()
-  const m = now.getMonth()
-  const d = now.getDate()
+export function quickRange(key: QuickRange, now = new Date(), timeZone?: string): CustomRange {
+  // «сегодня» — в поясе пользователя, если он задан (иначе — по часам браузера)
+  const base = timeZone ? parseYmd(zonedParts(now.toISOString(), timeZone).date) : now
+  const y = base.getFullYear()
+  const m = base.getMonth()
+  const d = base.getDate()
   const day = (offset: number) => ymd(new Date(y, m, d + offset))
   switch (key) {
     case 'today':

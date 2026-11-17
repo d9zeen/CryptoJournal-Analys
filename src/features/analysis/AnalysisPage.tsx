@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import { SideBadge } from '@/components/SideBadge'
 import { formatPercent, formatPnl, pnlClass } from '@/lib/format'
+import { useTimeZone } from '@/lib/useTimeZone'
 import { rangeFor, type CustomRange, type PeriodPreset } from '@/lib/period'
 import { byEmotion, bySetup, bySide, bySymbol, closedTrades, groupTotal, topMistakes, type ClosedTrade, type Group, type StatTrade } from '@/lib/calc/stats'
 import { GroupTable, type Row } from '@/features/dashboard/GroupTable'
@@ -71,7 +72,8 @@ export function AnalysisPage() {
   const navigate = useNavigate()
   const [preset, setPreset] = useState<PeriodPreset>('all')
   const [custom, setCustom] = useState<CustomRange>({ from: '', to: '' })
-  const range = useMemo(() => rangeFor(preset, custom), [preset, custom])
+  const tz = useTimeZone()
+  const range = useMemo(() => rangeFor(preset, custom, new Date(), tz), [preset, custom, tz])
 
   const { data: trades, isLoading, error, isPlaceholderData } = useTrades(range)
   // период, чьи сделки уже на экране: при его смене суммы в таблицах прокручиваются (№13)

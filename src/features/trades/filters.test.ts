@@ -72,4 +72,8 @@ describe('sortTrades', () => {
     expect(durationMs(list[3])).toBe((4 * 60 + 12) * 60_000)
     expect(durationMs(list[2])).toBeNull()
   })
+  it('durationMs: время открытия неизвестно (Bybit по API: открытие = закрытие) — null, а не «< 1 мин»', () => {
+    expect(durationMs({ entry_at: '2026-11-05T15:35:18Z', exit_at: '2026-11-05T15:35:18Z' })).toBeNull()
+    expect(durationMs({ entry_at: '2026-11-05T15:35:00Z', exit_at: '2026-11-05T15:35:30Z' })).toBe(30_000)
+  })
 })

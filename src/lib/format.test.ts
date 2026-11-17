@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatPnl, formatPnlShort, formatPrice, formatR, formatUsd, formatPercent, formatRatio } from './format'
+import { formatDateTime, formatPercent, formatPnl, formatPnlShort, formatPrice, formatR, formatRatio, formatUsd, isoToLocalInput, localInputToIso, setDisplayTimeZone } from './format'
 import { setLang } from './locale'
 
 // Intl в русской локали ставит неразрывные пробелы — для сравнения заменяем на обычные
@@ -75,5 +75,36 @@ describe('formatDuration — «В сделке»', () => {
     expect(formatDuration((4 * 60 + 12) * MIN)).toBe('4 h 12 min')
     expect(formatDuration((3 * 1440 + 2 * 60) * MIN)).toBe('3 d 2 h')
     setLang('ru')
+  })
+})
+
+describe('ноль — без знака (проверка перед запуском, 17.11.2026)', () => {
+  it('сумма, которая округляется до нуля, — «0,00 $», а не «−0,00 $» / «+0,00 $»', () => {
+    expect(n(formatPnl(-0.004))).toBe('0,00 $')
+    expect(n(formatPnl(0.004))).toBe('0,00 $')
+    expect(n(formatUsd(-0.004))).toBe('0,00 $')
+    expect(n(formatUsd(-0))).toBe('0,00 $')
+    expect(n(formatR(-0.001))).toBe('0,00R')
+  })
+  it('проценты: «0 %», а не «-0 %»', () => {
+    expect(n(formatPercent(-0.0004))).toBe('0 %')
+    expect(n(formatPercent(-0.5))).toBe('-50 %')
+  })
+})
+
+describe('время — в поясе профиля (как дни календаря)', () => {
+  it('показ и форма сделки в одном поясе: туда и обратно без сдвига', () => {
+    setDisplayTimeZone('Asia/Tokyo')
+    try {
+      expect(isoToLocalInput('2026-11-04T23:30:00Z')).toBe('2026-11-05T08:30')
+      expect(localInputToIso('2026-11-05T08:30')).toBe('2026-11-04T23:30:00.000Z')
+      expect(formatDateTime('2026-11-04T23:30:00Z')).toContain('05.11')
+      // переход на летнее время в Берлине: 29.03.2026 02:00 → 03:00
+      setDisplayTimeZone('Europe/Berlin')
+      expect(localInputToIso('2026-03-29T12:00')).toBe('2026-03-29T10:00:00.000Z')
+      expect(localInputToIso('2026-03-28T12:00')).toBe('2026-03-28T11:00:00.000Z')
+    } finally {
+      setDisplayTimeZone(undefined)
+    }
   })
 })
