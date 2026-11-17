@@ -1,5 +1,12 @@
 /** Подключения бирж: Hyperliquid по адресу кошелька, Bybit и OKX по ключу «только чтение» (у OKX — с кодовой фразой) */
+import type { Page } from '@playwright/test'
 import { test, expect, fakeSupabase, makeTrade } from './fixtures'
+
+/** Карточки подключений с 17.11.2026 — в панели биржи: нажатие на биржу в сетке → «Подключено» */
+async function openConn(page: Page, ex: string) {
+  await page.locator(`[data-exchanges] [data-exchange="${ex}"]`).click()
+  return page.locator(`[data-panel-manage] [data-conn="${ex}"]`)
+}
 
 const WALLET = '0xAbCdEf0123456789abcdef0123456789ABCDEF01'
 
@@ -31,8 +38,10 @@ test('Hyperliquid: подключение кошелька и первая си�
   expect(hlBodies[0]).toMatchObject({ type: 'userFillsByTime', user: WALLET.toLowerCase() })
   // после синхронизации запомнили, с какого места продолжать
   await expect.poll(() => db.connCalls?.find((c) => c.fn === 'touch_exchange_connection')?.body.p_cursor).toBe(new Date(t0 + 3_600_001).toISOString())
-  await expect(page.locator('[data-conn="hyperliquid"]')).toHaveAttribute('data-status', 'ok')
-  await expect(page.locator('[data-conn="hyperliquid"]')).toContainText(/Обновлено (только что|.+ назад)/)
+  await page.keyboard.press('Escape')
+  const hl = await openConn(page, 'hyperliquid')
+  await expect(hl).toHaveAttribute('data-status', 'ok')
+  await expect(hl).toContainText(/Обновлено (только что|.+ назад)/)
 })
 
 test('Bybit: ключ с правом торговли не принимаем', async ({ page, db }) => {
@@ -113,8 +122,10 @@ test('Pro Plus: синхронизация на сервере каждые 3 ч
   await fakeSupabase(page, db)
   await page.goto('import')
   await expect(page.getByText(/Сделки подтягиваются на сервере каждые 3 часа/)).toBeVisible()
-  await expect(page.getByText(/следующее примерно через 2 ч (59|58) мин/)).toBeVisible()
-  await expect(page.getByText(/Ключ Bybit перестанет работать/)).toBeVisible()
+  // срок ключа виден сразу — строкой под блоком; время следующей синхронизации — в панели биржи
+  await expect(page.locator('[data-issue="bybit"]')).toContainText(/Ключ Bybit перестанет работать/)
+  const tile = await openConn(page, 'bybit')
+  await expect(tile.getByText(/следующее примерно через 2 ч (59|58) мин/)).toBeVisible()
 })
 
 test('Basic: подключений нет — строка про тарифы, демо Polymarket работает', async ({ page, db }) => {
@@ -162,7 +173,9 @@ test('Pro: старое подключение Polymarket не удаляетс�
   ]
   await fakeSupabase(page, db)
   await page.goto('import')
-  const row = page.locator('[data-conn="polymarket"]')
+  // в блоке кривой — «На паузе», подробности и «Обновить» (недоступно) — в панели биржи
+  await expect(page.locator('[data-arrivals-curve] [data-curve-source="polymarket"]')).toHaveAttribute('data-state', 'paused')
+  const row = await openConn(page, 'polymarket')
   await expect(row).toHaveAttribute('data-status', 'paused')
   await expect(row.locator('[data-pill]')).toHaveText('На паузе')
   await expect(row.getByText('По тарифу не положено — нужен Pro Plus.')).toBeVisible()
@@ -215,14 +228,20 @@ test('Карточка подключения: «Ошибка» с подска�
   ]
   await fakeSupabase(page, db)
   await page.goto('import')
-  const bad = page.locator('[data-conn="hyperliquid"]')
+  // ошибка видна сразу — строкой под блоком; нажатие — панель биржи с подробностями
+  await expect(page.locator('[data-issue="hyperliquid"]')).toContainText('У ключа нет прав на чтение сделок')
+  await expect(page.locator('[data-issue]')).toHaveCount(1)
+  await page.locator('[data-issue="hyperliquid"]').click()
+  const bad = page.locator('[data-panel-manage] [data-conn="hyperliquid"]')
   await expect(bad).toHaveAttribute('data-status', 'error')
   await expect(bad.locator('[data-pill]')).toHaveText('Ошибка')
   await expect(bad).toContainText('У ключа нет прав на чтение сделок')
   await expect(bad).toContainText('Ответ биржи: 10005 Permission denied')
-  const ok = page.locator('[data-conn="bybit"]')
+  await page.keyboard.press('Escape')
+  const ok = await openConn(page, 'bybit')
   await expect(ok.locator('[data-pill]')).toHaveText('Работает')
   await expect(ok).toContainText('Обновлено 10 мин назад · следующее примерно через 2 ч 50 мин')
+  await page.keyboard.press('Escape')
   // «скоро по API» — бледные карточки без кнопок, старой строки текста нет
   await expect(page.locator('[data-soon]')).toHaveCount(1)
   await expect(page.locator('[data-soon="Binance"]')).toHaveCount(0)
@@ -238,7 +257,9 @@ test('Отключение подключения — только после п
   ]
   await fakeSupabase(page, db)
   await page.goto('import')
-  const card = page.locator('[data-conn="bybit"]')
+  // отдельных карточек на странице нет — отключение в панели биржи
+  await expect(page.locator('[data-conn]')).toHaveCount(0)
+  const card = await openConn(page, 'bybit')
   await card.getByRole('button', { name: 'Отключить' }).click()
   const dlg = page.getByRole('dialog', { name: 'Отключить Bybit?' })
   await expect(dlg).toBeVisible()
@@ -317,14 +338,14 @@ test('Анимации «Бирж»: без подключений — «Орб�
     await new Promise((r) => setTimeout(r, 800))
     await route.fallback()
   })
-  const tile = page.locator('[data-conn="bybit"]')
+  const tile = await openConn(page, 'bybit')
   await tile.getByRole('button', { name: 'Обновить' }).click()
   await expect(tile).toHaveClass(/beam-run/)
   await expect(tile).toContainText('Ищем новые сделки…')
   await expect(tile).not.toHaveClass(/beam-run/, { timeout: 20_000 })
 })
 
-test('«Сделки собирают кривую»: сделки по API за неделю — кривая и итог набегает до суммы и остаётся; из файла — не считаются', async ({ page, db }) => {
+test('«Сделки собирают кривую»: все сделки подключённых бирж за всё время (по API и файлом) — итог набегает до суммы и остаётся; чужая биржа не считается', async ({ page, db }) => {
   test.setTimeout(45_000)
   db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
   db.connections = [{ id: 'c1', exchange: 'bybit', label: null, api_key: 'AbCdEf123456', last_sync_at: new Date().toISOString(), cursor_at: new Date().toISOString(), last_error: null, created_at: '' }]
@@ -333,19 +354,21 @@ test('«Сделки собирают кривую»: сделки по API за
     makeTrade(1, { pnl: 100, source: 'api', entry_at: at(30), exit_at: at(29), external_id: 'o:1' }),
     makeTrade(2, { pnl: -40, source: 'api', entry_at: at(20), exit_at: at(19), external_id: 'o:2' }),
     makeTrade(3, { pnl: 60.5, source: 'api', entry_at: at(10), exit_at: at(9), external_id: 'o:3' }),
-    // из файла — не на кривой
-    makeTrade(4, { pnl: 999, source: 'import', entry_at: at(5), exit_at: at(4), external_id: 'f:4' }),
+    // из файла и давно — тоже на кривой (за всё время, владелец 17.11.2026)
+    makeTrade(4, { pnl: 999, source: 'import', entry_at: at(2000), exit_at: at(1999), external_id: 'f:4' }),
+    // биржа не подключена — не на кривой
+    makeTrade(5, { exchange: 'okx', pnl: 5000, source: 'import', entry_at: at(5), exit_at: at(4), external_id: 'f:5' }),
   ]
   await fakeSupabase(page, db)
   await page.goto('import')
   const curve = page.locator('[data-arrivals-curve]')
   await expect(curve.locator('canvas')).toBeVisible()
-  await expect(curve).toContainText('сделок по API: 3')
-  // итог набегает по мере сборки и останавливается на сумме сделок по API
-  await expect(curve.locator('[data-curve-sum]')).toHaveText(/\+120,50/, { timeout: 15_000 })
+  await expect(curve).toContainText('за всё время · сделок: 4')
+  // итог набегает по мере сборки и останавливается на сумме всех сделок Bybit
+  await expect(curve.locator('[data-curve-sum]')).toHaveText(/\+1\s?119,50/, { timeout: 15_000 })
   // собралась один раз и стоит — не гаснет и не собирается заново (владелец 17.11.2026)
   await page.waitForTimeout(8000)
-  await expect(curve.locator('[data-curve-sum]')).toHaveText(/\+120,50/)
+  await expect(curve.locator('[data-curve-sum]')).toHaveText(/\+1\s?119,50/)
   await page.setViewportSize({ width: 390, height: 844 })
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
   expect(overflow).toBeLessThanOrEqual(0)
@@ -407,8 +430,12 @@ test('«Сделки собирают кривую»: подключены то�
   await fakeSupabase(page, db)
   await page.route('https://solana-rpc.publicnode.com/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }))
   await page.goto('import')
-  await expect(page.locator('[data-conn="solana"]')).toBeVisible()
+  await expect(page.locator('[data-wallets] [data-wallet="solana"]')).toBeVisible()
   await expect(page.locator('[data-arrivals-curve]')).toHaveCount(0)
+  // нажатие на кошелёк — его панель с «Отключить»
+  await page.locator('[data-wallet="solana"]').click()
+  await expect(page.locator('[data-panel-manage] [data-conn="solana"]').getByRole('button', { name: 'Отключить' })).toBeVisible()
+  await page.keyboard.press('Escape')
 
   db.connections.push({ id: 'c1', exchange: 'bybit', label: null, api_key: 'AbCdEf123456', last_sync_at: new Date().toISOString(), cursor_at: new Date().toISOString(), last_error: null, created_at: '' })
   db.trades = [makeTrade(1, { pnl: 42.5, source: 'api', entry_at: new Date(Date.now() - 7_200_000).toISOString(), exit_at: new Date(Date.now() - 3_600_000).toISOString(), external_id: 'o:1' })]
@@ -417,7 +444,7 @@ test('«Сделки собирают кривую»: подключены то�
   const curve = page.locator('[data-arrivals-curve]')
   await expect(curve.locator('canvas')).toBeVisible()
   await expect(curve.locator('[data-curve-sum]')).toHaveText(/\+42,50/, { timeout: 10_000 })
-  await expect(curve).toContainText('сделок по API: 1')
+  await expect(curve).toContainText('за всё время · сделок: 1')
 })
 
 test('«Сделки собирают кривую»: 400 сделок за неделю — собирается не дольше ~9 с', async ({ page, db }) => {

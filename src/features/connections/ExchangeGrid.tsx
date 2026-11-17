@@ -3,7 +3,7 @@
  * если она уже подключена. Клик → ExchangePanel: панель справа (на телефоне — лист снизу) именно для этой биржи,
  * сверху переключатель «По API / Файлом». Образцы — 21st.dev integrations-4 (сетка) и settings / sheet (панель).
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useGlare } from '@/lib/motion'
 import { formatPnl } from '@/lib/format'
 import { useT } from '@/i18n'
@@ -110,12 +110,15 @@ export function ExchangePanel({
   admin,
   onClose,
   onPickFile,
+  manage,
 }: {
   exchange: string | null
   count: number
   admin: boolean
   onClose: () => void
   onPickFile?: (exchange: string) => void
+  /** подключения этой биржи (карточки со статусом, «Обновить», «Отключить») — сверху панели; ниже — подключить ещё */
+  manage?: ReactNode
 }) {
   const t = useT()
   const c = t.connections
@@ -136,7 +139,8 @@ export function ExchangePanel({
       ref={ref}
       data-panel={exchange ?? 'picker'}
       aria-labelledby="exchange-panel-title"
-      onClose={onClose}
+      // закрытие вложенного окна («Отключить Bybit?») всплывает в React до панели — закрываемся только от своего
+      onClose={(e) => e.target === e.currentTarget && onClose()}
       onClick={(e) => e.target === ref.current && onClose()}
       className="day-sheet mx-0 mt-auto mb-0 max-h-[88dvh] w-full max-w-none rounded-t-2xl border border-border bg-surface p-0 text-text shadow-2xl backdrop:bg-bg/60 md:my-0 md:mr-0 md:ml-auto md:h-dvh md:max-h-none md:w-[460px] md:rounded-none md:rounded-l-2xl"
     >
@@ -151,6 +155,15 @@ export function ExchangePanel({
             </svg>
           </button>
         </div>
+
+        {/* уже подключено: статус, ошибка, срок ключа, «Обновить» и «Отключить» (раньше — отдельные карточки на странице, 17.11.2026) */}
+        {manage && (
+          <section data-panel-manage className="flex flex-col gap-2">
+            <h3 className="text-sm font-semibold">{g.connectedTitle}</h3>
+            {manage}
+            <h3 className="mt-2 text-sm font-semibold">{g.addMore}</h3>
+          </section>
+        )}
 
         {/* переключатель способов — только если их больше одного */}
         {methods.length > 1 && (
