@@ -336,7 +336,7 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
     }
     return json([])
   })
-  // свечи для графика сделки (lib/candles.ts): плавная «пила» вокруг 100 на любое окно; биржа не из candleHosts — 503
+  // свечи для графика сделки (lib/candles.ts): цена около 100 на любое окно; биржа не из candleHosts — 503
   await page.route(/^https:\/\/(api\.bybit\.com|api\.binance\.com|fapi\.binance\.com|www\.okx\.com)\//, async (route) => {
     const url = new URL(route.request().url())
     ;(db.candleCalls ??= []).push(url.href)
@@ -348,8 +348,10 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
     const to = Number(q.get('end') ?? q.get('endTime') ?? q.get('after') ?? 0)
     const rows: string[][] = []
     for (let t = Math.ceil(from / ms) * ms; t < to && rows.length < 1000; t += ms) {
-      const o = 100 + Math.sin(t / ms / 6) * 1.5
-      const c = 100 + Math.sin((t / ms + 1) / 6) * 1.5
+      // похоже на рынок: сумма волн разной длины (детерминированно по времени — одинаково на любом окне)
+      const p = (x: number) => 100 + Math.sin(x / 9) * 1.2 + Math.sin(x / 2.7 + 1) * 0.45 + Math.sin(x / 1.1 + 2) * 0.2
+      const o = p(t / ms)
+      const c = p(t / ms + 1)
       rows.push([String(t), o.toFixed(2), (Math.max(o, c) + 0.3).toFixed(2), (Math.min(o, c) - 0.3).toFixed(2), c.toFixed(2)])
     }
     const body = url.hostname === 'api.bybit.com' ? { retCode: 0, result: { list: rows.reverse() } } : url.hostname === 'www.okx.com' ? { code: '0', data: [] } : rows

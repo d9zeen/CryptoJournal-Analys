@@ -9,7 +9,7 @@ import { useId, useMemo } from 'react'
 import { Area, AreaChart, CartesianGrid, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useT } from '@/i18n'
 import { formatDateTime, formatPercent, formatUsd, formatUsdShort } from '@/lib/format'
-import { niceStep } from '@/lib/calc/axis'
+import { fitAxis } from '@/lib/calc/axis'
 import { useMediaQuery } from '@/lib/useMediaQuery'
 import { intlLocale } from '@/lib/locale'
 import { shortDate } from '@/features/dashboard/equityTime'
@@ -20,24 +20,6 @@ const signedPct = (v: number, digits = 1) => (v > 0 ? '+' : v < 0 ? '−' : '') 
 
 type Row = { i: number; t: number; v: number; est: boolean; btc: number | null }
 type TipProps = { active?: boolean; payload?: ReadonlyArray<{ payload?: Row }> }
-
-/** Ось Y по данным, не от нуля: портфель в 50 000 $ и колебания в 2 % должны быть видны; деления — «круглые» */
-function axisFor(values: number[]) {
-  let lo = Math.min(...values)
-  let hi = Math.max(...values)
-  if (hi === lo) {
-    const d = Math.abs(hi) * 0.05 || 1
-    lo -= d
-    hi += d
-  }
-  const pad = (hi - lo) * 0.12
-  const step = niceStep((hi - lo + 2 * pad) / 4)
-  const a = Math.floor((lo - pad) / step) * step
-  const b = Math.ceil((hi + pad) / step) * step
-  const ticks: number[] = []
-  for (let x = a; x <= b + step / 2; x += step) ticks.push(Math.round(x * 1e6) / 1e6)
-  return { lo: a, hi: b, ticks }
-}
 
 /** pct — значения в процентах к первой точке (100 = начало): портфель по ссылке со скрытыми суммами */
 export function PortfolioChart({ points, short, pct = false, drawKey }: { points: SeriesPoint[]; short: boolean; pct?: boolean; drawKey?: unknown }) {
@@ -55,7 +37,7 @@ export function PortfolioChart({ points, short, pct = false, drawKey }: { points
         .map((x, i) => ({ ...x, i })),
     [points],
   )
-  const axis = useMemo(() => axisFor(data.map((d) => d.v)), [data])
+  const axis = useMemo(() => fitAxis(data.map((d) => d.v)), [data])
   const last = data[data.length - 1]
   const tick = (i: number) => {
     const d = data[Math.round(i)]

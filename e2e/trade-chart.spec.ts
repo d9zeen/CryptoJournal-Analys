@@ -1,10 +1,10 @@
 /**
- * График сделки (17.11.2026): свечи биржи, вход / выход, MAE / MFE, эффективность выхода, таймфреймы, «Повтор»; только Pro Plus.
- * Свечи — фейковые (fixtures.ts: «пила» вокруг 100), на настоящие биржи тесты не ходят.
+ * График сделки (17.11.2026): цена с биржи линией как кривая капитала, вход / выход, MAE / MFE, эффективность выхода, таймфреймы, «Повтор»; только Pro Plus.
+ * Свечи — фейковые (fixtures.ts: цена около 100), на настоящие биржи тесты не ходят.
  */
 import { expect, fakeSupabase, makeTrade, test } from './fixtures'
 
-const trade = makeTrade(0, { side: 'long', entry_price: 100, exit_price: 101, stop_loss: 98, take_profit: 103, size_usd: 1000 })
+const trade = makeTrade(0, { side: 'long', entry_price: 100, exit_price: 101, stop_loss: 98, take_profit: 103, size_usd: 1000, pnl: 10 })
 
 test('Pro Plus: свечи своей биржи, вход и выход, MFE / MAE, эффективность', async ({ page, db }) => {
   db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
@@ -12,22 +12,25 @@ test('Pro Plus: свечи своей биржи, вход и выход, MFE / 
   await fakeSupabase(page, db)
   await page.goto(`trades/${trade.id}`)
   const chart = page.locator('[data-trade-chart]')
-  await expect(chart.locator('[data-candle]').first()).toBeVisible()
+  // как кривая капитала: одна линия с заливкой, один пунктир (цена входа), точки входа и выхода, полоса сделки
+  await expect(chart.locator('[data-price-chart] .recharts-area-curve')).toBeVisible()
   // сделка 4 часа → «Авто · 5м», свечи Bybit (биржа сделки)
   await expect(chart.locator('[data-interval="auto"]')).toContainText('5м')
   await expect(chart.locator('[data-chart-source="bybit"]')).toContainText('Bybit')
-  expect(await chart.locator('[data-candle]').count()).toBeGreaterThan(50)
-  await expect(chart.locator('[data-entry]')).toHaveCount(1)
-  await expect(chart.locator('[data-exit]')).toHaveCount(1)
-  await expect(chart.locator('[data-trade-band]')).toHaveCount(1)
-  // ценники: вход, выход, стоп, тейк
-  for (const k of ['entry', 'exit', 'stop', 'take']) await expect(chart.locator(`[data-pill="${k}"]`)).toHaveCount(1)
+  await expect(chart.locator('.recharts-area')).toHaveCount(1)
+  await expect(chart.locator('.recharts-reference-line')).toHaveCount(1)
+  await expect(chart.locator('.recharts-reference-dot')).toHaveCount(2)
+  await expect(chart.locator('.recharts-reference-area')).toHaveCount(1)
+  // у выхода — результат сделки
+  await expect(chart.locator('[data-price-chart]')).toContainText('+10,00 $')
+  // одна строка вместо легенды: вход, выход, стоп, тейк
+  await expect(chart).toContainText('Вход 100')
+  await expect(chart).toContainText('Тейк 103')
   // MFE в плюс, MAE в минус, в R — от стопа (риск 2)
   await expect(chart.locator('[data-metric="mfe"]')).toContainText('+')
   await expect(chart.locator('[data-metric="mae"]')).toContainText('−')
   await expect(chart.locator('[data-metric="mae"]')).toContainText('R')
   await expect(chart.locator('[data-efficiency]')).toContainText('%')
-  await expect(chart.locator('[data-mark="mfe"]')).toHaveCount(1)
   // запросы только на чтение публичных свечей
   expect(db.candleCalls!.every((u) => u.startsWith('https://api.bybit.com/v5/market/kline?'))).toBe(true)
 
@@ -37,10 +40,9 @@ test('Pro Plus: свечи своей биржи, вход и выход, MFE / 
   await expect.poll(() => db.candleCalls!.some((u) => u.includes('interval=60'))).toBe(true)
   await expect(chart.locator('[data-chart-source]')).toContainText('1ч')
 
-  // «Повтор»: свечи появляются заново и доходят до конца
+  // «Повтор»: линия рисуется заново, точки на месте
   await chart.locator('[data-replay]').click()
-  await expect(chart.locator('[data-replay="idle"]')).toBeVisible({ timeout: 15_000 })
-  await expect(chart.locator('[data-exit]')).toHaveCount(1)
+  await expect(chart.locator('.recharts-reference-dot')).toHaveCount(2)
 })
 
 test('своя биржа не отвечает — свечи Binance, это написано под графиком', async ({ page, db }) => {
@@ -80,7 +82,7 @@ test('телефон 390px: график по ширине экрана, без 
   db.trades = [trade]
   await fakeSupabase(page, db)
   await page.goto(`trades/${trade.id}`)
-  await expect(page.locator('[data-trade-chart] [data-candle]').first()).toBeVisible()
+  await expect(page.locator('[data-trade-chart] .recharts-area-curve')).toBeVisible()
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
   expect(overflow).toBeLessThanOrEqual(0)
 })
