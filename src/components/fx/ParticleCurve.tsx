@@ -1,7 +1,7 @@
 /**
  * «Сделки собирают кривую» (17.11.2026, вариант S3; образцы 21st.dev particles, particle-text-effect):
  * из логотипа биржи, откуда пришла сделка, по дуге вылетают частицы и садятся на свои места, собирая кривую капитала;
- * за ними слева направо тянется плавная фиолетовая линия с заливкой (как кривая капитала «Статистики»).
+ * за ними слева направо тянется плавная фиолетовая линия с заливкой через каждую точку (monotone, как кривая капитала «Статистики»).
  * Владелец 17.11.2026: собирается ОДИН раз и дальше стоит; заново — при новом заходе на страницу (новый компонент)
  * и когда пришли новые сделки (values поменялись), но только если вкладку видно; вкладка в фоне или «уменьшить движение» — сразу готовая кривая.
  * Темп — «медленнее и постепенно». Canvas (как свечи главной), цвета — токены theme.css.
@@ -9,10 +9,41 @@
 import { useEffect, useRef } from 'react'
 import { prefersReducedMotion } from '@/lib/motion'
 
-const PER_POINT = 8
-const STEP = 220 // мс между точками кривой
+// темп — «медленнее и постепенно»: точка каждые 220 мс, полёт 1,8 с; но вся сборка не дольше ~8 с (500 сделок за неделю — не 2 минуты),
+// и частиц не больше ~600 (на точку — от 8 до 1)
+const MAX_STEP = 220 // мс между точками кривой
+const MAX_BUILD = 6500 // мс на все точки
+const MAX_PARTS = 600
 const FLY = 1800 // мс полёта частицы
 const TOP = 92 // место сверху под итог
+
+/**
+ * Плавная линия ЧЕРЕЗ каждую точку без выбросов за пределы соседних значений (monotone cubic, Fritsch–Carlson) —
+ * как type="monotone" у кривой капитала (Recharts): вершины не срезаются, а при 2–3 сделках линия не врёт.
+ */
+export function monotonePath(pts: [number, number][]): Path2D {
+  const p = new Path2D()
+  const n = pts.length
+  p.moveTo(pts[0][0], pts[0][1])
+  if (n === 2) {
+    p.lineTo(pts[1][0], pts[1][1])
+    return p
+  }
+  const dx: number[] = []
+  const m: number[] = []
+  for (let i = 0; i < n - 1; i++) {
+    dx.push(pts[i + 1][0] - pts[i][0])
+    m.push((pts[i + 1][1] - pts[i][1]) / (dx[i] || 1))
+  }
+  const tan: number[] = [m[0]]
+  for (let i = 1; i < n - 1; i++) tan.push(m[i - 1] * m[i] <= 0 ? 0 : (3 * (dx[i - 1] + dx[i])) / ((2 * dx[i] + dx[i - 1]) / m[i - 1] + (dx[i] + 2 * dx[i - 1]) / m[i]))
+  tan.push(m[n - 2])
+  for (let i = 0; i < n - 1; i++) {
+    const h = dx[i] / 3
+    p.bezierCurveTo(pts[i][0] + h, pts[i][1] + tan[i] * h, pts[i + 1][0] - h, pts[i + 1][1] - tan[i + 1] * h, pts[i + 1][0], pts[i + 1][1])
+  }
+  return p
+}
 
 /** values — накопленный результат по сделкам; source(i) — логотип биржи, откуда летят частицы точки i (у каждой сделки — своя биржа); onLanded — сколько точек уже на месте */
 export function ParticleCurve({ values, source, left, onLanded, className = '' }: { values: number[]; source: (i: number) => HTMLElement | null; left: number; onLanded?: (n: number) => void; className?: string }) {
@@ -32,6 +63,8 @@ export function ParticleCurve({ values, source, left, onLanded, className = '' }
     let raf = 0
     let landedShown = -1
     const n = values.length
+    const STEP = Math.min(MAX_STEP, MAX_BUILD / Math.max(1, n - 1))
+    const PER_POINT = Math.max(1, Math.min(8, Math.round(MAX_PARTS / n)))
     const total = (n - 1) * STEP + FLY + PER_POINT * 25
 
     const build = () => {
@@ -74,13 +107,10 @@ export function ParticleCurve({ values, source, left, onLanded, className = '' }
       const primary = css('--color-primary')
       const accent = css('--color-accent')
       // линия вытягивается слева направо плавно (обрезка по x), вслед за севшими частицами
-      const progress = Math.min(1, Math.max(0, (t - FLY) / (STEP * (n - 1))))
+      const progress = n < 2 ? 0 : Math.min(1, Math.max(0, (t - FLY) / (STEP * (n - 1))))
       const landed = t < FLY ? 0 : Math.min(n, Math.floor(progress * (n - 1)) + 1)
       if (progress > 0) {
-        const line = new Path2D()
-        line.moveTo(pts[0][0], pts[0][1])
-        for (let i = 1; i < n - 1; i++) line.quadraticCurveTo(pts[i][0], pts[i][1], (pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2)
-        line.lineTo(pts[n - 1][0], pts[n - 1][1])
+        const line = monotonePath(pts)
         const area = new Path2D(line)
         area.lineTo(pts[n - 1][0], H)
         area.lineTo(pts[0][0], H)
@@ -143,9 +173,15 @@ export function ParticleCurve({ values, source, left, onLanded, className = '' }
       if (done) draw(performance.now())
     })
     ro.observe(cv)
+    // смена темы / палитры после сборки — перерисовать готовую кривую новыми цветами (кадры уже не идут)
+    const mo = new MutationObserver(() => {
+      if (done) draw(performance.now())
+    })
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-palette'] })
     return () => {
       cancelAnimationFrame(raf)
       ro.disconnect()
+      mo.disconnect()
     }
   }, [values, source, left, onLanded])
   return <canvas ref={ref} aria-hidden className={`block size-full ${className}`} />

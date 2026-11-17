@@ -166,7 +166,8 @@ export function ConnectionsCard({ onPickFile }: { onPickFile?: (exchange: string
       ) : (
         <>
         {/* «Сделки собирают кривую» (вариант S3, 17.11.2026): частицы из логотипа биржи собирают кривую из сделок по API за неделю */}
-        <ArrivalsCurve conns={conns} />
+        {/* кошельки (EVM / Solana) сделок не дают — если подключены только они, блока нет */}
+        {conns.some((cn) => !PORTFOLIO_ONLY.has(cn.exchange)) && <ArrivalsCurve conns={conns} active={active} />}
         {/* каждое подключение — своя карточка: 1 колонка на телефоне, 2 — от sm, 3 — от xl */}
         <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {conns.map((conn) => (
