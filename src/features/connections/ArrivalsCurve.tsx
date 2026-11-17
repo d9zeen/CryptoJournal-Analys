@@ -2,6 +2,7 @@
  * «Сделки собирают кривую» на странице «Биржи» (17.11.2026, вариант S3, вместо «Потока в дневник»):
  * слева — подключённые биржи (и одна, которую можно подключить), из логотипа первой летят частицы и собирают
  * кривую из сделок, пришедших по API за 7 дней; справа сверху — итог, набегает по мере сборки. Мало сделок — тихая строка.
+ * Собирается один раз при заходе на страницу и заново — когда синхронизация принесла новые сделки (если вкладку видно), иначе стоит.
  */
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { fmt, useT } from '@/i18n'
@@ -25,13 +26,16 @@ export function ArrivalsCurve({ conns }: { conns: { exchange: string }[] }) {
   })
   const { data: trades } = useTrades(range, conns.length > 0)
   const mine = useMemo(() => [...new Set(conns.map((cn) => cn.exchange))], [conns])
-  const values = useMemo(() => {
+  const series = useMemo(() => {
     const list = (trades ?? [])
       .filter((tr) => tr.source === 'api' && tr.exit_at && tr.pnl !== null && mine.includes(tr.exchange))
       .sort((a, z) => Date.parse(a.exit_at!) - Date.parse(z.exit_at!))
     let eq = 0
     return [0, ...list.map((tr) => (eq += Number(tr.pnl)))]
   }, [trades, mine])
+  // кривая собирается заново только когда пришли НОВЫЕ сделки (другой набор), а не при каждом перезапросе тех же данных
+  const sig = series.join(',')
+  const values = useMemo(() => series, [sig])
   const count = values.length - 1
   const next = EXCHANGE_CARDS.find((x) => x.methods.includes('api') && !mine.includes(x.id))
   const srcRef = useRef<HTMLSpanElement>(null)

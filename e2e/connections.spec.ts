@@ -324,7 +324,8 @@ test('Анимации «Бирж»: без подключений — «Орб�
   await expect(tile).not.toHaveClass(/beam-run/, { timeout: 20_000 })
 })
 
-test('«Сделки собирают кривую»: сделки по API за неделю — кривая и итог набегает до суммы; из файла — не считаются; без сделок — строка-подсказка', async ({ page, db }) => {
+test('«Сделки собирают кривую»: сделки по API за неделю — кривая и итог набегает до суммы и остаётся; из файла — не считаются', async ({ page, db }) => {
+  test.setTimeout(45_000)
   db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
   db.connections = [{ id: 'c1', exchange: 'bybit', label: null, api_key: 'AbCdEf123456', last_sync_at: new Date().toISOString(), cursor_at: new Date().toISOString(), last_error: null, created_at: '' }]
   const at = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString()
@@ -342,6 +343,9 @@ test('«Сделки собирают кривую»: сделки по API за
   await expect(curve).toContainText('сделок по API: 3')
   // итог набегает по мере сборки и останавливается на сумме сделок по API
   await expect(curve.locator('[data-curve-sum]')).toHaveText(/\+120,50/, { timeout: 15_000 })
+  // собралась один раз и стоит — не гаснет и не собирается заново (владелец 17.11.2026)
+  await page.waitForTimeout(8000)
+  await expect(curve.locator('[data-curve-sum]')).toHaveText(/\+120,50/)
   await page.setViewportSize({ width: 390, height: 844 })
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
   expect(overflow).toBeLessThanOrEqual(0)
