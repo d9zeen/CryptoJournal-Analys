@@ -49,7 +49,7 @@ export async function fetchTwinIds(exchange: string, trades: TwinCandidate[]): P
   for (let from = 0; from < 200_000; from += 1000) {
     const { data, error } = await supabase
       .from('trades')
-      .select('external_id, symbol, side, exit_at, pnl')
+      .select('external_id, symbol, side, entry_at, exit_at, pnl')
       .eq('exchange', exchange)
       .gte('exit_at', range.from)
       .lte('exit_at', range.to)
