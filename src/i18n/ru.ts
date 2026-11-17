@@ -263,6 +263,7 @@ export const ru = {
     sizeHint: 'Номинал с учётом плеча. Маржа: {margin}',
     sizeHintCoins: 'Номинал с учётом плеча. Маржа: {margin} · ≈ {qty} монет',
     leverage: 'Плечо',
+    leverageUnknown: 'В файле биржи плеча нет — укажи своё, чтобы маржа считалась верно.',
     stopLoss: 'Стоп-лосс',
     takeProfit: 'Тейк-профит',
     risk: 'Риск до стопа: {risk}',
@@ -1032,7 +1033,7 @@ export const ru = {
       ctaButton: 'Начать бесплатно',
       madeWith: 'Сделано в CryptoJournal',
     },
-    accounts: { spot: 'спот', fund: 'фандинг', futures: 'фьючерсы', earn: 'Earn', perp: 'перпы', prediction: 'позиции', manual: 'вручную', wallet: 'кошелёк' },
+    accounts: { spot: 'спот', fund: 'фандинг', futures: 'фьючерсы', earn: 'Earn', perp: 'перпы', prediction: 'позиции', manual: 'вручную', wallet: 'кошелёк', unified: 'единый счёт (спот и фьючерсы, с открытыми позициями)' },
     empty: {
       title: 'Портфель пока пустой',
       text: 'Подключи биржу — балансы подтянутся сами по тому же ключу «только чтение», что и сделки. Холодный кошелёк или биржу без API можно добавить руками.',

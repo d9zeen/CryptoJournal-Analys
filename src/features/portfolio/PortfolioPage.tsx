@@ -366,6 +366,15 @@ export function Spark({ coin }: { coin: Coin | null }) {
 }
 
 /** Откуда монета: биржи (и счета — в подсказке) и «вручную» */
+/**
+ * Подпись счёта. У Bybit и OKX «spot» — это единый торговый счёт (спот и фьючерсы вместе, сумма — с прибылью открытых позиций),
+ * поэтому так и пишем: иначе «спот: 12 983 USDT» путает, а сумма «плавает» из-за открытых позиций.
+ */
+function accountLabel(p: ReturnType<typeof useT>['portfolio'], exchange: string | undefined, account: string): string {
+  if (account === 'spot' && (exchange === 'bybit' || exchange === 'okx')) return p.accounts.unified
+  return p.accounts[account as keyof typeof p.accounts] ?? account
+}
+
 function Sources({ row, conns }: { row: PortfolioRow; conns: Connection[] }) {
   const t = useT()
   const p = t.portfolio
@@ -376,7 +385,7 @@ function Sources({ row, conns }: { row: PortfolioRow; conns: Connection[] }) {
         const label = id === null ? p.manual : c ? exchangeName(c.exchange, '') : '?'
         const detail = row.holdings
           .filter((h) => h.connection_id === id)
-          .map((h) => `${p.accounts[h.account as keyof typeof p.accounts] ?? h.account}: ${formatNumber(h.amount, 8)}${h.note ? ` (${h.note})` : ''}`)
+          .map((h) => `${accountLabel(p, c?.exchange, h.account)}: ${formatNumber(h.amount, 8)}${h.note ? ` (${h.note})` : ''}`)
           .join(', ')
         return (
           <span key={id ?? 'manual'} title={detail} className="rounded-full bg-surface-2 px-2 py-0.5 text-xs whitespace-nowrap text-muted">

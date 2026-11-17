@@ -255,6 +255,7 @@ export const en: Dict = {
     sizeHint: 'Notional incl. leverage. Margin: {margin}',
     sizeHintCoins: 'Notional incl. leverage. Margin: {margin} · ≈ {qty} coins',
     leverage: 'Leverage',
+    leverageUnknown: 'The exchange file has no leverage — enter yours so the margin is right.',
     stopLoss: 'Stop loss',
     takeProfit: 'Take profit',
     risk: 'Risk to stop: {risk}',
@@ -990,7 +991,7 @@ export const en: Dict = {
       ctaButton: 'Start free',
       madeWith: 'Made with CryptoJournal',
     },
-    accounts: { spot: 'spot', fund: 'funding', futures: 'futures', earn: 'Earn', perp: 'perps', prediction: 'positions', manual: 'manual', wallet: 'wallet' },
+    accounts: { spot: 'spot', fund: 'funding', futures: 'futures', earn: 'Earn', perp: 'perps', prediction: 'positions', manual: 'manual', wallet: 'wallet', unified: 'unified account (spot and futures, incl. open positions)' },
     empty: {
       title: 'Your portfolio is empty',
       text: 'Connect an exchange and balances arrive on their own with the same read-only key as your trades. A cold wallet or an exchange without API can be added by hand.',

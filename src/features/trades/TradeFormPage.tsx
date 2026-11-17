@@ -234,6 +234,8 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
                 disabled={form.marketType === 'spot'}
                 onChange={(e) => set('leverage', e.target.value)}
                 error={err('leverage')}
+                // сделка из файла: в выгрузке биржи плеча нет — записано 1, маржа считалась бы на весь размер
+                hint={existing?.source === 'import' && form.marketType !== 'spot' && form.leverage === '1' ? t.tradeForm.leverageUnknown : undefined}
               />
               <NumberField
                 label={t.tradeForm.stopLoss}
