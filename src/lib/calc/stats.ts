@@ -22,6 +22,10 @@ export type StatTrade = {
   tagIds: string[]
   /** плечо (для «Разбор → Плечо»); нет — считаем 1× */
   leverage?: number | string | null
+  /** стоп-лосс из дневника (для «Разбор → Поведение»); нет — не указан */
+  stop_loss?: number | string | null
+  /** рынок: 'prediction' (Polymarket) — без стопа по природе */
+  market_type?: string | null
 }
 
 /** Закрытая сделка с числовыми pnl / r */
@@ -310,6 +314,65 @@ export function leverageBucket(leverage: number | string | null | undefined): Le
 /** «Разбор → Плечо»: только непустые группы, по порядку плеча */
 export function byLeverage(closed: ClosedTrade[]): Group<LeverageBucket>[] {
   return groupBy(closed, (t) => [leverageBucket(t.leverage)]).sort((a, b) => LEVERAGE_BUCKETS.indexOf(a.key) - LEVERAGE_BUCKETS.indexOf(b.key))
+}
+
+/* ───────────── «Разбор → Поведение» (18.11.2026) ───────────── */
+
+/** Сколько убытков подряд было ПЕРЕД сделкой: 0 (после прибыли / в начале), 1, 2, 3 и больше */
+export const STREAK_BUCKETS = ['0', '1', '2', '3+'] as const
+export type StreakBucket = (typeof STREAK_BUCKETS)[number]
+export const streakBucket = (n: number): StreakBucket => (n >= 3 ? '3+' : (String(n) as StreakBucket))
+
+/**
+ * Для каждой сделки — сколько убытков подряд закрылось перед её входом.
+ * Берутся сделки, закрытые не позже входа (параллельные позиции не мешают), по порядку закрытия;
+ * сделка в ноль серию прерывает, как и прибыльная.
+ */
+export function lossStreakBefore(closed: ClosedTrade[]): Map<string, number> {
+  const byExit = [...closed].sort((a, b) => a.exit_at.localeCompare(b.exit_at))
+  const byEntry = [...closed].sort((a, b) => a.entry_at.localeCompare(b.entry_at))
+  const out = new Map<string, number>()
+  let i = 0
+  let streak = 0
+  for (const t of byEntry) {
+    while (i < byExit.length && byExit[i].exit_at <= t.entry_at) {
+      streak = byExit[i].pnl < 0 ? streak + 1 : 0
+      i++
+    }
+    out.set(t.id, streak)
+  }
+  return out
+}
+
+/** Только непустые группы, по порядку серии */
+export function byLossStreak(closed: ClosedTrade[]): Group<StreakBucket>[] {
+  const before = lossStreakBefore(closed)
+  return groupBy(closed, (t) => [streakBucket(before.get(t.id) ?? 0)]).sort((a, b) => STREAK_BUCKETS.indexOf(a.key) - STREAK_BUCKETS.indexOf(b.key))
+}
+
+/** Время в сделке: до 15 мин, до 1 ч, до 4 ч, до суток, дольше (ключ — верхняя граница) */
+export const HOLD_BUCKETS = ['15m', '1h', '4h', '1d', '1d+'] as const
+export type HoldBucket = (typeof HOLD_BUCKETS)[number]
+const MIN = 60_000
+export function holdBucket(entryAt: string, exitAt: string): HoldBucket {
+  const ms = Math.max(0, Date.parse(exitAt) - Date.parse(entryAt))
+  return ms <= 15 * MIN ? '15m' : ms <= 60 * MIN ? '1h' : ms <= 240 * MIN ? '4h' : ms <= 1440 * MIN ? '1d' : '1d+'
+}
+/** Только непустые группы, от коротких к долгим */
+export function byHolding(closed: ClosedTrade[]): Group<HoldBucket>[] {
+  return groupBy(closed, (t) => [holdBucket(t.entry_at, t.exit_at)]).sort((a, b) => HOLD_BUCKETS.indexOf(a.key) - HOLD_BUCKETS.indexOf(b.key))
+}
+
+/**
+ * Стоп в дневнике указан / не указан (у рынков предсказаний Polymarket стопа не бывает — их не считаем).
+ * «Не указан» ≠ «без стопа»: импорт с биржи часто не приносит стоп.
+ */
+export type StopKey = 'with' | 'without'
+export const stopKey = (t: Pick<StatTrade, 'stop_loss'>): StopKey => (num(t.stop_loss ?? null) ? 'with' : 'without')
+export function byStop(closed: ClosedTrade[]): Group<StopKey>[] {
+  const list = closed.filter((t) => t.market_type !== 'prediction')
+  const groups = groupBy(list, (t) => [stopKey(t)])
+  return (['with', 'without'] as const).flatMap((k) => groups.filter((g) => g.key === k))
 }
 
 /**

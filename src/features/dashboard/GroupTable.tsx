@@ -31,20 +31,27 @@ type Props = {
   onSelect?: (id: string) => void
   /** плотнее строки (под лентой сделок в «Разборе») */
   compact?: boolean
+  /** заголовок над таблицей виден (во вкладке «Поведение» таблиц несколько) */
+  showTitle?: boolean
+  /** строки в данном порядке, пока не нажали на заголовок (серия 0 → 3+, время от коротких к долгим) */
+  keepOrder?: boolean
 }
 
-export function GroupTable({ title, hint, rows, total, mode = 'default', empty, limit = 12, i = 0, rollKey, selectedId, onSelect, compact = false }: Props) {
+export function GroupTable({ title, hint, rows, total, mode = 'default', empty, limit = 12, i = 0, rollKey, selectedId, onSelect, compact = false, showTitle = false, keepOrder = false }: Props) {
   const t = useT()
   const c = t.dashboard.tables
   const mistakes = mode === 'mistakes'
   // по умолчанию — по PnL (в «Ошибках» — по убыткам: самые дорогие сверху)
-  const [sort, setSort] = useState<{ key: GroupSortKey; dir: 'asc' | 'desc' }>({ key: mistakes ? 'loss' : 'pnl', dir: 'desc' })
+  // keepOrder — без сортировки, пока не нажали на заголовок (null)
+  const [sort, setSort] = useState<{ key: GroupSortKey; dir: 'asc' | 'desc' } | null>(keepOrder ? null : { key: mistakes ? 'loss' : 'pnl', dir: 'desc' })
   const [expanded, setExpanded] = useState(false)
-  const sorted = sortGroups(
-    rows.map((r) => r.group),
-    sort.key,
-    sort.dir,
-  ).map((g) => rows.find((r) => r.group === g)!)
+  const sorted = sort
+    ? sortGroups(
+        rows.map((r) => r.group),
+        sort.key,
+        sort.dir,
+      ).map((g) => rows.find((r) => r.group === g)!)
+    : rows
   const visible = expanded ? sorted : sorted.slice(0, limit)
   const py = compact ? 'py-1.5' : 'py-2.5'
   const num = `px-2 ${py} text-right whitespace-nowrap sm:px-3`
@@ -53,18 +60,18 @@ export function GroupTable({ title, hint, rows, total, mode = 'default', empty, 
 
   const th = (key: GroupSortKey | null, label: string, extra = '') => {
     if (!key) return <th className={`${num} border-b-2 border-transparent font-normal ${extra}`}>{label}</th>
-    const active = sort.key === key
+    const active = sort?.key === key
     return (
       // как в образце: под активным заголовком — линия цвета кнопок
-      <th aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'} className={`${num} border-b-2 font-normal ${active ? 'border-primary' : 'border-transparent'} ${extra}`}>
+      <th aria-sort={active ? (sort?.dir === 'asc' ? 'ascending' : 'descending') : 'none'} className={`${num} border-b-2 font-normal ${active ? 'border-primary' : 'border-transparent'} ${extra}`}>
         <button
           type="button"
           aria-label={fmt(t.analysis.sortBy, { col: label })}
-          onClick={() => setSort((s) => (s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' }))}
+          onClick={() => setSort((s) => (s?.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' }))}
           className={`group -my-1 inline-flex items-center gap-1 py-1 transition-colors hover:text-text ${active ? 'font-medium text-text' : ''}`}
         >
           <span aria-hidden className={`text-[10px] ${active ? '' : 'opacity-0 group-hover:opacity-40'}`}>
-            {active && sort.dir === 'asc' ? '▲' : '▼'}
+            {active && sort?.dir === 'asc' ? '▲' : '▼'}
           </span>
           {label}
         </button>
@@ -74,7 +81,7 @@ export function GroupTable({ title, hint, rows, total, mode = 'default', empty, 
 
   return (
     <Card className={`rise ${compact ? '!px-4 !py-3 sm:!px-5' : '!p-4 sm:!p-5'}`} style={{ '--i': i } as CSSProperties}>
-      <h2 className="sr-only">{title}</h2>
+      <h2 className={showTitle ? 'mb-1 text-sm font-semibold' : 'sr-only'}>{title}</h2>
       {hint && <p className="mb-2 text-xs text-muted">{hint}</p>}
       {rows.length === 0 ? (
         <p className="text-sm text-muted">{empty}</p>
