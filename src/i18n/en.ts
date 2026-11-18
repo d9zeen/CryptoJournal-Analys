@@ -933,7 +933,7 @@ export const en: Dict = {
       value: 'Value now',
       change: 'Last 24 hours',
       pnl: 'Profit',
-      pnlHint: 'by entry price for {n} of {total}',
+      pnlHint: 'by entry price for {n}\u00a0of\u00a0{total}',
       pnlNone: 'set entry prices in the table',
       invested: 'Invested',
       investedHint: 'at average entry prices',

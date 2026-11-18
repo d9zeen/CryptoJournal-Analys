@@ -294,6 +294,17 @@
   font-feature-settings: 'tnum';
 }
 
+/* Фокус поля ввода: рамка цвета кнопок + мягкое кольцо 3px — как в общем Input (components/ui/Input.tsx); у своих <input> — тот же вид */
+@utility field-focus {
+  outline: none;
+  transition-property: border-color, box-shadow;
+  transition-duration: 150ms;
+  &:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 20%, transparent);
+  }
+}
+
 /* дни соседнего месяца в календаре прибыли — штриховка */
 @utility cal-hatch {
   background-image: repeating-linear-gradient(135deg, color-mix(in srgb, var(--color-border) 70%, transparent) 0 1px, transparent 1px 9px);

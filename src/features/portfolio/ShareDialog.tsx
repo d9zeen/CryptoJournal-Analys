@@ -65,7 +65,7 @@ export function ShareDialog({ onClose }: { onClose: () => void }) {
                 readOnly
                 value={url}
                 onFocus={(e) => e.currentTarget.select()}
-                className="num min-w-0 flex-1 rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs focus:border-primary focus:outline-none"
+                className="num min-w-0 flex-1 rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs field-focus"
               />
               <Button type="button" variant="secondary" onClick={() => void copy()} aria-label={copied ? s.copied : s.copy} className="shrink-0">
                 {copied ? <CheckMark className="size-4 text-up" /> : s.copy}

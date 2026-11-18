@@ -52,6 +52,7 @@ import {
 } from './api'
 import { CoinIcon } from './CoinIcon'
 import { ShareDialog } from './ShareDialog'
+import { radioKeys } from '@/lib/radioKeys'
 
 const PortfolioChart = lazy(() => import('./PortfolioChart').then((m) => ({ default: m.PortfolioChart })))
 
@@ -134,13 +135,14 @@ export function PortfolioPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {sources.length > 1 && (
-            <div role="radiogroup" aria-label={p.sourcesLabel} className="flex max-w-full overflow-x-auto rounded-full border border-border bg-surface p-1">
+            <div role="radiogroup" aria-label={p.sourcesLabel} onKeyDown={radioKeys} className="flex max-w-full overflow-x-auto rounded-full border border-border bg-surface p-1">
               {[{ id: null, label: p.all }, ...sources].map((s) => (
                 <button
                   key={s.id ?? 'all'}
                   type="button"
                   role="radio"
                   aria-checked={source === s.id}
+                  tabIndex={source === s.id ? 0 : -1}
                   onClick={() => setSource(s.id)}
                   className={`shrink-0 rounded-full px-3 py-1 text-sm whitespace-nowrap transition-colors ${source === s.id ? 'bg-surface-2 font-medium text-text' : 'text-muted hover:text-text'}`}
                 >
@@ -175,13 +177,14 @@ export function PortfolioPage() {
         <section style={{ '--i': 4 } as CSSProperties} className="rise flex min-w-0 flex-col rounded-lg border border-border bg-surface p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-sm font-semibold">{p.chart.title}</h2>
-            <div role="radiogroup" aria-label={p.chart.rangesLabel} className="flex rounded-full border border-border bg-surface-2/60 p-0.5">
+            <div role="radiogroup" aria-label={p.chart.rangesLabel} onKeyDown={radioKeys} className="flex rounded-full border border-border bg-surface-2/60 p-0.5">
               {RANGES.map((r) => (
                 <button
                   key={r}
                   type="button"
                   role="radio"
                   aria-checked={range === r}
+                  tabIndex={range === r ? 0 : -1}
                   onClick={() => setRange(r)}
                   className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${range === r ? 'bg-surface text-text shadow-sm' : 'text-muted hover:text-text'}`}
                 >
@@ -402,6 +405,9 @@ function coinName(row: PortfolioRow, polymarket: string) {
   return row.symbol === 'POLYMARKET' ? polymarket : (row.coin?.name ?? row.symbol)
 }
 
+/** мелкие кнопки в таблице монет: на сенсорном экране зона нажатия шире самой кнопки (~44px), вид не меняется */
+const TAP = 'relative before:absolute before:-inset-x-1.5 before:-inset-y-3 pointer-fine:before:hidden'
+
 function CoinTable({ rows, conns, costs }: { rows: PortfolioRow[]; conns: Connection[]; costs: Record<string, number> }) {
   const t = useT()
   const p = t.portfolio
@@ -430,7 +436,7 @@ function CoinTable({ rows, conns, costs }: { rows: PortfolioRow[]; conns: Connec
         data-avg-source={r.avgSource ?? 'none'}
         onClick={() => setEditing(r.symbol)}
         title={avgTitle(r)}
-        className={`inline-flex flex-col items-end rounded-md px-1.5 py-0.5 transition-colors hover:bg-surface-2 ${r.avgPrice === null ? 'text-primary' : r.avgSource === 'stable' ? 'text-muted' : ''}`}
+        className={`${TAP} inline-flex flex-col items-end rounded-md px-1.5 py-0.5 transition-colors hover:bg-surface-2 ${r.avgPrice === null ? 'text-primary' : r.avgSource === 'stable' ? 'text-muted' : ''}`}
       >
         <span className="num">{r.avgPrice === null ? c.setAvg : formatUsdPrice(r.avgPrice)}</span>
         {/* откуда цена: «по сделкам» (история покупок на биржах) / «вручную» */}
@@ -440,7 +446,7 @@ function CoinTable({ rows, conns, costs }: { rows: PortfolioRow[]; conns: Connec
 
   const removeBtn = (r: PortfolioRow) =>
     r.sources.includes(null) ? (
-      <button type="button" onClick={() => setRemoving(r)} aria-label={`${c.remove} ${r.symbol}`} className="rounded-md p-1 text-muted hover:bg-surface-2 hover:text-down">
+      <button type="button" onClick={() => setRemoving(r)} aria-label={`${c.remove} ${r.symbol}`} className={`${TAP} rounded-md p-1 text-muted hover:bg-surface-2 hover:text-down`}>
         <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
           <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
         </svg>
@@ -611,7 +617,7 @@ function CostEditor({ symbol, initial, onDone }: { symbol: string; initial: numb
         aria-label={fmt(c.avgLabel, { symbol })}
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        className="num w-24 rounded-md border border-border bg-surface-2 px-2 py-1 text-right text-sm focus:border-primary focus:outline-none"
+        className="num w-24 rounded-md border border-border bg-surface-2 px-2 py-1 text-right text-sm field-focus"
       />
       <button type="submit" disabled={num === null || num <= 0 || set.isPending} className="rounded-md px-2 py-1 text-xs font-semibold text-primary hover:bg-surface-2 disabled:opacity-50">
         {c.save}
@@ -680,7 +686,7 @@ function AddCoinDialog({ coins, onClose }: { coins: Coin[]; onClose: () => void 
               setQuery(e.target.value)
             }}
             placeholder={d.search}
-            className="rounded-lg border border-border bg-surface-2 px-3 py-2 focus:border-primary focus:outline-none"
+            className="rounded-lg border border-border bg-surface-2 px-3 py-2 field-focus"
           />
         </label>
         {!picked && (
@@ -700,11 +706,11 @@ function AddCoinDialog({ coins, onClose }: { coins: Coin[]; onClose: () => void 
         )}
         <label className="flex flex-col gap-1.5 text-sm">
           <span className="text-muted">{d.amount}</span>
-          <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="num rounded-lg border border-border bg-surface-2 px-3 py-2 focus:border-primary focus:outline-none" />
+          <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="num rounded-lg border border-border bg-surface-2 px-3 py-2 field-focus" />
         </label>
         <label className="flex flex-col gap-1.5 text-sm">
           <span className="text-muted">{d.note}</span>
-          <input maxLength={100} value={note} onChange={(e) => setNote(e.target.value)} placeholder={d.notePlaceholder} className="rounded-lg border border-border bg-surface-2 px-3 py-2 focus:border-primary focus:outline-none" />
+          <input maxLength={100} value={note} onChange={(e) => setNote(e.target.value)} placeholder={d.notePlaceholder} className="rounded-lg border border-border bg-surface-2 px-3 py-2 field-focus" />
         </label>
         {add.error && <p className="text-sm text-down">{dbErrorMessage(add.error, t)}</p>}
         <div className="flex justify-end gap-2">

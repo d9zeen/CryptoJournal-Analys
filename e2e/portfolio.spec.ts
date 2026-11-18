@@ -73,6 +73,22 @@ test('портфель: балансы Bybit приходят сами, икон
   await expect(page.locator('[data-portfolio-chart] .recharts-area')).toBeVisible()
   await expect(page.locator('[data-portfolio-alloc]')).toContainText('BTC')
   await expect(page.locator('[data-portfolio-alloc]')).toContainText('Хуже всех за 24 ч')
+  // подписи оси дат не повторяются (ось — по номеру точки, раньше выходило «12.11, 12.11»)
+  const tickText = page.locator('[data-portfolio-chart] .recharts-xAxis-tick-labels text')
+  await expect.poll(() => tickText.count()).toBeGreaterThan(1)
+  const ticks = await tickText.allTextContents()
+  expect(new Set(ticks).size).toBe(ticks.length)
+  // период графика — группа вариантов: Tab заходит на выбранный, стрелки переключают
+  const ranges = page.getByRole('radiogroup', { name: 'Период графика' })
+  const picked = ranges.locator('[aria-checked="true"]')
+  const start = await picked.textContent()
+  await picked.focus()
+  await page.keyboard.press('ArrowRight')
+  await expect(picked).not.toHaveText(start ?? '')
+  await expect(picked).toBeFocused()
+  await page.keyboard.press('ArrowLeft')
+  await expect(picked).toHaveText(start ?? '')
+  await expect(ranges.locator('[tabindex="0"]')).toHaveCount(1)
 
   // средняя цена BTC — из истории покупок: 0,25 по 80 000 → прибыль +5 000 $
   const btcAvg = table.locator('[data-coin="BTC"] [data-avg-source]')
