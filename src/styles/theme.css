@@ -50,6 +50,18 @@
   --color-warning: #f4b64a;
   /* Текст и значки на заливке цветом прибыли (кнопка «Сохранено»): profit светлый — нужен тёмный, контраст ≥ 4.5:1 */
   --color-on-profit: #04241a;
+  /* Доли портфеля (полоса «Из чего состоит», 18.11.2026): один фиолетовый, от самой большой доли к меньшей — 4 шага + «Другое» серым.
+     Проверено скиллом dataviz (validate_palette --ordinal) на обеих поверхностях; ink — цвет подписи процента на полосе (≥ 4.5:1) */
+  --color-alloc-1: #8d78ff;
+  --color-alloc-2: #7766d3;
+  --color-alloc-3: #6357ac;
+  --color-alloc-4: #524889;
+  --color-alloc-other: #4a4c53;
+  --color-alloc-ink-1: #17181b;
+  --color-alloc-ink-2: #ffffff;
+  --color-alloc-ink-3: #ffffff;
+  --color-alloc-ink-4: #ffffff;
+  --color-alloc-ink-other: #ffffff;
 
   /*
    * Подсветка под курсором (№3) и блик наклона (№2): одно правило CSS на обе темы (.spot-frame, .spot-card::before, .tilt-sheen ниже),
@@ -188,6 +200,16 @@
   --color-loss: #dc2f4a;
   --color-warning: #b0700a;
   --color-on-profit: #03170e;
+  --color-alloc-1: #4d3bb4;
+  --color-alloc-2: #5b45e6;
+  --color-alloc-3: #8d7de7;
+  --color-alloc-4: #ada0e8;
+  --color-alloc-other: #c4baa6;
+  --color-alloc-ink-1: #ffffff;
+  --color-alloc-ink-2: #ffffff;
+  --color-alloc-ink-3: #1f1b14;
+  --color-alloc-ink-4: #1f1b14;
+  --color-alloc-ink-other: #1f1b14;
 
   /* Подсветка и блик в светлой теме ярче: шире круг, плотнее фиолетовый, рамка светится дальше от курсора, блик — белый */
   --spot-ring-r: 260px;
@@ -680,6 +702,20 @@
 .eq-draw .recharts-reference-dot .recharts-label {
   animation: var(--animate-fade-in);
   animation-delay: 1.2s;
+}
+
+/* «Портфель» (18.11.2026): крупная цифра стоимости — пропорциональные цифры (моноширинные на 48px+ выглядят рыхло), плотнее трекинг.
+   Полоса долей: наведение на блок или строку легенды — остальные приглушаются (только opacity) */
+.hero-figure {
+  font-variant-numeric: proportional-nums;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+}
+.alloc-seg {
+  transition: opacity 160ms var(--ease-snap);
+}
+:is(.alloc-bar, .alloc-legend)[data-hover] .alloc-seg:not([data-on]) {
+  opacity: 0.35;
 }
 
 /* Галочка рисуется линией: stroke-dasharray / --len задаёт длину, .drawn — нарисована */

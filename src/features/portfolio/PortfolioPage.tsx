@@ -6,7 +6,7 @@
  * Сверху — стоимость, изменение за 24 ч, прибыль и вложено (по ценам входа); на xl рядом график стоимости и кольцо «Из чего состоит»;
  * ниже — таблица монет с иконками (на телефоне — карточки). Балансы бирж приходят сами (api.ts), монеты можно добавить руками.
  */
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { fmt, plural, useT } from '@/i18n'
 import { Button } from '@/components/ui/Button'
@@ -18,11 +18,12 @@ import { AnimatedNumber } from '@/components/AnimatedNumber'
 import { useUsage } from '@/features/settings/api'
 import { useMediaQuery } from '@/lib/useMediaQuery'
 import { exchangeName } from '@/lib/exchanges'
-import { formatDuration, formatNumber, formatPercent, formatPnl, formatUsd, formatUsdPrice, pnlClass } from '@/lib/format'
+import { formatDateTime, formatDuration, formatNumber, formatPercent, formatPnl, formatUsd, formatUsdPrice, pnlClass } from '@/lib/format'
 import { parseDecimal } from '@/lib/parse'
 import { dbErrorMessage } from '@/lib/errors'
 import {
   DUST_USD,
+  STABLES,
   allocation,
   costBasis,
   realizedTotal,
@@ -34,6 +35,7 @@ import {
   type Coin,
   type PortfolioRange,
   type PortfolioRow,
+  type SeriesPoint,
 } from '@/lib/calc/portfolio'
 import type { Connection } from '@/features/connections/api'
 import {
@@ -52,17 +54,12 @@ import {
 } from './api'
 import { CoinIcon } from './CoinIcon'
 import { ShareDialog } from './ShareDialog'
+import type { Scrub } from './PortfolioChart'
 import { radioKeys } from '@/lib/radioKeys'
 
 const PortfolioChart = lazy(() => import('./PortfolioChart').then((m) => ({ default: m.PortfolioChart })))
 
 const RANGES: PortfolioRange[] = ['24h', '7d', '1m', '3m', '1y', 'all']
-/**
- * Цвет доли в кольце — цвет самой монеты (из её логотипа: BTC оранжевый, USDT зелёный…, считает prices-worker).
- * Цвета нет — запасные в тон сайта; «Другое» — серый
- */
-const sliceColor = (s: { symbol: string | null; color: string | null }, i: number) => (s.symbol === null ? SLICE[5] : (s.color ?? SLICE[i % 5]))
-const SLICE = ['var(--color-primary)', 'var(--color-accent)', 'var(--color-muted)', 'color-mix(in srgb, var(--color-primary) 45%, var(--color-surface))', 'color-mix(in srgb, var(--color-accent) 40%, var(--color-surface))', 'var(--color-border)']
 
 export function PortfolioPage() {
   const t = useT()
@@ -171,57 +168,20 @@ export function PortfolioPage() {
       )}
       {coins.length === 0 && <p className="text-sm text-muted">{p.pricesPending}</p>}
 
-      <Kpis totals={totals} realized={fills.length ? realized : null} />
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <section style={{ '--i': 4 } as CSSProperties} className="rise flex min-w-0 flex-col rounded-lg border border-border bg-surface p-4 sm:p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold">{p.chart.title}</h2>
-            <div role="radiogroup" aria-label={p.chart.rangesLabel} onKeyDown={radioKeys} className="flex rounded-full border border-border bg-surface-2/60 p-0.5">
-              {RANGES.map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  role="radio"
-                  aria-checked={range === r}
-                  tabIndex={range === r ? 0 : -1}
-                  onClick={() => setRange(r)}
-                  className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${range === r ? 'bg-surface text-text shadow-sm' : 'text-muted hover:text-text'}`}
-                >
-                  {p.chart.ranges[r]}
-                </button>
-              ))}
-            </div>
-          </div>
-          {/* одна сплошная линия, как кривая капитала в «Статистике»; оценка до первого снимка — подписью, без пунктира */}
-          {hasEstimate && (
-            <p data-chart-estimate className="mt-2 text-xs text-muted">
-              {p.chart.estimateNote}
-            </p>
-          )}
-          {/* график занимает всю высоту карточки (на xl — вровень с «Из чего состоит»), не ниже 260px */}
-          <div data-portfolio-chart className="relative mt-2 min-h-[260px] flex-1">
-            <div className="absolute inset-0">
-              {series.length >= 2 ? (
-                <Suspense fallback={<Skeleton className="h-full" />}>
-                  <PortfolioChart points={series} short={range === '24h'} drawKey={range} />
-                </Suspense>
-              ) : (
-                <p className="grid h-full place-items-center px-6 text-center text-sm text-muted">{p.chart.empty}</p>
-              )}
-            </div>
-          </div>
-        </section>
-
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
+        <ValueCard totals={totals} realized={fills.length ? realized : null} series={series} range={range} onRange={setRange} hasEstimate={hasEstimate} filtered={source !== null} />
         <Allocation rows={rows} />
       </div>
 
-      <section style={{ '--i': 6 } as CSSProperties} className="rise min-w-0 rounded-lg border border-border bg-surface p-4 sm:p-5">
+      <section style={{ '--i': 2 } as CSSProperties} className="rise min-w-0 rounded-lg border border-border bg-surface p-4 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-sm font-semibold">{p.table.title}</h2>
           <label className="flex cursor-pointer items-center gap-2 text-sm text-muted">
             <input type="checkbox" role="switch" checked={hideDust} onChange={(e) => setHideDust(e.target.checked)} className="peer sr-only" />
-            <span aria-hidden className="relative h-5 w-9 rounded-full bg-surface-2 transition-colors peer-checked:bg-primary peer-focus-visible:outline-2 peer-focus-visible:outline-primary after:absolute after:top-0.5 after:left-0.5 after:size-4 after:rounded-full after:bg-surface after:transition-transform peer-checked:after:translate-x-4" />
+            <span
+              aria-hidden
+              className="relative h-5 w-9 rounded-full bg-surface-2 transition-colors peer-checked:bg-primary peer-focus-visible:outline-2 peer-focus-visible:outline-primary after:absolute after:top-0.5 after:left-0.5 after:size-4 after:rounded-full after:bg-surface after:transition-transform peer-checked:after:translate-x-4"
+            />
             {p.table.hideDust}
           </label>
         </div>
@@ -234,136 +194,309 @@ export function PortfolioPage() {
   )
 }
 
-function Kpis({ totals, realized }: { totals: ReturnType<typeof portfolioTotals>; realized: number | null }) {
+/**
+ * Стоимость и график одной карточкой (18.11.2026, скиллы impeccable + dataviz; образцы 21st.dev balance-chart, portfolio-chart):
+ * одна крупная цифра, рядом три спокойных показателя строкой (не четыре одинаковые плитки), ниже — график.
+ * Ведёшь мышью по графику — крупная цифра показывает стоимость в этой точке, под ней дата и изменение с начала периода;
+ * убрал мышь — цифра возвращается к «сейчас».
+ */
+function ValueCard({
+  totals,
+  realized,
+  series,
+  range,
+  onRange,
+  hasEstimate,
+  filtered,
+}: {
+  totals: ReturnType<typeof portfolioTotals>
+  realized: number | null
+  series: SeriesPoint[]
+  range: PortfolioRange
+  onRange: (r: PortfolioRange) => void
+  hasEstimate: boolean
+  /** выбран один источник: цифры — по нему, а график — весь портфель (снимки пишутся целиком) */
+  filtered: boolean
+}) {
   const t = useT()
-  const k = t.portfolio.kpi
-  const card = 'rise flex min-w-0 flex-col gap-1 rounded-lg border bg-surface p-4'
+  const p = t.portfolio
+  const k = p.kpi
+  const [scrub, setScrub] = useState<Scrub | null>(null)
+  // только мышь: у пальца нет «ушёл с графика», цифра застряла бы на старой точке — на сенсорном экране обычная подсказка у точки
+  const mouse = useMediaQuery('(hover: hover) and (pointer: fine)')
+  const delta = scrub ? scrub.v - scrub.start : 0
   return (
-    <div data-portfolio-kpis className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <div style={{ '--i': 0 } as CSSProperties} className={`${card} border-primary`}>
-        <span className="text-xs text-muted">{k.value}</span>
-        <AnimatedNumber value={totals.value} format={formatUsd} className="num text-2xl font-semibold sm:text-3xl" />
-        <span className="text-xs text-muted">
-          {plural(totals.priced, k.coins)}
-          {totals.unpriced > 0 && ` · ${fmt(k.noPrice, { n: totals.unpriced })}`}
-        </span>
+    <section data-portfolio-value style={{ '--i': 0 } as CSSProperties} className="rise flex min-w-0 flex-col rounded-lg border border-border bg-surface p-4 sm:p-6">
+      <div className="flex flex-wrap items-end gap-x-10 gap-y-5">
+        <div className="min-w-0">
+          <h2 className="text-sm text-muted">{scrub ? (filtered ? p.chart.whole : p.chart.title) : k.value}</h2>
+          <p data-hero className="hero-figure mt-1 text-4xl font-semibold sm:text-5xl 2xl:text-6xl">
+            {/* счётчик не размонтируется на время наведения — иначе после него цифра заново набегала бы с нуля */}
+            <span className={scrub ? 'hidden' : undefined}>
+              <AnimatedNumber value={totals.value} format={formatUsd} />
+            </span>
+            {scrub && <span data-hero-scrub>{formatUsd(scrub.v)}</span>}
+          </p>
+          <p data-hero-sub className="mt-2 text-sm text-muted">
+            {plural(totals.priced, k.coins)}
+            {totals.unpriced > 0 && ` · ${fmt(k.noPrice, { n: totals.unpriced })}`}
+          </p>
+        </div>
+
+        {/* три показателя строкой: за 24 ч, прибыль по цене входа, зафиксировано продажами */}
+        <dl data-portfolio-kpis className="grid w-full grid-cols-2 gap-x-6 gap-y-4 sm:flex sm:w-auto sm:min-w-[28rem] sm:flex-1 sm:flex-wrap sm:gap-x-8 sm:pb-1 xl:justify-end">
+          <Stat label={k.change} value={formatPnl(totals.change24Usd)} tone={pnlClass(totals.change24Usd)}>
+            <span className={`num ${pnlClass(totals.change24)}`}>{totals.change24 === null ? '—' : signedPct(totals.change24)}</span>
+          </Stat>
+          <Stat label={k.pnl} value={totals.withCost ? formatPnl(totals.pnl) : '—'} tone={totals.withCost ? pnlClass(totals.pnl) : 'text-muted'}>
+            {totals.withCost ? (
+              <>
+                {totals.pnlPct !== null && <span className={`num ${pnlClass(totals.pnlPct)}`}>{signedPct(totals.pnlPct)} · </span>}
+                <span className="whitespace-nowrap">{fmt(k.investedShort, { v: formatUsd(totals.invested) })}</span>
+                {totals.withCost < totals.priced && (
+                  <span className="block whitespace-nowrap">
+                    {fmt(k.pnlHint, {
+                      n: totals.withCost,
+                      total: totals.priced,
+                    })}
+                  </span>
+                )}
+              </>
+            ) : (
+              k.pnlNone
+            )}
+          </Stat>
+          <Stat data-kpi-realized label={k.realized} value={realized === null ? '—' : formatPnl(realized)} tone={realized === null ? 'text-muted' : pnlClass(realized)}>
+            {realized === null ? k.realizedNone : k.realizedHint}
+          </Stat>
+        </dl>
       </div>
-      <div style={{ '--i': 1 } as CSSProperties} className={`${card} border-border`}>
-        <span className="text-xs text-muted">{k.change}</span>
-        <span className={`num text-2xl font-semibold ${pnlClass(totals.change24Usd)}`}>{formatPnl(totals.change24Usd)}</span>
-        <span className={`num text-xs ${pnlClass(totals.change24)}`}>{totals.change24 === null ? '—' : signedPct(totals.change24)}</span>
-      </div>
-      <div style={{ '--i': 2 } as CSSProperties} className={`${card} border-border`}>
-        <span className="text-xs text-muted">{k.pnl}</span>
-        <span className={`num text-2xl font-semibold ${totals.withCost ? pnlClass(totals.pnl) : 'text-muted'}`}>{totals.withCost ? formatPnl(totals.pnl) : '—'}</span>
-        <span className="text-xs text-muted">
-          {totals.withCost ? (
+
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+        {/* до первых снимков начало графика — оценка: подпись слева, периоды справа */}
+        {/* строка над графиком на всю ширину: при наведении — дата точки и изменение с начала периода (крупная цифра — сама стоимость);
+            без наведения — пояснение про оценку или подсказка «веди по графику» (на сенсорном экране её нет) */}
+        <p
+          data-chart-estimate={hasEstimate && !scrub && !filtered ? '' : undefined}
+          data-scrub-line={scrub ? '' : undefined}
+          className={`min-h-4 min-w-0 flex-1 text-xs text-muted ${hasEstimate || scrub || filtered ? '' : 'hidden pointer-fine:block'}`}
+        >
+          {scrub ? (
             <>
-              <span className={`num ${pnlClass(totals.pnlPct)}`}>{totals.pnlPct === null ? '' : `${signedPct(totals.pnlPct)} · `}</span>
-              {fmt(k.investedShort, { v: formatUsd(totals.invested) })} · {fmt(k.pnlHint, { n: totals.withCost, total: totals.priced })}
+              <span className="num text-text">{formatDateTime(new Date(scrub.t).toISOString())}</span>
+              {' · '}
+              <span className={`num whitespace-nowrap ${pnlClass(delta)}`}>
+                {formatPnl(delta)}
+                {scrub.start > 0 && ` (${signedPct(delta / scrub.start)})`}
+              </span>{' '}
+              {p.chart.sinceStart}
+              {scrub.est && ` · ${p.chart.estimateShort}`}
+              {scrub.btc !== null && (
+                <span className="whitespace-nowrap">
+                  {' · '}
+                  {p.chart.btc}: <span className="num">{formatUsd(scrub.btc)}</span>
+                </span>
+              )}
             </>
+          ) : filtered ? (
+            <span data-chart-whole>{p.chart.wholeNote}</span>
+          ) : hasEstimate ? (
+            p.chart.estimateNote
           ) : (
-            k.pnlNone
+            p.chart.scrubHint
           )}
-        </span>
+        </p>
+        <div role="radiogroup" aria-label={p.chart.rangesLabel} onKeyDown={radioKeys} className="flex rounded-full border border-border bg-surface-2/60 p-0.5">
+          {RANGES.map((r) => (
+            <button
+              key={r}
+              type="button"
+              role="radio"
+              aria-checked={range === r}
+              tabIndex={range === r ? 0 : -1}
+              onClick={() => onRange(r)}
+              className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${range === r ? 'bg-surface text-text shadow-sm' : 'text-muted hover:text-text'}`}
+            >
+              {p.chart.ranges[r]}
+            </button>
+          ))}
+        </div>
       </div>
-      {/* этап 2: прибыль, зафиксированная продажами (из истории спотовых сделок на биржах) */}
-      <div data-kpi-realized style={{ '--i': 3 } as CSSProperties} className={`${card} border-border`}>
-        <span className="text-xs text-muted">{k.realized}</span>
-        <span className={`num text-2xl font-semibold ${realized === null ? 'text-muted' : pnlClass(realized)}`}>{realized === null ? '—' : formatPnl(realized)}</span>
-        <span className="text-xs text-muted">{realized === null ? k.realizedNone : k.realizedHint}</span>
+      {/* график занимает всю оставшуюся высоту карточки (на xl — вровень с «Из чего состоит»), не ниже 260px */}
+      <div data-portfolio-chart className="relative mt-3 min-h-[260px] flex-1">
+        <div className="absolute inset-0">
+          {series.length >= 2 ? (
+            <Suspense fallback={<Skeleton className="h-full" />}>
+              <PortfolioChart points={series} short={range === '24h'} drawKey={range} onScrub={mouse ? setScrub : undefined} />
+            </Suspense>
+          ) : (
+            <p className="grid h-full place-items-center px-6 text-center text-sm text-muted">{p.chart.empty}</p>
+          )}
+        </div>
       </div>
+    </section>
+  )
+}
+
+function Stat({
+  label,
+  value,
+  tone,
+  children,
+  ...rest
+}: { label: string; value: string; tone: string; children: ReactNode } & {
+  'data-kpi-realized'?: boolean
+}) {
+  return (
+    <div {...rest} className="flex min-w-0 flex-col gap-0.5 sm:max-w-64">
+      <dt className="text-xs text-muted">{label}</dt>
+      <dd className={`num text-lg font-semibold ${tone}`}>{value}</dd>
+      <dd className="text-xs text-muted">{children}</dd>
     </div>
   )
 }
 
 const signedPct = (v: number) => (v > 0 ? '+' : v < 0 ? '−' : '') + formatPercent(Math.abs(v), 2)
 
-/** Кольцо долей + легенда + лучшая / худшая монета за 24 ч (образец — 21st.dev sectors-donut) */
-export function Allocation({ rows }: { rows: PortfolioRow[] }) {
+/** Доля печатается на самой полосе, если блок шире ~10 %; уже — доля пишется в легенде рядом с названием */
+const LABEL_MIN = 0.1
+
+/**
+ * «Из чего состоит» (18.11.2026, скилл dataviz: одно целое из ≤ 5 частей читается полосой, а не кольцом):
+ * высокая полоса 28px — доли блоками от большей к меньшей, проценты прямо на блоках; цвет — шаги одного фиолетового
+ * (--color-alloc-1…4, «Другое» серым; проверено validate_palette на обеих темах). Ниже — легенда с иконками и суммами,
+ * наведение на строку или блок приглушает остальные. Полоса открывается той же «шторкой», что и график.
+ * amounts = false — портфель по ссылке со скрытыми суммами: в легенде только названия.
+ */
+export function Allocation({ rows, amounts = true }: { rows: PortfolioRow[]; amounts?: boolean }) {
   const t = useT()
   const a = t.portfolio.alloc
-  const parts = allocation(rows, 5)
+  // доли меньше 0,05 % (мелочь вроде SHIB на 0,0001 $, если её показали) — не блоком в полосу: это пустая щель «0 %»
+  const parts = allocation(rows, 4).filter((s, _, all) => all.length === 1 || s.share >= 0.0005)
   const m = movers(rows)
-  const R = 54
-  const C = 2 * Math.PI * R
-  let off = 0
+  const [hover, setHover] = useState<string | null>(null)
+  const key = (s: { symbol: string | null }) => s.symbol ?? 'other'
+  const tone = (s: { symbol: string | null }, i: number) => (s.symbol === null ? 'other' : String(i + 1))
+  const rest = rows.filter((r) => r.value !== null && r.value > 0).length - (parts.length - (parts.some((s) => s.symbol === null) ? 1 : 0))
+  const name = (s: { symbol: string | null }) => (s.symbol === null ? a.other : s.symbol === 'POLYMARKET' ? t.portfolio.polymarket : s.symbol)
   return (
-    <section data-portfolio-alloc style={{ '--i': 5 } as CSSProperties} className="rise flex min-w-0 flex-col gap-4 rounded-lg border border-border bg-surface p-4 sm:p-5">
+    <section data-portfolio-alloc style={{ '--i': 1 } as CSSProperties} className="rise flex min-w-0 flex-col gap-4 rounded-lg border border-border bg-surface p-4 sm:p-6">
       <h2 className="text-sm font-semibold">{a.title}</h2>
-      <div className="flex flex-col items-center gap-5 sm:flex-row">
-        <svg viewBox="0 0 136 136" className="size-36 shrink-0" aria-hidden>
-          <circle cx="68" cy="68" r={R} fill="none" stroke="var(--color-surface-2)" strokeWidth="12" />
-          {parts.map((s, i) => {
-            const len = C * s.share
-            const gap = parts.length > 1 ? Math.min(3, len / 3) : 0
-            const el = (
-              <circle
-                key={s.symbol ?? 'other'}
-                cx="68"
-                cy="68"
-                r={R}
-                fill="none"
-                stroke={sliceColor(s, i)}
-                strokeWidth="12"
-                strokeDasharray={`${Math.max(0, len - gap)} ${C}`}
-                strokeDashoffset={-off}
-                transform="rotate(-90 68 68)"
-              />
-            )
-            off += len
-            return el
-          })}
-        </svg>
-        <ul className="grid w-full min-w-0 gap-2 text-sm">
-          {parts.map((s, i) => (
-            <li key={s.symbol ?? 'other'} className="grid grid-cols-[10px_minmax(0,1fr)_auto] items-center gap-2">
-              <i aria-hidden className="size-2.5 rounded-[3px]" style={{ background: sliceColor(s, i) }} />
-              <span className="truncate">{s.symbol ?? a.other}</span>
-              <span className="num text-muted">{formatPercent(s.share)}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
+      {parts.length === 0 ? (
+        <p className="text-sm text-muted">{a.empty}</p>
+      ) : (
+        <>
+          <div className="relative">
+            <div
+              role="img"
+              aria-label={fmt(a.barLabel, {
+                list: parts.map((s) => `${name(s)} ${formatPercent(s.share)}`).join(', '),
+              })}
+              data-alloc-bar
+              data-hover={hover ?? undefined}
+              className="alloc-bar flex h-7 gap-0.5"
+            >
+              {parts.map((s, i) => (
+                <div
+                  key={key(s)}
+                  data-seg={key(s)}
+                  data-on={hover === key(s) ? '' : undefined}
+                  onMouseEnter={() => setHover(key(s))}
+                  onMouseLeave={() => setHover(null)}
+                  title={`${name(s)} · ${formatPercent(s.share)}`}
+                  style={{
+                    flexGrow: s.share,
+                    background: `var(--color-alloc-${tone(s, i)})`,
+                    color: `var(--color-alloc-ink-${tone(s, i)})`,
+                  }}
+                  className="alloc-seg flex min-w-1 basis-0 items-center overflow-hidden rounded-[4px] px-2"
+                >
+                  {s.share >= LABEL_MIN && <span className="num text-xs font-semibold whitespace-nowrap">{formatPercent(s.share)}</span>}
+                </div>
+              ))}
+            </div>
+            <div aria-hidden className="pointer-events-none absolute -inset-px overflow-hidden">
+              <div className="eq-curtain size-full bg-surface" />
+            </div>
+          </div>
+
+          <ul className="alloc-legend flex flex-col" data-hover={hover ?? undefined}>
+            {parts.map((s, i) => {
+              const row = rows.find((r) => r.symbol === s.symbol)
+              return (
+                <li
+                  key={key(s)}
+                  data-seg={key(s)}
+                  data-on={hover === key(s) ? '' : undefined}
+                  onMouseEnter={() => setHover(key(s))}
+                  onMouseLeave={() => setHover(null)}
+                  className="alloc-seg grid grid-cols-[10px_24px_minmax(0,1fr)_auto] items-center gap-x-2.5 border-b border-border py-2 text-sm last:border-0"
+                >
+                  <i aria-hidden className="size-2.5 rounded-[3px]" style={{ background: `var(--color-alloc-${tone(s, i)})` }} />
+                  {s.symbol === null ? <span aria-hidden className="size-6 rounded-full bg-surface-2" /> : <CoinIcon symbol={s.symbol} icon={row?.coin?.icon} size={24} />}
+                  <span className="flex min-w-0 items-baseline gap-2">
+                    <b className="truncate font-semibold">{name(s)}</b>
+                    <span className="truncate text-xs text-muted">{s.symbol === null ? plural(rest, t.portfolio.kpi.coins) : (row?.coin?.name ?? '')}</span>
+                  </span>
+                  <span className="num text-right whitespace-nowrap">
+                    {amounts && formatUsd(s.value)}
+                    {s.share < LABEL_MIN && <span className="ml-2 text-xs text-muted">{formatPercent(s.share)}</span>}
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+        </>
+      )}
+
       {(m.best || m.worst) && (
-        <div className="mt-auto grid grid-cols-2 gap-2">
+        <dl className="mt-auto flex flex-col gap-2 border-t border-border pt-4 text-sm">
           {[
             { row: m.best, label: a.best },
             { row: m.worst, label: a.worst },
           ].map(({ row, label }) => (
-            <div key={label} className="flex min-w-0 flex-col gap-1 rounded-lg bg-surface-2/60 px-3 py-2.5">
-              <span className="text-xs text-muted">{label}</span>
-              {row ? (
-                <span className="flex min-w-0 items-center gap-2">
-                  <CoinIcon symbol={row.symbol} icon={row.coin?.icon} size={20} />
-                  <b className="truncate text-sm">{row.symbol}</b>
-                  <span className={`num ml-auto text-sm ${pnlClass(row.change24)}`}>{signedPct((row.change24 ?? 0) / 100)}</span>
-                </span>
-              ) : (
-                <span className="text-sm text-muted">—</span>
-              )}
+            <div key={label} className="flex min-w-0 items-center justify-between gap-3">
+              <dt className="text-muted">{label}</dt>
+              <dd className="flex min-w-0 items-center gap-2">
+                {row ? (
+                  <>
+                    <CoinIcon symbol={row.symbol} icon={row.coin?.icon} size={20} />
+                    <b className="truncate">{row.symbol}</b>
+                    <span className={`num ${pnlClass(row.change24)}`}>{signedPct((row.change24 ?? 0) / 100)}</span>
+                  </>
+                ) : (
+                  <span className="text-muted">—</span>
+                )}
+              </dd>
             </div>
           ))}
-        </div>
+        </dl>
       )}
     </section>
   )
 }
 
-/** Мини-график цены за 7 дней (из coins.spark), цвет — по итогу недели */
+/**
+ * Мини-график цены за 7 дней (из coins.spark): линия спокойным серым, итог недели — точкой на конце цветом плюса / минуса.
+ * Стейблкоин — ровная линия: его копеечные колебания — шум, а не движение цены
+ */
 export function Spark({ coin }: { coin: Coin | null }) {
   const pts = coin?.spark ?? []
   if (pts.length < 2) return <span className="text-muted">—</span>
+  const stable = STABLES.has(coin?.symbol ?? '')
   const lo = Math.min(...pts)
   const hi = Math.max(...pts)
-  // размах не меньше 2 % цены: у стейблкоина копеечные колебания не превращаются в «пилу»
+  // размах не меньше 2 % цены: мелкое движение не превращается в «пилу»
   const span = Math.max(hi - lo, ((hi + lo) / 2) * 0.02) || 1
   const base = lo - (span - (hi - lo)) / 2
-  const d = pts.map((v, i) => `${((i / (pts.length - 1)) * 72).toFixed(1)},${(22 - ((v - base) / span) * 20).toFixed(1)}`).join(' ')
+  const y = (v: number) => (stable ? 12 : 21 - ((v - base) / span) * 18)
+  const xy = pts.map((v, i) => [(i / (pts.length - 1)) * 66, y(v)] as const)
+  const [ex, ey] = xy[xy.length - 1]
   const up = pts[pts.length - 1] >= pts[0]
   return (
-    <svg viewBox="0 0 72 24" className="inline-block h-6 w-[72px]" aria-hidden>
-      <polyline fill="none" stroke={up ? 'var(--color-up)' : 'var(--color-down)'} strokeWidth="1.6" strokeLinejoin="round" points={d} />
+    <svg viewBox="0 0 72 24" data-spark={stable ? 'flat' : up ? 'up' : 'down'} className="inline-block h-6 w-[72px] overflow-visible" aria-hidden>
+      <polyline fill="none" stroke="var(--color-muted)" strokeOpacity={0.55} strokeWidth="1.5" strokeLinejoin="round" points={xy.map(([x, v]) => `${x.toFixed(1)},${v.toFixed(1)}`).join(' ')} />
+      <circle cx={ex} cy={ey} r={2.75} fill={stable ? 'var(--color-muted)' : up ? 'var(--color-up)' : 'var(--color-down)'} />
     </svg>
   )
 }
@@ -487,22 +620,30 @@ function CoinTable({ rows, conns, costs }: { rows: PortfolioRow[]; conns: Connec
                   <div className="num text-xs text-muted">{r.symbol === 'POLYMARKET' ? '' : `${formatNumber(r.amount, 8)} ${r.symbol}`}</div>
                 </div>
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 pl-11 text-xs">
-                <span className="num text-muted">
-                  {formatUsdPrice(r.price)} <span className={pnlClass(r.change24)}>{r.change24 === null ? '' : signedPct(r.change24 / 100)}</span>
-                </span>
-                <span className="flex items-center gap-1 text-muted">
-                  {c.avg}: {avgCell(r)}
-                </span>
-                {r.pnl !== null && (
-                  <span className={`num ${pnlClass(r.pnl)}`}>
-                    {formatPnl(r.pnl)} {r.pnlPct !== null && `(${signedPct(r.pnlPct)})`}
-                  </span>
-                )}
-                <span className="flex items-center gap-1">
-                  <Sources row={r} conns={conns} />
-                  {removeBtn(r)}
-                </span>
+              {/* три колонки: цена за 24 ч, средняя цена входа, прибыль — подписи над значениями, ровно друг под другом у всех монет */}
+              <dl className="grid grid-cols-3 gap-x-3 pl-11 text-xs">
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <dt className="text-muted">{c.price}</dt>
+                  <dd className="num">
+                    {r.price === null ? <span className="text-muted">{r.symbol === 'POLYMARKET' ? '—' : c.noPrice}</span> : formatUsdPrice(r.price)}
+                    {r.change24 !== null && <span className={`block ${pnlClass(r.change24)}`}>{signedPct(r.change24 / 100)}</span>}
+                  </dd>
+                </div>
+                <div className="flex min-w-0 flex-col items-start gap-0.5">
+                  <dt className="text-muted">{c.avg}</dt>
+                  <dd className="-ml-1.5 [&>button]:items-start">{avgCell(r)}</dd>
+                </div>
+                <div className="flex min-w-0 flex-col items-end gap-0.5 text-right">
+                  <dt className="text-muted">{c.pnl}</dt>
+                  <dd className={`num ${r.pnl === null ? 'text-muted' : pnlClass(r.pnl)}`}>
+                    {r.pnl === null ? '—' : formatPnl(r.pnl)}
+                    {r.pnlPct !== null && <span className="block">{signedPct(r.pnlPct)}</span>}
+                  </dd>
+                </div>
+              </dl>
+              <div className="flex items-center justify-end gap-1 pl-11">
+                <Sources row={r} conns={conns} />
+                {removeBtn(r)}
               </div>
             </li>
           ))}

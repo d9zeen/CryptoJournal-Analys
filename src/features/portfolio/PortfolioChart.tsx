@@ -19,10 +19,25 @@ const axisProps = { tick: { fill: 'var(--color-muted)', fontSize: 11 }, tickLine
 const signedPct = (v: number, digits = 1) => (v > 0 ? '+' : v < 0 ? '−' : '') + formatPercent(Math.abs(v), digits)
 
 type Row = { i: number; t: number; v: number; est: boolean; btc: number | null }
+/** Точка под курсором — для большой цифры над графиком (страница «Портфель»): start — значение в начале периода */
+export type Scrub = { t: number; v: number; est: boolean; btc: number | null; start: number }
 type TipProps = { active?: boolean; payload?: ReadonlyArray<{ payload?: Row }> }
 
 /** pct — значения в процентах к первой точке (100 = начало): портфель по ссылке со скрытыми суммами */
-export function PortfolioChart({ points, short, pct = false, drawKey }: { points: SeriesPoint[]; short: boolean; pct?: boolean; drawKey?: unknown }) {
+export function PortfolioChart({
+  points,
+  short,
+  pct = false,
+  drawKey,
+  onScrub,
+}: {
+  points: SeriesPoint[]
+  short: boolean
+  pct?: boolean
+  drawKey?: unknown
+  /** есть — подсказки нет: значение под курсором показывает сама страница (крупно над графиком) */
+  onScrub?: (s: Scrub | null) => void
+}) {
   const t = useT()
   const p = t.portfolio.chart
   const id = useId().replace(/:/g, '')
@@ -61,7 +76,16 @@ export function PortfolioChart({ points, short, pct = false, drawKey }: { points
   return (
     <div key={String(drawKey)} className="eq-draw relative h-full">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 22, right, bottom: 0, left: 0 }}>
+        <AreaChart
+          data={data}
+          margin={{ top: 22, right, bottom: 0, left: 0 }}
+          onMouseMove={(st) => {
+            if (!onScrub) return
+            const d = data[Number(st?.activeTooltipIndex)]
+            onScrub(d ? { t: d.t, v: d.v, est: d.est, btc: d.btc, start: data[0].v } : null)
+          }}
+          onMouseLeave={() => onScrub?.(null)}
+        >
           <defs>
             <linearGradient id={`${id}f`} x1="0" y1="0" x2="0" y2="1">
               <stop offset={0} stopColor={color} stopOpacity={0.26} />
@@ -75,7 +99,7 @@ export function PortfolioChart({ points, short, pct = false, drawKey }: { points
             cursor={{ stroke: 'var(--color-muted)', strokeOpacity: 0.4 }}
             content={(props) => {
               const pt = (props as TipProps).active ? (props as TipProps).payload?.[0]?.payload : undefined
-              if (!pt) return null
+              if (!pt || onScrub) return null
               return (
                 <div className="num rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs shadow-lg">
                   <div className="text-muted">{formatDateTime(new Date(pt.t).toISOString())}</div>
