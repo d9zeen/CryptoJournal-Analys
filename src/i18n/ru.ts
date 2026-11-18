@@ -975,7 +975,7 @@ export const ru = {
       value: 'Стоимость сейчас',
       change: 'За 24 часа',
       pnl: 'Прибыль',
-      pnlHint: 'по цене входа у {n} из {total}',
+      pnlHint: 'по цене входа у {n}\u00a0из\u00a0{total}',
       pnlNone: 'укажи цену входа в таблице',
       invested: 'Вложено',
       investedHint: 'по средним ценам входа',

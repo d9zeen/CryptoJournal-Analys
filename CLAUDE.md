@@ -38,11 +38,12 @@ Node 22 (см. `.node-version`).
 src/
   styles/theme.css     ВСЕ цвета, шрифты и анимации (Tailwind @theme), стиль «Аврора». Классы: bg-bg, bg-surface, bg-surface-2,
                        border-border, text-text, text-muted, text-primary (фиолет: кнопки), text-accent (мята: данные),
-                       text-profit, text-loss, font-display (заголовки), num (цифры моно), rise (появление, --i), card-lift.
+                       text-profit, text-loss, font-display (заголовки), num (цифры моно), rise (появление, --i), card-lift, field-focus (фокус своих <input>: рамка + кольцо, как у ui/Input).
                        Без пульсаций и кричащих градиентов. Разрешены только: мягкая подсветка под курсором (spotlight) и отблеск заготовок при загрузке (skeleton) — сайт не должен выглядеть «сгенерированным». Светлая тема — :root[data-theme='light'] в том же файле
   lib/theme.ts         светлая (по умолчанию) / тёмная тема (localStorage; до загрузки приложения — public/theme-init.js, без вспышки), useTheme / setTheme; кнопка — components/ThemeToggle.tsx
   lib/palette.ts       палитра прибыли / убытка (по умолчанию classic — зелёный / красный; classic, teal_salmon, sky_coral — всем, остальные 5 — Pro / Pro Plus, проверка и триггером 0015; выбор — полоска PaletteStrip под календарём и в «Настройки → Оформление», features/palette):
                        data-palette на <html>, цвета в theme.css; --color-up / --color-down = profit / loss
+  lib/radioKeys.ts     стрелки / Home / End в группе вариантов (role="radiogroup"): onKeyDown={radioKeys} на группе + tabIndex={выбран ? 0 : -1} у кнопок
   lib/motion.ts        хуки анимаций (раздел «Анимации» ниже): prefersReducedMotion, useCountUp, useShown, useTilt, useSpotlight, useShake, pause
   i18n/ru.ts, en.ts    ВСЕ тексты интерфейса на двух языках (en.ts типизирован Dict из ru.ts — ключи обязаны совпадать). Новый язык = ещё один файл + LANGS в lib/locale.ts
   lib/locale.ts        язык: английский ПО УМОЛЧАНИЮ, русский — по выбору; localStorage cj-lang (до загрузки — public/theme-init.js ставит <html lang>), getLang / setLang / intlLocale().
@@ -185,6 +186,7 @@ e2e/                   сквозные тесты: вход, 2FA, дашбор�
 docs/PLAN.md           решения, формулы, схема БД, этапы
 docs/ADMIN.md          SQL для владельца: выдать/снять Pro, список пользователей, сброс лимита
 docs/SECURITY.md       вся защита (база, сайт, сборка) + что владелец включает руками
+.claude/skills/        скиллы проекта (есть в каждой сессии, в т.ч. облачной): impeccable (интерфейс: аудит, полировка, анимации, адаптив), design-taste-frontend (главная / лендинг); источники, версии, лицензии — .claude/skills/README.md
 ```
 
 ## Правила
@@ -316,3 +318,4 @@ docs/SECURITY.md       вся защита (база, сайт, сборка) + 
 Цвета в графиках — `var(--color-…)` из theme.css.
 Шрифты — npm `@fontsource-variable/*` (файлы в сборке); `assetsInlineLimit` в vite.config.ts не даёт встраивать их как data: (CSP).
 Новые цвета — в ОБЕ темы theme.css (тёмная в @theme, светлая в :root[data-theme='light']).
+Цвета сайта выбраны владельцем и НЕ меняются (18.11.2026): прибыль / убыток всех палитр в светлой теме и фиолетовая кнопка с белым текстом в тёмной — так и остаются, хотя контраст ниже 4,5 по WCAG. В аудитах это не предлагать.
