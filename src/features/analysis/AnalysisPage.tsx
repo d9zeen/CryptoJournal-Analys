@@ -276,13 +276,13 @@ export function AnalysisPage() {
                 role="tab"
                 aria-selected={tab === k}
                 onClick={() => setTab(k)}
-                className={`relative flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors sm:px-4 ${
+                className={`relative flex shrink-0 items-center gap-1.5 rounded-full px-1.5 py-1.5 text-sm font-medium whitespace-nowrap transition-colors sm:px-4 ${
                   tab === k ? 'bg-surface-2 text-text' : 'text-muted hover:text-text'
                 }`}
               >
                 {tab === k && <span className="absolute -top-1 left-1/2 h-1 w-6 -translate-x-1/2 rounded-full bg-primary" aria-hidden />}
                 {t.analysis.tabs[k]}
-                {/* число групп — от 640px: на телефоне иначе четыре вкладки не помещаются */}
+                {/* число групп — от 640px; на телефоне отступы px-1.5 — все пять вкладок помещаются без прокрутки от 390px (уже — полоса листается, выбранная видна) */}
                 <span className={`num hidden rounded-full px-1.5 text-xs sm:inline ${tab === k ? 'bg-primary/15 text-primary' : 'bg-surface-2 text-muted'}`}>{tabCount[k]}</span>
               </button>
             ))}

@@ -1164,16 +1164,20 @@ test.describe('«Разбор»: вкладки, «Итого», сортиро�
     await expect(page).toHaveURL(/\/trades$/)
   })
 
-  test('вкладки — капсулой: только Сетапы, Ошибки, Пары, Эмоции; старые ссылки на «Время суток» и «Плечо» открывают Сетапы', async ({ page, db }) => {
+  test('вкладки — капсулой: Сетапы, Ошибки, Пары, Эмоции, Поведение; старые ссылки на «Время суток» и «Плечо» открывают Сетапы', async ({ page, db }) => {
     seed(db)
     await fakeSupabase(page, db)
     await page.goto('analysis')
     const tabs = page.getByRole('tab')
-    await expect(tabs).toHaveCount(4)
+    await expect(tabs).toHaveText([/Сетапы/, /Ошибки/, /Пары/, /Эмоции/, /Поведение/])
     // у вкладки — число групп: «Пары 2» (BTCUSDT, ETHUSDT)
     if ((page.viewportSize()?.width ?? 0) >= 640) await expect(page.getByRole('tab', { name: /Пары/ })).toContainText('2')
-    // все четыре помещаются без прокрутки (и на телефоне)
+    // все пять помещаются без прокрутки (и на телефоне, и на 390px — ширина проверки проекта)
     expect(await page.locator('[data-shot="analysis-tabs"]').evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true)
+    if ((page.viewportSize()?.width ?? 0) < 640) {
+      await page.setViewportSize({ width: 390, height: 800 })
+      expect(await page.locator('[data-shot="analysis-tabs"]').evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true)
+    }
     for (const old of ['time', 'leverage']) {
       await page.goto(`analysis?tab=${old}`)
       await expect(page.getByRole('tab', { name: /Сетапы/ })).toHaveAttribute('aria-selected', 'true')
