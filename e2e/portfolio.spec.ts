@@ -36,10 +36,14 @@ test('портфель: балансы Bybit приходят сами, икон
     p_connection: 'c1',
     p_items: expect.arrayContaining([
       { account: 'spot', symbol: 'BTC', amount: 0.25 },
-      { account: 'spot', symbol: 'USDT', amount: 1200.5 },
+      { account: 'fund', symbol: 'USDT', amount: 1200.5 },
       { account: 'fund', symbol: 'ETH', amount: 2 },
     ]),
   })
+  // только спот: 5 000 USDT единого счёта Bybit — маржа фьючерсов, их нет среди записанных балансов
+  expect((db.portfolioCalls?.find((c) => c.fn === 'replace_holdings')?.body.p_items as { account: string; symbol: string }[]).filter((x) => x.symbol === 'USDT')).toEqual([
+    { account: 'fund', symbol: 'USDT', amount: 1200.5 },
+  ])
   // снимок — после балансов и истории покупок
   await expect.poll(() => db.portfolioCalls?.some((c) => c.fn === 'portfolio_snapshot')).toBe(true)
   // этап 2: история спотовых покупок Bybit записана — из неё средняя цена входа
@@ -62,9 +66,10 @@ test('портфель: балансы Bybit приходят сами, икон
   await page.getByRole('switch', { name: 'Скрыть мелочь до 1 $' }).uncheck({ force: true })
   await expect(table.locator('[data-coin="SHIB"]')).toBeVisible()
 
-  // сводка: 25 000 + 6 000 + 1 200,5 = 32 200,50 $ — одной крупной цифрой, три показателя рядом строкой
+  // сводка (только спот): 25 000 + 6 000 + 1 200,5 USDT на фандинге = 32 200,50 $ — одной крупной цифрой, три показателя рядом строкой
   const hero = page.locator('[data-hero]')
   await expect(hero).toHaveText('32 200,50 $')
+  await expect(page.locator('[data-spot-only]')).toContainText('только спот')
   const kpis = page.locator('[data-portfolio-kpis]')
   await expect(kpis.locator('dt')).toHaveText(['За 24 часа', 'Прибыль', 'Зафиксировано'])
   // прибыль: у BTC цена входа — из покупки на Bybit, у USDT — 1 $ (стейблкоин), у остальных — не указана

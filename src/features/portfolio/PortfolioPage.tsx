@@ -128,6 +128,8 @@ export function PortfolioPage() {
           <h1 className="font-display text-xl font-semibold">{p.title}</h1>
           <p className="text-sm text-muted">
             {refreshing ? <Shimmer>{p.refreshing}</Shimmer> : ago === null ? (conns.length ? p.never : p.manual) : ago < 60_000 ? p.updatedNow : fmt(p.updated, { ago: formatDuration(ago) })}
+            {/* портфель — только спот (владелец 18.11.2026): фьючерсные счета и USDT единого счёта под фьючерсы не считаются */}
+            {conns.length > 0 && <span data-spot-only> · {p.spotOnly}</span>}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -477,8 +479,8 @@ export function Allocation({ rows, amounts = true }: { rows: PortfolioRow[]; amo
 }
 
 /**
- * Мини-график цены за 7 дней (из coins.spark): линия спокойным серым, итог недели — точкой на конце цветом плюса / минуса.
- * Стейблкоин — ровная линия: его копеечные колебания — шум, а не движение цены
+ * Мини-график цены за 7 дней (из coins.spark): цвет всей линии — итог недели (владелец 18.11.2026): выросла — цвет плюса, упала — цвет минуса,
+ * точка на конце того же цвета. Стейблкоин — ровная серая линия: его копеечные колебания — шум, а не движение цены
  */
 export function Spark({ coin }: { coin: Coin | null }) {
   const pts = coin?.spark ?? []
@@ -493,18 +495,19 @@ export function Spark({ coin }: { coin: Coin | null }) {
   const xy = pts.map((v, i) => [(i / (pts.length - 1)) * 66, y(v)] as const)
   const [ex, ey] = xy[xy.length - 1]
   const up = pts[pts.length - 1] >= pts[0]
+  const tone = stable ? 'var(--color-muted)' : up ? 'var(--color-up)' : 'var(--color-down)'
   return (
     <svg viewBox="0 0 72 24" data-spark={stable ? 'flat' : up ? 'up' : 'down'} className="inline-block h-6 w-[72px] overflow-visible" aria-hidden>
-      <polyline fill="none" stroke="var(--color-muted)" strokeOpacity={0.55} strokeWidth="1.5" strokeLinejoin="round" points={xy.map(([x, v]) => `${x.toFixed(1)},${v.toFixed(1)}`).join(' ')} />
-      <circle cx={ex} cy={ey} r={2.75} fill={stable ? 'var(--color-muted)' : up ? 'var(--color-up)' : 'var(--color-down)'} />
+      <polyline fill="none" stroke={tone} strokeOpacity={stable ? 0.55 : 1} strokeWidth="1.5" strokeLinejoin="round" points={xy.map(([x, v]) => `${x.toFixed(1)},${v.toFixed(1)}`).join(' ')} />
+      <circle cx={ex} cy={ey} r={2.75} fill={tone} />
     </svg>
   )
 }
 
 /** Откуда монета: биржи (и счета — в подсказке) и «вручную» */
 /**
- * Подпись счёта. У Bybit и OKX «spot» — это единый торговый счёт (спот и фьючерсы вместе, сумма — с прибылью открытых позиций),
- * поэтому так и пишем: иначе «спот: 12 983 USDT» путает, а сумма «плавает» из-за открытых позиций.
+ * Подпись счёта. У Bybit и OKX «spot» — это единый торговый счёт (спот и фьючерсы вместе): в портфель с него идут только монеты,
+ * USDT под фьючерсы не считаем (lib/portfolio/balances.ts spotOnlyUnified) — так и пишем в подсказке.
  */
 function accountLabel(p: ReturnType<typeof useT>['portfolio'], exchange: string | undefined, account: string): string {
   if (account === 'spot' && (exchange === 'bybit' || exchange === 'okx')) return p.accounts.unified

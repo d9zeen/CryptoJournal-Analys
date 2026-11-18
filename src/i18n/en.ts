@@ -924,6 +924,7 @@ export const en: Dict = {
     never: 'balances not loaded yet',
     refresh: 'Refresh',
     refreshing: 'Refreshing balances…',
+    spotOnly: 'spot only: futures and their USDT margin are not counted',
     add: 'Add coin',
     sourcesLabel: 'Where coins are',
     all: 'All',
@@ -1024,7 +1025,7 @@ export const en: Dict = {
       ctaButton: 'Start free',
       madeWith: 'Made with CryptoJournal',
     },
-    accounts: { spot: 'spot', fund: 'funding', futures: 'futures', earn: 'Earn', perp: 'perps', prediction: 'positions', manual: 'manual', wallet: 'wallet', unified: 'unified account (spot and futures, incl. open positions)' },
+    accounts: { spot: 'spot', fund: 'funding', futures: 'futures', earn: 'Earn', perp: 'perps', prediction: 'positions', manual: 'manual', wallet: 'wallet', unified: 'unified account — coins only, futures USDT margin is not counted' },
     empty: {
       title: 'Your portfolio is empty',
       text: 'Connect an exchange and balances arrive on their own with the same read-only key as your trades. A cold wallet or an exchange without API can be added by hand.',

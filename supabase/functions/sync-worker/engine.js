@@ -2789,15 +2789,35 @@ async function solanaBalances(address, coins, fetchFn = fetch) {
 	return out;
 }
 
+// src/lib/calc/portfolio.ts
+/** Стейблкоины: цена входа по умолчанию — 1 $ */
+/** Стейблкоины (тот же список — STABLE_SYMBOLS в prices-worker/platforms.ts: держат привязку ±0,5 % — цена ровно 1 $) */
+const STABLES = /* @__PURE__ */ new Set([
+	"USDT",
+	"USDC",
+	"DAI",
+	"FDUSD",
+	"TUSD",
+	"USDE",
+	"PYUSD",
+	"USDD",
+	"BUSD",
+	"USD1",
+	"RLUSD"
+]);
+
 // src/lib/portfolio/balances.ts
 /**
 * Портфель: балансы подключённой биржи / кошелька → строки holdings (0019).
 * Общий код для браузера (через exchange-proxy) и сервера (sync-worker, Pro Plus): запросы приходят снаружи (deps).
 *
-* Правила (дыры №5 и №6 из плана, 16.11.2026):
-*  - складываем все счета биржи (спот, фандинг, фьючерсы, Earn), но не задваиваем: у Binance активы «LD…» в споте —
-*    это Simple Earn, их берём из Earn; фьючерсный счёт — по equity (с нереализованным PnL), позиции отдельно не считаем;
-*  - основной счёт не ответил — ошибка (старые балансы остаются, график не «падает»); дополнительный (Earn, фьючерсы) не ответил —
+* Правила:
+*  - ТОЛЬКО СПОТ (владелец 18.11.2026, как у Bybit «Обзор активов», Delta, CoinStats: портфель — монеты, фьючерсы отдельно):
+*    спот, фандинг и Earn складываем; фьючерсные счета (Binance USDⓈ-M, Bitget mix, BingX swap) и перпы Hyperliquid не берём;
+*    на ЕДИНОМ торговом счёте (Bybit UTA, OKX trading, Bitget UTA) спот и фьючерсы в одном кошельке — стейблкоины там
+*    это маржа фьючерсов, их не считаем (spotOnlyUnified), монеты — по балансу без нереализованного PnL фьючерсов;
+*  - не задваиваем: у Binance активы «LD…» в споте — это Simple Earn, их берём из Earn;
+*  - основной счёт не ответил — ошибка (старые балансы остаются, график не «падает»); дополнительный (фандинг, Earn) не ответил —
 *    просто без него;
 *  - символы — заглавными, только буквы / цифры; нули и отрицательные (заём) отбрасываем.
 */
@@ -2838,6 +2858,13 @@ function mergeBalances(list) {
 	}
 	return [...map.values()].filter((b) => b.amount > 1e-12 || (b.value_usd ?? 0) > 0);
 }
+/**
+* Единый торговый счёт (спот + фьючерсы в одном кошельке): стейблкоины на нём — маржа фьючерсов, в спотовый портфель не идут.
+* Монеты (купленные на споте) остаются. Стейблкоины на фандинге и в Earn считаются — это отдельные счета
+*/
+function spotOnlyUnified(list) {
+	return list.filter((b) => !STABLES.has(cleanSymbol(b.symbol) ?? ""));
+}
 /** Дополнительный счёт: ошибка — пусто (основной уже ответил) */
 async function optional(fn) {
 	try {
@@ -2854,11 +2881,11 @@ async function bybitResult(call, path, params) {
 async function bybitBalances(call) {
 	const c = call;
 	const unified = await bybitResult(c, "/v5/account/wallet-balance", { accountType: "UNIFIED" });
-	const out = arr(unified.list?.[0]?.coin).map((x) => ({
+	const out = spotOnlyUnified(arr(unified.list?.[0]?.coin).map((x) => ({
 		account: "spot",
 		symbol: String(x.coin),
-		amount: n$1(x.equity ?? x.walletBalance)
-	}));
+		amount: n$1(x.walletBalance ?? x.equity)
+	})));
 	out.push(...await optional(async () => {
 		const fund = await bybitResult(c, "/v5/asset/transfer/query-account-coins-balance", { accountType: "FUND" });
 		return arr(fund.balance).map((x) => ({
@@ -2888,10 +2915,6 @@ async function binanceBalances(call) {
 		account: "fund",
 		symbol: String(x.asset),
 		amount: n$1(x.free) + n$1(x.locked) + n$1(x.freeze) + n$1(x.withdrawing)
-	}))), ...await optional(async () => arr(await binanceGet(call, "/fapi/v2/balance", {})).map((x) => ({
-		account: "futures",
-		symbol: String(x.asset),
-		amount: n$1(x.balance) + n$1(x.crossUnPnl)
 	}))), ...await optional(async () => arr((await binanceGet(call, "/sapi/v1/simple-earn/flexible/position", { size: 100 })).rows).map((x) => ({
 		account: "earn",
 		symbol: String(x.asset),
@@ -2905,11 +2928,11 @@ async function binanceBalances(call) {
 }
 async function okxBalances(call) {
 	const trading = await okxGet(call, "/api/v5/account/balance", {});
-	const out = arr(trading[0]?.details).map((x) => ({
+	const out = spotOnlyUnified(arr(trading[0]?.details).map((x) => ({
 		account: "spot",
 		symbol: String(x.ccy),
-		amount: n$1(x.eq)
-	}));
+		amount: n$1(x.cashBal ?? x.eq)
+	})));
 	out.push(...await optional(async () => (await okxGet(call, "/api/v5/asset/balances", {})).map((x) => ({
 		account: "fund",
 		symbol: String(x.ccy),
@@ -2923,40 +2946,25 @@ async function okxBalances(call) {
 }
 async function bitgetBalances(call) {
 	const uta = await call("/api/v3/account/assets", {});
-	if (uta?.code === "00000") return mergeBalances(arr(uta.data?.assets).map((x) => ({
+	if (uta?.code === "00000") return mergeBalances(spotOnlyUnified(arr(uta.data?.assets).map((x) => ({
 		account: "spot",
 		symbol: String(x.coin),
-		amount: n$1(x.equity ?? x.balance)
-	})));
+		amount: n$1(x.balance ?? x.equity)
+	}))));
 	const spot = await bitgetGet(call, "/api/v2/spot/account/assets", {});
-	const out = arr(spot).map((x) => ({
+	return mergeBalances(arr(spot).map((x) => ({
 		account: "spot",
 		symbol: String(x.coin),
 		amount: n$1(x.available) + n$1(x.frozen) + n$1(x.locked)
-	}));
-	for (const productType of ["USDT-FUTURES", "USDC-FUTURES"]) out.push(...await optional(async () => arr(await bitgetGet(call, "/api/v2/mix/account/accounts", { productType })).map((x) => ({
-		account: "futures",
-		symbol: String(x.marginCoin),
-		amount: n$1(x.accountEquity ?? x.usdtEquity)
-	}))));
-	return mergeBalances(out);
+	})));
 }
 async function bingxBalances(call) {
 	const spot = await bingxGet(call, "/openApi/spot/v1/account/balance", {});
-	const out = arr(spot.balances).map((x) => ({
+	return mergeBalances(arr(spot.balances).map((x) => ({
 		account: "spot",
 		symbol: String(x.asset),
 		amount: n$1(x.free) + n$1(x.locked)
-	}));
-	out.push(...await optional(async () => {
-		const d = await bingxGet(call, "/openApi/swap/v2/user/balance", {});
-		return (Array.isArray(d) ? d : Array.isArray(d.balance) ? d.balance : d.balance ? [d.balance] : []).map((x) => ({
-			account: "futures",
-			symbol: String(x.asset),
-			amount: n$1(x.equity ?? x.balance)
-		}));
-	}));
-	return mergeBalances(out);
+	})));
 }
 async function hyperliquidBalances(address, fetchFn = fetch) {
 	const post = async (type) => {
@@ -2972,19 +2980,11 @@ async function hyperliquidBalances(address, fetchFn = fetch) {
 		return await res.json();
 	};
 	const spot = await post("spotClearinghouseState");
-	const out = arr(spot.balances).map((x) => ({
+	return mergeBalances(arr(spot.balances).map((x) => ({
 		account: "spot",
 		symbol: String(x.coin),
 		amount: n$1(x.total)
-	}));
-	const perp = await post("clearinghouseState");
-	const value = n$1(perp.marginSummary?.accountValue);
-	if (value > 0) out.push({
-		account: "perp",
-		symbol: "USDC",
-		amount: value
-	});
-	return mergeBalances(out);
+	})));
 }
 /** Открытые позиции по текущей цене исхода — одной строкой «POLYMARKET» со стоимостью в $ */
 async function polymarketBalances(get, address) {
