@@ -25,7 +25,7 @@ function proPlus(db: FakeDb) {
   ]
 }
 
-test('портфель: балансы Bybit приходят сами, иконки, сводка, график, доли', async ({ page, db }) => {
+test('портфель: балансы Bybit приходят сами, иконки, сводка, график, доли', async ({ page, db, isMobile }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   proPlus(db)
   await fakeSupabase(page, db)
@@ -62,17 +62,45 @@ test('портфель: балансы Bybit приходят сами, икон
   await page.getByRole('switch', { name: 'Скрыть мелочь до 1 $' }).uncheck({ force: true })
   await expect(table.locator('[data-coin="SHIB"]')).toBeVisible()
 
-  // сводка: 25 000 + 6 000 + 1 200,5 = 32 200,50 $
+  // сводка: 25 000 + 6 000 + 1 200,5 = 32 200,50 $ — одной крупной цифрой, три показателя рядом строкой
+  const hero = page.locator('[data-hero]')
+  await expect(hero).toHaveText('32 200,50 $')
   const kpis = page.locator('[data-portfolio-kpis]')
-  await expect(kpis).toContainText('32 200,50 $')
+  await expect(kpis.locator('dt')).toHaveText(['За 24 часа', 'Прибыль', 'Зафиксировано'])
   // прибыль: у BTC цена входа — из покупки на Bybit, у USDT — 1 $ (стейблкоин), у остальных — не указана
   await expect(kpis).toContainText('по цене входа у 2 из 4')
   await expect(kpis.locator('[data-kpi-realized]')).toContainText('Зафиксировано')
 
-  // график (3 снимка + «сейчас») и кольцо долей
+  // график (3 снимка + «сейчас») и полоса долей: от большей к меньшей, проценты на блоках, суммы в легенде
   await expect(page.locator('[data-portfolio-chart] .recharts-area')).toBeVisible()
-  await expect(page.locator('[data-portfolio-alloc]')).toContainText('BTC')
-  await expect(page.locator('[data-portfolio-alloc]')).toContainText('Хуже всех за 24 ч')
+  const alloc = page.locator('[data-portfolio-alloc]')
+  await expect(alloc.getByRole('img', { name: /^Доли монет: BTC 77,6 %, ETH 18,6 %, USDT 3,7 %$/ })).toBeVisible()
+  await expect(alloc.locator('[data-alloc-bar] [data-seg]')).toHaveCount(3)
+  await expect(alloc.locator('[data-alloc-bar] [data-seg="BTC"]')).toHaveText('77,6 %')
+  // USDT — 3,7 %: на узком блоке процент не печатается, он в легенде рядом с суммой
+  await expect(alloc.locator('[data-alloc-bar] [data-seg="USDT"]')).toHaveText('')
+  await expect(alloc.locator('li[data-seg="USDT"]')).toContainText('1 200,50 $3,7 %')
+  await expect(alloc).toContainText('Хуже всех за 24 ч')
+  // наведение на строку легенды — блок этой монеты выделен, остальные приглушены
+  await alloc.locator('li[data-seg="ETH"]').hover()
+  await expect(alloc.locator('[data-alloc-bar]')).toHaveAttribute('data-hover', 'ETH')
+  await expect.poll(() => alloc.locator('[data-alloc-bar] [data-seg="BTC"]').evaluate((e) => getComputedStyle(e).opacity)).toBe('0.35')
+  await expect(alloc.locator('[data-alloc-bar] [data-seg="ETH"]')).toHaveCSS('opacity', '1')
+  await page.mouse.move(0, 0)
+  // мини-график стейблкоина — ровная линия, у остальных — точка цветом итога недели
+  await expect(table.locator('[data-coin="USDT"] [data-spark]')).toHaveAttribute('data-spark', 'flat')
+  // ведём мышью по графику (на сенсорном экране — обычная подсказка у точки) — крупная цифра показывает стоимость в точке, строка над графиком — дату и изменение; убрали мышь — снова «сейчас»
+  if (!isMobile) {
+    const box = (await page.locator('[data-portfolio-chart]').boundingBox())!
+    await page.mouse.move(box.x + box.width * 0.2, box.y + box.height / 2)
+    await page.mouse.move(box.x + box.width * 0.3, box.y + box.height / 2, { steps: 5 })
+    await expect(page.locator('[data-hero-scrub]')).toBeVisible()
+    await expect(page.locator('[data-scrub-line]')).toContainText('с начала периода')
+    await expect(page.locator('[data-portfolio-value] h2')).toHaveText('Стоимость портфеля')
+    await page.mouse.move(0, 0)
+    await expect(page.locator('[data-hero-scrub]')).toHaveCount(0)
+    await expect(hero).toHaveText('32 200,50 $')
+  }
   // подписи оси дат не повторяются (ось — по номеру точки, раньше выходило «12.11, 12.11»)
   const tickText = page.locator('[data-portfolio-chart] .recharts-xAxis-tick-labels text')
   await expect.poll(() => tickText.count()).toBeGreaterThan(1)
@@ -144,4 +172,74 @@ test('портфель на телефоне: карточки монет, «П�
   await expect(nav.getByRole('link')).toHaveCount(6)
   await expect(nav.getByRole('link', { name: 'Портфель' })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width)
+})
+
+const many = (n: number) =>
+  Array.from({ length: n }, (_, i) => ({ id: `c${i}`, symbol: `C${i}`, name: `Coin ${i}`, rank: i + 1, price: 100 - i * 10, change_24h: i % 2 ? -1 : 1, change_7d: 0, spark: null, icon: null }))
+const manual = (symbols: string[], amount = 1) =>
+  symbols.map((symbol, i) => ({ id: `m${i}`, connection_id: null, account: 'manual', symbol, amount, value_usd: null, note: null, updated_at: new Date().toISOString() }))
+
+test('доли: 7 монет — 4 крупные и «Другое», одна монета — 100 %, без цены — объяснение', async ({ page, db }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  db.usage = { plan: 'pro', trades_created: 0, trade_limit: null }
+  db.coins = many(7)
+  db.holdings = manual(['C0', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6'])
+  await fakeSupabase(page, db)
+  await page.goto('portfolio')
+  const alloc = page.locator('[data-portfolio-alloc]')
+  // 100 + 90 + 80 + 70 = четыре крупные, остальные три (60 + 50 + 40 = 150) — «Другое · 3 монеты»
+  await expect(alloc.locator('[data-alloc-bar] [data-seg]')).toHaveCount(5)
+  await expect(alloc.locator('li[data-seg]').last()).toContainText('Другое3 монеты')
+  await expect(alloc.locator('li[data-seg="other"]')).toContainText('150,00 $')
+  // цвет — по месту доли (шаги одного фиолетового), «Другое» — серый токен
+  await expect(alloc.locator('[data-alloc-bar] [data-seg="C0"]')).toHaveAttribute('style', /--color-alloc-1/)
+  await expect(alloc.locator('[data-alloc-bar] [data-seg="other"]')).toHaveAttribute('style', /--color-alloc-other/)
+
+  db.holdings = manual(['C0'])
+  await page.reload()
+  await expect(alloc.locator('[data-alloc-bar] [data-seg]')).toHaveCount(1)
+  await expect(alloc.locator('[data-alloc-bar] [data-seg="C0"]')).toHaveText('100 %')
+
+  // монета без цены: стоимость 0 — долю посчитать не из чего
+  db.coins = [{ ...many(1)[0], price: null }]
+  await page.reload()
+  await expect(alloc).toContainText('Нет монет с ценой')
+  await expect(alloc.locator('[data-alloc-bar]')).toHaveCount(0)
+  await expect(page.locator('[data-hero-sub]')).toContainText('без цены: 1')
+})
+
+test('портфель по ссылке без сумм: в легенде долей нет денег', async ({ page, db }) => {
+  db.coins = many(2)
+  db.share = { token: 'ab'.repeat(16), show_amounts: false }
+  db.shared = {
+    show_amounts: false,
+    total: null,
+    coins: [
+      { symbol: 'C0', name: 'Coin 0', share: 0.7, change_24h: 1 },
+      { symbol: 'C1', name: 'Coin 1', share: 0.3, change_24h: -1 },
+    ],
+    history: [],
+  }
+  await fakeSupabase(page, db, { signedIn: false })
+  await page.goto(`p/${'ab'.repeat(16)}`)
+  const alloc = page.locator('[data-portfolio-alloc]')
+  await expect(alloc.locator('[data-alloc-bar] [data-seg="C0"]')).toHaveText('70 %')
+  await expect(alloc.locator('li[data-seg="C0"]')).not.toContainText('$')
+})
+
+test('фильтр источника: цифры — по источнику, над графиком сказано, что график — весь портфель', async ({ page, db }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  proPlus(db)
+  db.holdings = manual(['ETH'])
+  await fakeSupabase(page, db)
+  await page.goto('portfolio')
+  const sources = page.getByRole('radiogroup', { name: 'Откуда монеты' })
+  await expect(sources.getByRole('radio')).toHaveText(['Все', 'Bybit · Основной', 'Вручную'])
+  await expect(page.locator('[data-chart-whole]')).toHaveCount(0)
+  await sources.getByRole('radio', { name: 'Вручную' }).click()
+  // вручную — только ETH: 1 × 3 000 $
+  await expect(page.locator('[data-hero]')).toHaveText('3 000,00 $')
+  await expect(page.locator('[data-chart-whole]')).toContainText('весь портфель')
+  await sources.getByRole('radio', { name: 'Все' }).click()
+  await expect(page.locator('[data-chart-whole]')).toHaveCount(0)
 })

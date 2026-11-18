@@ -89,7 +89,7 @@ export function SharedPortfolioPage() {
                       </div>
                     </div>
                   </section>
-                  <Allocation rows={rows} />
+                  <Allocation rows={rows} amounts={amounts} />
                 </div>
 
                 <section style={{ '--i': 2 } as CSSProperties} className="rise min-w-0 rounded-lg border border-border bg-surface p-4 sm:p-5">
