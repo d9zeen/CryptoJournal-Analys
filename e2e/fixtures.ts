@@ -230,8 +230,10 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
       }
       // exchange-proxy: балансы Bybit (портфель)
       if (b.path === '/v5/account/wallet-balance')
-        return json({ retCode: 0, retMsg: 'OK', result: { list: [{ coin: [{ coin: 'BTC', equity: '0.25' }, { coin: 'USDT', equity: '1200.5' }, { coin: 'SHIB', equity: '10' }] }] } })
-      if (b.path === '/v5/asset/transfer/query-account-coins-balance') return json({ retCode: 0, retMsg: 'OK', result: { balance: [{ coin: 'ETH', walletBalance: '2' }] } })
+        // единый счёт: 5 000 USDT — маржа фьючерсов, в спотовый портфель не идут
+        return json({ retCode: 0, retMsg: 'OK', result: { list: [{ coin: [{ coin: 'BTC', equity: '0.25' }, { coin: 'USDT', equity: '5000' }, { coin: 'SHIB', equity: '10' }] }] } })
+      if (b.path === '/v5/asset/transfer/query-account-coins-balance')
+        return json({ retCode: 0, retMsg: 'OK', result: { balance: [{ coin: 'ETH', walletBalance: '2' }, { coin: 'USDT', walletBalance: '1200.5' }] } })
       if (b.path === '/v5/earn/position') return json({ retCode: 0, retMsg: 'OK', result: { list: [] } })
       // exchange-proxy: ответы Bybit
       if (b.path === '/v5/user/query-api') return json({ retCode: 0, retMsg: 'OK', result: { readOnly: db.bybitReadOnly ?? 1 } })

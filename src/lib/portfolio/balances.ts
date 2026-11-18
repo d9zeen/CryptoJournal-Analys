@@ -2,10 +2,13 @@
  * Портфель: балансы подключённой биржи / кошелька → строки holdings (0019).
  * Общий код для браузера (через exchange-proxy) и сервера (sync-worker, Pro Plus): запросы приходят снаружи (deps).
  *
- * Правила (дыры №5 и №6 из плана, 16.11.2026):
- *  - складываем все счета биржи (спот, фандинг, фьючерсы, Earn), но не задваиваем: у Binance активы «LD…» в споте —
- *    это Simple Earn, их берём из Earn; фьючерсный счёт — по equity (с нереализованным PnL), позиции отдельно не считаем;
- *  - основной счёт не ответил — ошибка (старые балансы остаются, график не «падает»); дополнительный (Earn, фьючерсы) не ответил —
+ * Правила:
+ *  - ТОЛЬКО СПОТ (владелец 18.11.2026, как у Bybit «Обзор активов», Delta, CoinStats: портфель — монеты, фьючерсы отдельно):
+ *    спот, фандинг и Earn складываем; фьючерсные счета (Binance USDⓈ-M, Bitget mix, BingX swap) и перпы Hyperliquid не берём;
+ *    на ЕДИНОМ торговом счёте (Bybit UTA, OKX trading, Bitget UTA) спот и фьючерсы в одном кошельке — стейблкоины там
+ *    это маржа фьючерсов, их не считаем (spotOnlyUnified), монеты — по балансу без нереализованного PnL фьючерсов;
+ *  - не задваиваем: у Binance активы «LD…» в споте — это Simple Earn, их берём из Earn;
+ *  - основной счёт не ответил — ошибка (старые балансы остаются, график не «падает»); дополнительный (фандинг, Earn) не ответил —
  *    просто без него;
  *  - символы — заглавными, только буквы / цифры; нули и отрицательные (заём) отбрасываем.
  */
@@ -18,6 +21,7 @@ import { HL_API } from '@/lib/sync/hyperliquid'
 import { pmDirectGet, type PmGet } from '@/lib/sync/polymarket'
 import type { CexCall } from '@/lib/sync/cex'
 import { evmBalances, solanaBalances, type CoinPlatforms } from './wallets'
+import { STABLES } from '@/lib/calc/portfolio'
 
 export type HoldingAccount = 'spot' | 'fund' | 'futures' | 'earn' | 'perp' | 'prediction' | 'wallet'
 export type Balance = { account: HoldingAccount; symbol: string; amount: number; value_usd?: number | null }
@@ -64,6 +68,14 @@ export function mergeBalances(list: Balance[]): Balance[] {
   return [...map.values()].filter((b) => b.amount > 1e-12 || (b.value_usd ?? 0) > 0)
 }
 
+/**
+ * Единый торговый счёт (спот + фьючерсы в одном кошельке): стейблкоины на нём — маржа фьючерсов, в спотовый портфель не идут.
+ * Монеты (купленные на споте) остаются. Стейблкоины на фандинге и в Earn считаются — это отдельные счета
+ */
+export function spotOnlyUnified(list: Balance[]): Balance[] {
+  return list.filter((b) => !STABLES.has(cleanSymbol(b.symbol) ?? ''))
+}
+
 /** Дополнительный счёт: ошибка — пусто (основной уже ответил) */
 async function optional(fn: () => Promise<Balance[]>): Promise<Balance[]> {
   try {
@@ -82,9 +94,9 @@ async function bybitResult<T>(call: BybitCall, path: string, params: Record<stri
 
 export async function bybitBalances(call: CexCall): Promise<Balance[]> {
   const c = call as BybitCall
-  // единый торговый счёт: спот + фьючерсы, equity по монете уже с нереализованным PnL
+  // единый торговый счёт (спот + фьючерсы): монеты по walletBalance (без нереализованного PnL фьючерсов), стейблкоины — маржа, не считаем
   const unified = await bybitResult<{ list?: Obj[] }>(c, '/v5/account/wallet-balance', { accountType: 'UNIFIED' })
-  const out: Balance[] = arr(unified.list?.[0]?.coin).map((x) => ({ account: 'spot', symbol: String(x.coin), amount: n(x.equity ?? x.walletBalance) }))
+  const out: Balance[] = spotOnlyUnified(arr(unified.list?.[0]?.coin).map((x) => ({ account: 'spot', symbol: String(x.coin), amount: n(x.walletBalance ?? x.equity) })))
   out.push(
     ...(await optional(async () => {
       const fund = await bybitResult<{ balance?: Obj[] }>(c, '/v5/asset/transfer/query-account-coins-balance', { accountType: 'FUND' })
@@ -118,13 +130,6 @@ export async function binanceBalances(call: CexCall): Promise<Balance[]> {
       })),
     )),
     ...(await optional(async () =>
-      arr(await binanceGet<unknown>(call, '/fapi/v2/balance', {})).map((x) => ({
-        account: 'futures' as const,
-        symbol: String(x.asset),
-        amount: n(x.balance) + n(x.crossUnPnl),
-      })),
-    )),
-    ...(await optional(async () =>
       arr((await binanceGet<{ rows?: unknown }>(call, '/sapi/v1/simple-earn/flexible/position', { size: 100 })).rows).map((x) => ({
         account: 'earn' as const,
         symbol: String(x.asset),
@@ -144,8 +149,9 @@ export async function binanceBalances(call: CexCall): Promise<Balance[]> {
 
 // ---------- OKX ----------
 export async function okxBalances(call: CexCall): Promise<Balance[]> {
+  // торговый счёт OKX — единый (спот + фьючерсы): монеты по cashBal (без нереализованного PnL), стейблкоины — маржа, не считаем
   const trading = await okxGet<Obj>(call, '/api/v5/account/balance', {})
-  const out: Balance[] = arr(trading[0]?.details).map((x) => ({ account: 'spot', symbol: String(x.ccy), amount: n(x.eq) }))
+  const out: Balance[] = spotOnlyUnified(arr(trading[0]?.details).map((x) => ({ account: 'spot', symbol: String(x.ccy), amount: n(x.cashBal ?? x.eq) })))
   out.push(
     ...(await optional(async () => (await okxGet<Obj>(call, '/api/v5/asset/balances', {})).map((x) => ({ account: 'fund' as const, symbol: String(x.ccy), amount: n(x.bal) })))),
     ...(await optional(async () =>
@@ -157,38 +163,19 @@ export async function okxBalances(call: CexCall): Promise<Balance[]> {
 
 // ---------- Bitget ----------
 export async function bitgetBalances(call: CexCall): Promise<Balance[]> {
-  // единый аккаунт (UTA): все продукты одним адресом
+  // единый аккаунт (UTA): спот и фьючерсы одним кошельком — монеты по balance (без нереализованного PnL), стейблкоины — маржа, не считаем
   const uta = (await call('/api/v3/account/assets', {})) as { code?: string; data?: { assets?: unknown } } | null
-  if (uta?.code === '00000') return mergeBalances(arr(uta.data?.assets).map((x) => ({ account: 'spot', symbol: String(x.coin), amount: n(x.equity ?? x.balance) })))
-  // классический: спот + фьючерсные счета (USDT / USDC)
+  if (uta?.code === '00000') return mergeBalances(spotOnlyUnified(arr(uta.data?.assets).map((x) => ({ account: 'spot', symbol: String(x.coin), amount: n(x.balance ?? x.equity) }))))
+  // классический: только спотовый счёт (фьючерсные USDT / USDC-FUTURES — не портфель)
   const spot = await bitgetGet<unknown>(call, '/api/v2/spot/account/assets', {})
-  const out: Balance[] = arr(spot).map((x) => ({ account: 'spot', symbol: String(x.coin), amount: n(x.available) + n(x.frozen) + n(x.locked) }))
-  for (const productType of ['USDT-FUTURES', 'USDC-FUTURES']) {
-    out.push(
-      ...(await optional(async () =>
-        arr(await bitgetGet<unknown>(call, '/api/v2/mix/account/accounts', { productType })).map((x) => ({
-          account: 'futures' as const,
-          symbol: String(x.marginCoin),
-          amount: n(x.accountEquity ?? x.usdtEquity),
-        })),
-      )),
-    )
-  }
-  return mergeBalances(out)
+  return mergeBalances(arr(spot).map((x) => ({ account: 'spot', symbol: String(x.coin), amount: n(x.available) + n(x.frozen) + n(x.locked) })))
 }
 
 // ---------- BingX ----------
 export async function bingxBalances(call: CexCall): Promise<Balance[]> {
   const spot = await bingxGet<{ balances?: unknown }>(call, '/openApi/spot/v1/account/balance', {})
-  const out: Balance[] = arr(spot.balances).map((x) => ({ account: 'spot', symbol: String(x.asset), amount: n(x.free) + n(x.locked) }))
-  out.push(
-    ...(await optional(async () => {
-      const d = await bingxGet<{ balance?: unknown } | Obj[]>(call, '/openApi/swap/v2/user/balance', {})
-      const list = Array.isArray(d) ? d : Array.isArray(d.balance) ? (d.balance as Obj[]) : d.balance ? [d.balance as Obj] : []
-      return list.map((x) => ({ account: 'futures' as const, symbol: String(x.asset), amount: n(x.equity ?? x.balance) }))
-    })),
-  )
-  return mergeBalances(out)
+  // только спотовый счёт: фьючерсный (swap) — не портфель
+  return mergeBalances(arr(spot.balances).map((x) => ({ account: 'spot', symbol: String(x.asset), amount: n(x.free) + n(x.locked) })))
 }
 
 // ---------- Hyperliquid (по адресу, без ключа) ----------
@@ -199,12 +186,8 @@ export async function hyperliquidBalances(address: string, fetchFn: typeof fetch
     return (await res.json()) as Obj
   }
   const spot = await post('spotClearinghouseState')
-  const out: Balance[] = arr(spot.balances).map((x) => ({ account: 'spot', symbol: String(x.coin), amount: n(x.total) }))
-  // перпы: стоимость счёта (маржа + нереализованный PnL) в USDC
-  const perp = await post('clearinghouseState')
-  const value = n((perp.marginSummary as Obj | undefined)?.accountValue)
-  if (value > 0) out.push({ account: 'perp', symbol: 'USDC', amount: value })
-  return mergeBalances(out)
+  // только спот: счёт перпов (маржа + нереализованный PnL) — не портфель
+  return mergeBalances(arr(spot.balances).map((x) => ({ account: 'spot', symbol: String(x.coin), amount: n(x.total) })))
 }
 
 // ---------- Polymarket (по адресу) ----------

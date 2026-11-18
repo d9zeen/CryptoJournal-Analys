@@ -41,14 +41,18 @@ describe('общие правила', () => {
 })
 
 describe('Bybit', () => {
-  it('единый счёт по equity + фандинг + Earn', async () => {
+  it('только спот: единый счёт без стейблкоинов (маржа фьючерсов), монеты без PnL фьючерсов + фандинг + Earn', async () => {
     const call = fake({
-      '/v5/account/wallet-balance': { retCode: 0, result: { list: [{ coin: [{ coin: 'USDT', equity: '1200.5', walletBalance: '1000' }, { coin: 'BTC', equity: '0.25' }] }] } },
+      '/v5/account/wallet-balance': {
+        retCode: 0,
+        result: { list: [{ coin: [{ coin: 'USDT', equity: '1200.5', walletBalance: '1000' }, { coin: 'USDC', walletBalance: '50' }, { coin: 'BTC', equity: '0.25', walletBalance: '0.25' }] }] },
+      },
       '/v5/asset/transfer/query-account-coins-balance': { retCode: 0, result: { balance: [{ coin: 'USDT', walletBalance: '300' }, { coin: 'DOGE', walletBalance: '0' }] } },
       '/v5/earn/position': { retCode: 0, result: { list: [{ coin: 'ETH', amount: '1.5' }] } },
     })
     const b = await bybitBalances(call)
-    expect(b).toContainEqual({ account: 'spot', symbol: 'USDT', amount: 1200.5 })
+    // USDT / USDC единого счёта — деньги под фьючерсы, в спотовый портфель не идут; USDT на фандинге — идут
+    expect(b.filter((x) => x.account === 'spot').map((x) => x.symbol)).toEqual(['BTC'])
     expect(b).toContainEqual({ account: 'spot', symbol: 'BTC', amount: 0.25 })
     expect(b).toContainEqual({ account: 'fund', symbol: 'USDT', amount: 300 })
     // Earn: FlexibleSaving и OnChain — один и тот же фейковый ответ дважды → 3 ETH
@@ -61,7 +65,7 @@ describe('Bybit', () => {
 })
 
 describe('Binance', () => {
-  it('спот без LD-активов (это Earn) + фандинг + фьючерсы с PnL + Earn', async () => {
+  it('спот без LD-активов (это Earn) + фандинг + Earn; фьючерсный счёт не спрашиваем', async () => {
     const call = fake({
       '/api/v3/account': { balances: [{ asset: 'BTC', free: '0.1', locked: '0.05' }, { asset: 'LDUSDT', free: '500', locked: '0' }] },
       '/sapi/v1/asset/get-funding-asset': [{ asset: 'USDT', free: '100', locked: '0', freeze: '10', withdrawing: '0' }],
@@ -73,9 +77,10 @@ describe('Binance', () => {
     expect(b).toEqual([
       { account: 'spot', symbol: 'BTC', amount: 0.15000000000000002 },
       { account: 'fund', symbol: 'USDT', amount: 110 },
-      { account: 'futures', symbol: 'USDT', amount: 975 },
       { account: 'earn', symbol: 'USDT', amount: 500 },
     ])
+    // USDT на споте Binance — настоящий спот (фьючерсы — отдельный счёт), он считается
+    expect(await binanceBalances(fake({ '/api/v3/account': { balances: [{ asset: 'USDT', free: '25', locked: '0' }] } }))).toEqual([{ account: 'spot', symbol: 'USDT', amount: 25 }])
   })
   it('фьючерсы не включены — портфель без них, а не ошибка', async () => {
     const b = await binanceBalances(fake({ '/api/v3/account': { balances: [{ asset: 'ETH', free: '2', locked: '0' }] } }))
@@ -84,18 +89,17 @@ describe('Binance', () => {
 })
 
 describe('OKX', () => {
-  it('торговый счёт (eq) + фандинг + Earn', async () => {
+  it('торговый счёт (единый): монеты по cashBal, без стейблкоинов + фандинг + Earn', async () => {
     const ok = (data: unknown) => ({ code: '0', msg: '', data })
     const b = await okxBalances(
       fake({
-        '/api/v5/account/balance': ok([{ details: [{ ccy: 'BTC', eq: '0.5' }, { ccy: 'USDT', eq: '12.3' }] }]),
+        '/api/v5/account/balance': ok([{ details: [{ ccy: 'BTC', eq: '0.52', cashBal: '0.5' }, { ccy: 'USDT', eq: '12.3', cashBal: '12' }] }]),
         '/api/v5/asset/balances': ok([{ ccy: 'USDT', bal: '7.7' }]),
         '/api/v5/finance/savings/balance': ok([{ ccy: 'USDC', amt: '100' }]),
       }),
     )
     expect(b).toEqual([
       { account: 'spot', symbol: 'BTC', amount: 0.5 },
-      { account: 'spot', symbol: 'USDT', amount: 12.3 },
       { account: 'fund', symbol: 'USDT', amount: 7.7 },
       { account: 'earn', symbol: 'USDC', amount: 100 },
     ])
@@ -103,11 +107,18 @@ describe('OKX', () => {
 })
 
 describe('Bitget', () => {
-  it('единый аккаунт: все продукты одним адресом (equity)', async () => {
-    const b = await bitgetBalances(fake({ '/api/v3/account/assets': { code: '00000', data: { accountEquity: '11.1', assets: [{ coin: 'USDT', equity: '6.19', usdValue: '6.19' }] } } }))
-    expect(b).toEqual([{ account: 'spot', symbol: 'USDT', amount: 6.19 }])
+  it('единый аккаунт: монеты по balance, стейблкоины (маржа фьючерсов) — нет', async () => {
+    const b = await bitgetBalances(
+      fake({
+        '/api/v3/account/assets': {
+          code: '00000',
+          data: { accountEquity: '11.1', assets: [{ coin: 'USDT', equity: '6.19', balance: '6' }, { coin: 'BGB', equity: '3.1', balance: '3' }] },
+        },
+      }),
+    )
+    expect(b).toEqual([{ account: 'spot', symbol: 'BGB', amount: 3 }])
   })
-  it('классический: спот + фьючерсные счета', async () => {
+  it('классический: только спотовый счёт, фьючерсные не спрашиваем', async () => {
     const b = await bitgetBalances(
       fake({
         '/api/v3/account/assets': { code: '40084', msg: 'not uta' },
@@ -115,30 +126,24 @@ describe('Bitget', () => {
         '/api/v2/mix/account/accounts': { code: '00000', data: [{ marginCoin: 'USDT', accountEquity: '250' }] },
       }),
     )
-    expect(b).toEqual([
-      { account: 'spot', symbol: 'BGB', amount: 11 },
-      { account: 'futures', symbol: 'USDT', amount: 500 }, // USDT- и USDC-FUTURES — фейк отвечает одинаково
-    ])
+    expect(b).toEqual([{ account: 'spot', symbol: 'BGB', amount: 11 }])
   })
 })
 
 describe('BingX', () => {
-  it('спот + фьючерсы (equity)', async () => {
+  it('только спот: фьючерсный счёт не спрашиваем', async () => {
     const b = await bingxBalances(
       fake({
         '/openApi/spot/v1/account/balance': { code: 0, data: { balances: [{ asset: 'USDT', free: '40', locked: '2' }] } },
         '/openApi/swap/v2/user/balance': { code: 0, data: { balance: { asset: 'USDT', balance: '100', equity: '96.5' } } },
       }),
     )
-    expect(b).toEqual([
-      { account: 'spot', symbol: 'USDT', amount: 42 },
-      { account: 'futures', symbol: 'USDT', amount: 96.5 },
-    ])
+    expect(b).toEqual([{ account: 'spot', symbol: 'USDT', amount: 42 }])
   })
 })
 
 describe('Hyperliquid', () => {
-  it('спот по монетам + перпы стоимостью счёта в USDC', async () => {
+  it('только спот по монетам: счёт перпов не считаем', async () => {
     const fetchFn = (async (_url: string, init?: RequestInit) => {
       const type = JSON.parse(String(init?.body)).type
       const body =
@@ -151,7 +156,6 @@ describe('Hyperliquid', () => {
       { account: 'spot', symbol: 'HYPE', amount: 120 },
       { account: 'spot', symbol: 'BTC', amount: 0.01 },
       { account: 'spot', symbol: 'USDC', amount: 5 },
-      { account: 'perp', symbol: 'USDC', amount: 1500.25 },
     ])
   })
 })
