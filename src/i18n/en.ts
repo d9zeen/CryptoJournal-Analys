@@ -491,26 +491,7 @@ export const en: Dict = {
     insightBest: 'Works best: {name} ({pnl}).',
     insightWorst: 'Costs you the most: {name} ({pnl}).',
     sideLine: '{trades} · win rate {winrate}',
-    tabs: { setups: 'Setups', mistakes: 'Mistakes', pairs: 'Pairs', emotions: 'Emotions', behavior: 'Behavior' },
-    behavior: {
-      streak: {
-        title: 'After a losing streak',
-        hint: 'How many losses in a row came right before the entry.',
-        rows: { '0': 'After a win or first trade', '1': 'After 1 loss', '2': 'After 2 losses in a row', '3+': 'After 3 or more losses' },
-      },
-      hold: {
-        title: 'Time in trade',
-        hint: 'From entry to exit.',
-        rows: { '15m': 'Up to 15 min', '1h': '15 min – 1 h', '4h': '1–4 h', '1d': '4 h – 1 day', '1d+': 'Over a day' },
-      },
-      stop: {
-        title: 'Stop loss',
-        hint: "Stop from your journal. Exchange imports often don't include it, so “not set” doesn't mean “no stop”.",
-        rows: { with: 'Stop set', without: 'Stop not set' },
-      },
-      insightTilt: 'After 2+ losses in a row your win rate is {after}, the rest of the time {other}.',
-      insightHold: 'Your best trades last {name} ({pnl}).',
-    },
+    tabs: { setups: 'Setups', mistakes: 'Mistakes', pairs: 'Pairs', emotions: 'Emotions' },
     tabsLabel: 'Breakdown',
     total: 'Total',
     sortBy: 'Sort by {col}',
