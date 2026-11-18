@@ -151,8 +151,11 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
       {/* на телефоне «Сохранить» — здесь, справа от заголовка (нижней полосы и нижнего меню на этой странице нет — они закрывали поля) */}
       <div className="flex items-center justify-between gap-2 md:gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <Link to="/trades" className="shrink-0 text-muted hover:text-text" aria-label={t.common.back}>
-            ←
+          {/* зона нажатия ~40px, значок 20px — вид тот же */}
+          <Link to="/trades" className="-m-2.5 shrink-0 rounded-lg p-2.5 text-muted transition-colors hover:text-text" aria-label={t.common.back}>
+            <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M19 12H5M11 6l-6 6 6 6" />
+            </svg>
           </Link>
           <h1 className="truncate text-xl font-semibold">{isNew ? t.tradeForm.titleNew : `${t.tradeForm.titleEdit} ${existing!.title ?? existing!.symbol}`}</h1>
         </div>

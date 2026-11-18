@@ -47,7 +47,7 @@ export function MistakePicker({ value, onChange }: { value: string[]; onChange: 
               }
               if (e.key === 'Escape') setAdding(false)
             }}
-            className="w-40 rounded-full border border-primary bg-surface-2 px-3 py-1 text-sm outline-none"
+            className="w-40 rounded-full border border-primary bg-surface-2 px-3 py-1 text-sm field-focus"
           />
         ) : (
           <Chip onClick={() => setAdding(true)} className="border-dashed">
