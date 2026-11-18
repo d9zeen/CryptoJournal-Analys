@@ -39,10 +39,22 @@ export function PortfolioChart({ points, short, pct = false, drawKey }: { points
   )
   const axis = useMemo(() => fitAxis(data.map((d) => d.v)), [data])
   const last = data[data.length - 1]
+  const label = useMemo(() => {
+    const hm = new Intl.DateTimeFormat(intlLocale(), { hour: '2-digit', minute: '2-digit' })
+    return (ts: number) => (short ? hm.format(ts) : shortDate(ts))
+  }, [short])
+  // ось X — по номеру точки, поэтому подписи ставим сами: первая точка каждой новой даты (иначе «12.11, 12.11» на широком экране),
+  // из них — не больше 6 (на телефоне 4), равномерно
+  const ticks = useMemo(() => {
+    const firsts = data.filter((d, i) => i === 0 || label(d.t) !== label(data[i - 1].t)).map((d) => d.i)
+    const max = wide ? 6 : 4
+    if (firsts.length <= max) return firsts
+    const step = (firsts.length - 1) / (max - 1)
+    return [...new Set(Array.from({ length: max }, (_, k) => firsts[Math.round(k * step)]))]
+  }, [data, label, wide])
   const tick = (i: number) => {
     const d = data[Math.round(i)]
-    if (!d) return ''
-    return short ? new Intl.DateTimeFormat(intlLocale(), { hour: '2-digit', minute: '2-digit' }).format(d.t) : shortDate(d.t)
+    return d ? label(d.t) : ''
   }
   const color = 'var(--color-primary)'
   const right = wide ? 104 : 16
@@ -57,7 +69,7 @@ export function PortfolioChart({ points, short, pct = false, drawKey }: { points
             </linearGradient>
           </defs>
           <CartesianGrid stroke="var(--color-border)" vertical={false} />
-          <XAxis dataKey="i" type="number" domain={['dataMin', 'dataMax']} {...axisProps} tickFormatter={tick} minTickGap={40} />
+          <XAxis dataKey="i" type="number" domain={['dataMin', 'dataMax']} {...axisProps} ticks={ticks} interval="preserveStartEnd" tickFormatter={tick} minTickGap={24} />
           <YAxis {...axisProps} width={60} domain={[axis.lo, axis.hi]} ticks={axis.ticks} tickFormatter={(v: number) => moneyShort(v)} allowDataOverflow />
           <Tooltip
             cursor={{ stroke: 'var(--color-muted)', strokeOpacity: 0.4 }}

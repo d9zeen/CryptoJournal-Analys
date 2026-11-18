@@ -38,11 +38,12 @@ Node 22 (см. `.node-version`).
 src/
   styles/theme.css     ВСЕ цвета, шрифты и анимации (Tailwind @theme), стиль «Аврора». Классы: bg-bg, bg-surface, bg-surface-2,
                        border-border, text-text, text-muted, text-primary (фиолет: кнопки), text-accent (мята: данные),
-                       text-profit, text-loss, font-display (заголовки), num (цифры моно), rise (появление, --i), card-lift.
+                       text-profit, text-loss, font-display (заголовки), num (цифры моно), rise (появление, --i), card-lift, field-focus (фокус своих <input>: рамка + кольцо, как у ui/Input).
                        Без пульсаций и кричащих градиентов. Разрешены только: мягкая подсветка под курсором (spotlight) и отблеск заготовок при загрузке (skeleton) — сайт не должен выглядеть «сгенерированным». Светлая тема — :root[data-theme='light'] в том же файле
   lib/theme.ts         светлая (по умолчанию) / тёмная тема (localStorage; до загрузки приложения — public/theme-init.js, без вспышки), useTheme / setTheme; кнопка — components/ThemeToggle.tsx
   lib/palette.ts       палитра прибыли / убытка (по умолчанию classic — зелёный / красный; classic, teal_salmon, sky_coral — всем, остальные 5 — Pro / Pro Plus, проверка и триггером 0015; выбор — полоска PaletteStrip под календарём и в «Настройки → Оформление», features/palette):
                        data-palette на <html>, цвета в theme.css; --color-up / --color-down = profit / loss
+  lib/radioKeys.ts     стрелки / Home / End в группе вариантов (role="radiogroup"): onKeyDown={radioKeys} на группе + tabIndex={выбран ? 0 : -1} у кнопок
   lib/motion.ts        хуки анимаций (раздел «Анимации» ниже): prefersReducedMotion, useCountUp, useShown, useTilt, useSpotlight, useShake, pause
   i18n/ru.ts, en.ts    ВСЕ тексты интерфейса на двух языках (en.ts типизирован Dict из ru.ts — ключи обязаны совпадать). Новый язык = ещё один файл + LANGS в lib/locale.ts
   lib/locale.ts        язык: английский ПО УМОЛЧАНИЮ, русский — по выбору; localStorage cj-lang (до загрузки — public/theme-init.js ставит <html lang>), getLang / setLang / intlLocale().
