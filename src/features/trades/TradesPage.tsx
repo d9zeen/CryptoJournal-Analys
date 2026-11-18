@@ -97,7 +97,7 @@ export function TradesPage() {
           type="button"
           onClick={() => sortBy(key)}
           aria-label={fmt(t.trades.sort.by, { col: label })}
-          className={`group inline-flex items-center gap-1 whitespace-nowrap transition-colors hover:text-text ${active ? 'font-medium text-text' : ''}`}
+          className={`group -my-1 inline-flex items-center gap-1 whitespace-nowrap py-1 transition-colors hover:text-text ${active ? 'font-medium text-text' : ''}`}
         >
           {label}
           <span aria-hidden className={`text-[10px] ${active ? '' : 'opacity-0 group-hover:opacity-40'}`}>
@@ -137,7 +137,7 @@ export function TradesPage() {
           onChange={(e) => set('symbol', e.target.value)}
           placeholder={f.search}
           aria-label={f.search}
-          className="h-9 w-full rounded-lg border border-border bg-surface-2 px-3 text-sm text-text outline-none placeholder:text-muted/70 focus:border-primary sm:w-44"
+          className="h-9 w-full rounded-lg border border-border bg-surface-2 px-3 text-sm text-text field-focus placeholder:text-muted/70 sm:w-44"
         />
         <Pills
           options={[
@@ -159,7 +159,7 @@ export function TradesPage() {
           aria-label={f.setup}
           value={filters.setupId}
           onChange={(e) => set('setupId', e.target.value)}
-          className={`h-9 rounded-lg border bg-surface-2 px-2 text-sm outline-none focus:border-primary ${filters.setupId ? 'border-primary text-text' : 'border-border text-muted'}`}
+          className={`h-9 rounded-lg border bg-surface-2 px-2 text-sm field-focus ${filters.setupId ? 'border-primary text-text' : 'border-border text-muted'}`}
         >
           <option value="">{f.anySetup}</option>
           {setups.map((s) => (
@@ -189,7 +189,7 @@ export function TradesPage() {
               const [key, dir] = e.target.value.split(':') as [SortKey, 'asc' | 'desc']
               update(filters, { key, dir })
             }}
-            className="h-9 rounded-lg border border-border bg-surface-2 px-2 text-sm text-muted outline-none focus:border-primary"
+            className="h-9 rounded-lg border border-border bg-surface-2 px-2 text-sm text-muted field-focus"
           >
             {SORT_COLS.flatMap((key) =>
               (['desc', 'asc'] as const).map((dir) => (
@@ -276,8 +276,11 @@ export function TradesPage() {
               <table className="w-full text-sm">
                 <thead className="bg-surface text-left text-muted">
                   <tr>
-                    <th className="w-10 py-3 pr-0 pl-4 font-normal">
-                      <input type="checkbox" checked={allVisibleSelected} onChange={toggleAll} aria-label={t.trades.bulk.selectAll} className="size-4 accent-primary" />
+                    <th className="w-10 p-0 font-normal">
+                      {/* вся ячейка — зона нажатия галочки (сама галочка 16px) */}
+                      <label className="flex cursor-pointer items-center py-3 pr-1 pl-4">
+                        <input type="checkbox" checked={allVisibleSelected} onChange={toggleAll} aria-label={t.trades.bulk.selectAll} className="size-4 accent-primary" />
+                      </label>
                     </th>
                     {sortTh('date', t.trades.col.date)}
                     {sortTh('symbol', t.trades.col.symbol)}
@@ -299,14 +302,16 @@ export function TradesPage() {
                       data-fresh={fresh.has(tr.id) || undefined}
                       className={`cursor-pointer border-t border-border transition-colors hover:bg-surface-2/60 ${selected.has(tr.id) ? 'bg-primary/5' : ''} ${fresh.has(tr.id) ? flashCls(tr.pnl) : ''}`}
                     >
-                      <td className="py-3 pr-0 pl-4" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={selected.has(tr.id)}
-                          onChange={() => toggleOne(tr.id)}
-                          aria-label={fmt(t.trades.bulk.select, { name: tr.title ?? tr.symbol })}
-                          className="size-4 accent-primary"
-                        />
+                      <td className="p-0" onClick={(e) => e.stopPropagation()}>
+                        <label className="flex cursor-pointer items-center py-3 pr-1 pl-4">
+                          <input
+                            type="checkbox"
+                            checked={selected.has(tr.id)}
+                            onChange={() => toggleOne(tr.id)}
+                            aria-label={fmt(t.trades.bulk.select, { name: tr.title ?? tr.symbol })}
+                            className="size-4 accent-primary"
+                          />
+                        </label>
                       </td>
                       <td className="num whitespace-nowrap px-4 py-3 text-xs text-muted">
                         <Grow open={fresh.has(tr.id)}>{formatDateTime(tr.entry_at)}</Grow>
@@ -477,7 +482,7 @@ function BulkBar({
           aria-label={b.setSetup}
           value={setupId}
           onChange={(e) => setSetupId(e.target.value)}
-          className="order-3 h-9 w-full rounded-lg border border-border bg-surface-2 px-2 text-sm outline-none focus:border-primary md:w-48"
+          className="order-3 h-9 w-full rounded-lg border border-border bg-surface-2 px-2 text-sm field-focus md:w-48"
         >
           <option value="">{b.setSetup}…</option>
           <option value={NO_SETUP}>{b.noSetup}</option>

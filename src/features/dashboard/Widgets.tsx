@@ -153,13 +153,13 @@ export function Widget({
         <div className="flex items-center justify-between gap-2">
           <h2 className="flex items-center gap-1.5 text-xs font-medium text-muted">
             {label}
-            <span
-              title={hint}
-              aria-label={hint}
-              className="inline-flex size-3.5 cursor-help items-center justify-center rounded-full border border-current text-[9px] leading-none opacity-70"
-            >
-              i
-            </span>
+            {/* значок «i» нарисован (не буква 9px); подсказка — title, для экранного диктора — role="img" + aria-label */}
+            <svg viewBox="0 0 16 16" role="img" aria-label={hint} className="size-3.5 shrink-0 cursor-help opacity-70" fill="none" stroke="currentColor" strokeWidth={1.25} strokeLinecap="round">
+              <title>{hint}</title>
+              <circle cx="8" cy="8" r="7" />
+              <path d="M8 7.25v4" />
+              <circle cx="8" cy="4.75" r="0.6" fill="currentColor" stroke="none" />
+            </svg>
           </h2>
           {aside}
         </div>

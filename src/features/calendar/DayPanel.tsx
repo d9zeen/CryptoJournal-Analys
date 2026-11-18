@@ -127,7 +127,7 @@ function NoteForm({ day }: { day: string }) {
         disabled={!allowed || isLoading}
         onChange={(e) => setText(e.target.value)}
         placeholder={d.notePlaceholder}
-        className="w-full resize-y rounded-lg border border-border bg-bg/40 px-3 py-2 text-sm text-text placeholder:text-muted focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+        className="w-full resize-y rounded-lg border border-border bg-bg/40 px-3 py-2 text-sm text-text placeholder:text-muted field-focus disabled:cursor-not-allowed disabled:opacity-60"
       />
       {allowed ? (
         <div className="flex items-center justify-between gap-3">

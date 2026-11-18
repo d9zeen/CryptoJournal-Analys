@@ -61,7 +61,7 @@ export function GroupTable({ title, hint, rows, total, mode = 'default', empty, 
           type="button"
           aria-label={fmt(t.analysis.sortBy, { col: label })}
           onClick={() => setSort((s) => (s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' }))}
-          className={`group inline-flex items-center gap-1 transition-colors hover:text-text ${active ? 'font-medium text-text' : ''}`}
+          className={`group -my-1 inline-flex items-center gap-1 py-1 transition-colors hover:text-text ${active ? 'font-medium text-text' : ''}`}
         >
           <span aria-hidden className={`text-[10px] ${active ? '' : 'opacity-0 group-hover:opacity-40'}`}>
             {active && sort.dir === 'asc' ? '▲' : '▼'}
