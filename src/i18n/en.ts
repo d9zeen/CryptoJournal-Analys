@@ -1321,6 +1321,7 @@ export const en: Dict = {
           'Trades: pair, side, prices, size, PnL, notes, setups, mistakes and emotions.',
           'Trade screenshots: up to 10 per trade. Images are re-encoded in the browser before upload, so photo metadata (such as location) never reaches the server.',
           'Settings: time zone, starting balance, theme and palette, login email.',
+          'Sign in with Google: Google gives us only your email, name and profile picture. We do not get your Google password or access to anything else in your Google account.',
         ],
       },
       access: {
