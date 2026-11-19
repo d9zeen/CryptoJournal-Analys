@@ -46,7 +46,7 @@ jobs:
           VITE_AUTH_GOOGLE: '1'
       # GitHub Pages не умеет SPA-фолбэк: прямые ссылки (/trades/123) отдаём через 404.html = index.html
       - run: cp dist/index.html dist/404.html
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
