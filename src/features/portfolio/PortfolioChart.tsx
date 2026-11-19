@@ -5,7 +5,7 @@
  * До первого снимка — оценка по нынешнему составу (est): та же линия, «оценка» — только в подсказке.
  * «Если бы всё было в BTC» — тоже в подсказке, отдельной линии нет.
  */
-import { useId, useMemo } from 'react'
+import { useId, useMemo, useRef } from 'react'
 import { Area, AreaChart, CartesianGrid, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useT } from '@/i18n'
 import { formatDateTime, formatPercent, formatUsd, formatUsdShort } from '@/lib/format'
@@ -41,6 +41,7 @@ export function PortfolioChart({
   const t = useT()
   const p = t.portfolio.chart
   const id = useId().replace(/:/g, '')
+  const inside = useRef(false)
   const wide = useMediaQuery('(min-width: 640px)')
   const money = (v: number) => (pct ? signedPct((v - 100) / 100) : formatUsd(v))
   const moneyShort = (v: number) => (pct ? signedPct((v - 100) / 100, 0) : formatUsdShort(v))
@@ -74,13 +75,23 @@ export function PortfolioChart({
   const color = 'var(--color-primary)'
   const right = wide ? 104 : 16
   return (
-    <div key={String(drawKey)} className="eq-draw relative h-full">
+    // мышь над графиком — по самому блоку: Recharts присылает движение с задержкой (кадр), и после быстрого ухода
+    // запоздавшее движение снова ставило точку — крупная цифра «застревала» на прошлом значении
+    <div
+      key={String(drawKey)}
+      className="eq-draw relative h-full"
+      onPointerMove={() => (inside.current = true)}
+      onPointerLeave={() => {
+        inside.current = false
+        onScrub?.(null)
+      }}
+    >
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart
           data={data}
           margin={{ top: 22, right, bottom: 0, left: 0 }}
           onMouseMove={(st) => {
-            if (!onScrub) return
+            if (!onScrub || !inside.current) return
             const d = data[Number(st?.activeTooltipIndex)]
             onScrub(d ? { t: d.t, v: d.v, est: d.est, btc: d.btc, start: data[0].v } : null)
           }}

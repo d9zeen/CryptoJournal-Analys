@@ -248,3 +248,26 @@ test('фильтр источника: цифры — по источнику, �
   await sources.getByRole('radio', { name: 'Все' }).click()
   await expect(page.locator('[data-chart-whole]')).toHaveCount(0)
 })
+
+test('быстрый уход мыши с графика на медленном компьютере — крупная цифра не застревает на точке', async ({ page, db, isMobile }) => {
+  test.skip(isMobile, 'наведение мышью — только компьютер')
+  await page.setViewportSize({ width: 1440, height: 900 })
+  proPlus(db)
+  await fakeSupabase(page, db)
+  await page.goto('portfolio')
+  const hero = page.locator('[data-hero]')
+  await expect(hero).toHaveText('32 200,50 $')
+  await expect(page.locator('[data-portfolio-chart] .recharts-area')).toBeVisible()
+  // как в CI: браузер в 6 раз медленнее — движение мыши Recharts приходит уже после ухода с графика
+  const cdp = await page.context().newCDPSession(page)
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 6 })
+  const box = (await page.locator('[data-portfolio-chart]').boundingBox())!
+  for (let k = 0; k < 5; k++) {
+    await page.mouse.move(box.x + box.width * 0.2, box.y + box.height / 2)
+    await page.mouse.move(box.x + box.width * 0.4, box.y + box.height / 2, { steps: 4 })
+    await page.mouse.move(0, 0)
+    await expect(page.locator('[data-hero-scrub]')).toHaveCount(0)
+    await expect(hero).toHaveText('32 200,50 $')
+  }
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 })
+})
