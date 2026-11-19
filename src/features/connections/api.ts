@@ -249,7 +249,7 @@ export function useAddConnection() {
           const info = mod ? await mod.check(call) : await checkBybitKey(call as BybitCall)
           if (!info.readOnly) throw new SyncError('KEY_NOT_READONLY')
           if (info.expiresAt !== undefined) await supabase.rpc('set_connection_key_expiry', { p_id: connId, p_expires: info.expiresAt })
-          // один аккаунт биржи — одно подключение (0024): тот же аккаунт другим ключом посчитал бы деньги и сделки дважды.
+          // один аккаунт биржи — одно подключение (0025): тот же аккаунт другим ключом посчитал бы деньги и сделки дважды.
           // Другие ошибки (функции ещё нет в базе) подключение не ломают
           if (info.uid) {
             const { error: dup } = await supabase.rpc('set_connection_account', { p_id: connId, p_uid: info.uid })

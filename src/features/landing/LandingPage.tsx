@@ -15,6 +15,7 @@ import { formatDayShort, formatPnl, pnlClass } from '@/lib/format'
 import { Reveal } from './Reveal'
 import { SideBadge } from '@/components/SideBadge'
 import { PlanCards } from './PlanCards'
+import { DiaryTabs } from './DiaryTabs'
 import { HeroCandles } from './HeroCandles'
 import { DEMO_FEATURED, demoAccount, demoMistakeRows, demoWeek } from './demo'
 import { compactPnl } from '@/lib/calc/calendar'
@@ -56,19 +57,21 @@ export function LandingPage() {
   useTilt(previewRef, 4)
   const pathRef = useRef<HTMLOListElement>(null)
   useSpotlight(pathRef)
-  const { user } = useAuth()
+  const { user: authUser, isGuest } = useAuth()
+  // гость демо для главной — «не вошёл» (видит «Войти» / «Начать», а в демо возвращается через «Открыть демо»)
+  const user = isGuest ? null : authUser
 
   return (
     <div className="min-h-dvh">
       {/* шапка */}
       <header className="animate-drop sticky top-0 z-20 border-b border-border bg-bg/85 backdrop-blur">
         <div className={`${wrap} flex h-14 items-center justify-between gap-4`}>
-          {/* уже 380px название не помещается рядом с «Начать» — только значок */}
+          {/* уже 440px название не помещается рядом с «Войти» и «Начать» — только значок */}
           <Link to="/" aria-label={t.app.name} className="shrink-0">
-            <span className="min-[380px]:hidden">
+            <span className="min-[440px]:hidden">
               <LogoMark />
             </span>
-            <span className="hidden min-[380px]:block">
+            <span className="hidden min-[440px]:block">
               <Logo />
             </span>
           </Link>
@@ -96,7 +99,10 @@ export function LandingPage() {
               </Link>
             ) : (
               <>
-                {/* на телефоне в шапке — главная кнопка «Начать»; «Войти» остаётся на первом экране и в подвале */}
+                {/* «Войти» — и на телефоне (19.11.2026): там текстовой ссылкой без рамки, чтобы поместиться рядом с «Начать» */}
+                <Link to="/login" className={`${btn} !px-2 !py-2 whitespace-nowrap text-text hover:text-primary sm:hidden`}>
+                  {l.login}
+                </Link>
                 <span className="hidden sm:contents">
                   <Link to="/login" className={`${btnSecondary} !px-3 !py-2 whitespace-nowrap`}>
                     {l.login}
@@ -131,17 +137,18 @@ export function LandingPage() {
                     <span
                       aria-hidden
                       className={`animate-word inline-block ${i >= all.length - accentWords ? 'text-primary' : ''}`}
-                      style={{ animationDelay: `${150 + i * 70}ms` }}
+                      style={{ animationDelay: `${60 + i * 45}ms` }}
                     >
                       {w}
                     </span>
                   </Fragment>
                 ))}
               </h1>
-              <Reveal delay={550}>
-                <p className="mt-4 max-w-xl text-lg leading-snug text-balance text-text/75 sm:text-xl">{l.subtitle}</p>
-              </Reveal>
-              <Reveal delay={680} className="mt-8 flex flex-wrap items-center gap-3">
+              {/* первый экран — только CSS-анимация (без IntersectionObserver): текст и кнопки видны сразу после загрузки в любом браузере */}
+              <p className="animate-rise mt-4 max-w-xl text-lg leading-snug text-balance text-text/75 sm:text-xl" style={{ animationDelay: '300ms' }}>
+                {l.subtitle}
+              </p>
+              <div className="animate-rise mt-8 flex flex-wrap items-center gap-3" style={{ animationDelay: '380ms' }}>
                 {/* №2 «Луч по рамке» — свет бежит по краю главной кнопки */}
                 <Link
                   to="/register"
@@ -149,23 +156,29 @@ export function LandingPage() {
                 >
                   {l.start}
                 </Link>
-                <Link to="/login" className={`${btnSecondary} !px-5 !py-3`}>
-                  {l.login}
+                {/* «Открыть демо» — сразу в дневник с демо-сделками, без регистрации (0024); «Войти» — в шапке и подвале */}
+                <Link to="/demo" data-open-demo className={`${btnSecondary} !px-5 !py-3 gap-2`}>
+                  {l.openDemo}
+                  <span className="text-xs font-normal text-muted">{l.openDemoHint}</span>
                 </Link>
-              </Reveal>
+              </div>
             </div>
           </div>
 
           {/* живое превью дашборда */}
-          <Reveal delay={820} zoom className="mt-12">
+          <div className="animate-rise mt-12" style={{ animationDelay: '460ms' }}>
             {/* №2: превью чуть наклоняется к курсору (только мышь; большой блок — наклон меньше, ±4°) */}
             <div ref={previewRef} className="tilt relative rounded-xl border border-border bg-surface/40 p-2 sm:p-3">
               <span aria-hidden className="tilt-sheen" />
-              <div className="flex items-center gap-1.5 px-2 pt-1 pb-2.5">
-                <i className="size-2.5 rounded-full bg-border" />
-                <i className="size-2.5 rounded-full bg-border" />
-                <i className="size-2.5 rounded-full bg-border" />
-                <span className="ml-2 truncate text-xs text-muted">{l.previewLabel}</span>
+              <div className="flex items-start gap-1.5 px-2 pt-1 pb-2.5">
+                <i className="mt-[3px] size-2.5 shrink-0 rounded-full bg-border" />
+                <i className="mt-[3px] size-2.5 shrink-0 rounded-full bg-border" />
+                <i className="mt-[3px] size-2.5 shrink-0 rounded-full bg-border" />
+                {/* на телефоне подпись переносится на вторую строку, а не обрезается многоточием */}
+                <span className="ml-2 min-w-0 flex-1 text-xs leading-snug text-muted">{l.previewLabel}</span>
+                <Link to="/demo" className="shrink-0 text-xs font-medium text-primary hover:underline">
+                  {l.openDemo} →
+                </Link>
               </div>
               <div className="flex flex-col gap-3 rounded-lg bg-bg p-3 sm:p-4">
                 <KpiRow summary={demo.summary} score={demo.score} startingBalance={demo.balance} equity={demo.equity} days={demo.days} />
@@ -176,7 +189,7 @@ export function LandingPage() {
                 </div>
               </div>
             </div>
-          </Reveal>
+          </div>
         </section>
 
         {/* биржи: две строки — «сами по API» (с зелёной точкой) и «файлом»; на телефоне подпись строки над пилюлями */}
@@ -222,6 +235,16 @@ export function LandingPage() {
               <WeekVisual trades={demo.trades} mark={demo.featuredId} />
             </PathStep>
           </ol>
+        </section>
+
+        {/* как выглядит дневник изнутри: вкладки над одним окном со снимком экрана (вариант А, 19.11.2026) */}
+        <section id="inside" className={`${wrap} scroll-mt-20 ${section}`}>
+          <Reveal as="h2" className="mb-6 text-center text-3xl font-bold tracking-tight sm:text-4xl">
+            {l.inside.title}
+          </Reveal>
+          <Reveal>
+            <DiaryTabs />
+          </Reveal>
         </section>
 
         {/* тарифы */}

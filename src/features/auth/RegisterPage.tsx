@@ -9,6 +9,7 @@ import { FormError } from '@/components/FormError'
 import { PasswordInput } from '@/components/PasswordInput'
 import { pause, useShake } from '@/lib/motion'
 import { AuthLayout } from './AuthLayout'
+import { OAuthButtons } from './OAuthButtons'
 import { CheckEmail } from './CheckEmail'
 import { authErrorMessage, passwordProblem } from './errors'
 import { appUrl } from '@/lib/url'
@@ -84,6 +85,7 @@ export function RegisterPage() {
   return (
     <AuthLayout title={t.auth.register.title} cardRef={cardRef}>
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
+        <OAuthButtons />
         <FormError message={error?.text ?? null} />
         <Input
           label={t.auth.email}

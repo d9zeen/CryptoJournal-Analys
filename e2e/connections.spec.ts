@@ -152,7 +152,7 @@ test('Pro Plus: синхронизация на сервере каждые 3 ч
 test('Basic: подключений нет — строка про тарифы, демо Polymarket работает', async ({ page, db }) => {
   await fakeSupabase(page, db)
   await page.goto('import')
-  await expect(page.getByText(/На Pro Plus — на сервере каждые 3 часа/)).toBeVisible()
+  await expect(page.getByText(/На Pro Plus — ещё и каждые 3 часа без захода/)).toBeVisible()
   const upgrade = page.locator('[data-upgrade]').filter({ hasText: 'Подключения бирж — с Pro' })
   await expect(upgrade.first()).toBeVisible()
   await expect(upgrade.first().getByRole('link', { name: 'Тарифы' })).toBeVisible()

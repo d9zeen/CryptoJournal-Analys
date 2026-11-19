@@ -10,6 +10,8 @@ import { buildTrade, computeDerived, emptyForm, formFromTrade, type FormErrors, 
 import { ListSelect } from './ListSelect'
 import { MistakePicker } from './MistakePicker'
 import { ScreenshotsField } from './ScreenshotsField'
+import { useAuth } from '@/features/auth/AuthProvider'
+import { GuestLine } from '@/features/demo/DemoBanner'
 import type { TradeScreenshot } from '@/types/db'
 import { useUsage } from '@/features/settings/api'
 import { Card } from '@/components/ui/Card'
@@ -66,6 +68,7 @@ export function TradeFormPage() {
 
 function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data'] }) {
   const t = useT()
+  const guest = useAuth().isGuest
   const navigate = useNavigate()
   const isNew = !existing
   const [tradeId] = useState(() => existing?.id ?? crypto.randomUUID())
@@ -365,13 +368,14 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
             />
           </div>
           <div className="min-w-0">
-            <ScreenshotsField
+            {/* демо без регистрации: скриншоты (файлы в Storage) — только в своём аккаунте */}
+            {guest ? <GuestLine text={t.demo.noScreenshots} /> : <ScreenshotsField
               saved={savedShots}
               pending={addShots}
               onAdd={(blobs) => setAddShots((a) => [...a, ...blobs])}
               onRemoveSaved={(s) => setRemoveShots((r) => [...r, s])}
               onRemovePending={(i) => setAddShots((a) => a.filter((_, j) => j !== i))}
-            />
+            />}
           </div>
         </div>
       </Section>
@@ -379,7 +383,7 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
       <FormError message={submitError} />
 
       {/* компьютер и планшет: панель действий прилипает к низу экрана, пока форма длиннее экрана; на телефоне её нет — «Сохранить» в заголовке */}
-      <div className="sticky bottom-4 z-10 hidden items-center justify-end gap-3 rounded-lg border border-border bg-surface/95 px-4 py-3 backdrop-blur md:flex">
+      <div data-trade-actions className="sticky bottom-4 z-10 hidden items-center justify-end gap-3 rounded-lg border border-border bg-surface/95 px-4 py-3 backdrop-blur md:flex">
         <Button type="button" variant="secondary" onClick={() => navigate('/trades')}>
           {t.common.cancel}
         </Button>

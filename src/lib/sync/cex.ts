@@ -19,7 +19,7 @@ export class ExchangeError extends Error {
   }
 }
 
-/** uid — номер аккаунта на бирже: один аккаунт — одно подключение (0024; нет у биржи такого — не передаём) */
+/** uid — номер аккаунта на бирже: один аккаунт — одно подключение (0025; нет у биржи такого — не передаём) */
 export type KeyInfo = { readOnly: boolean; expiresAt?: string | null; uid?: string | null }
 
 export type CexModule = {

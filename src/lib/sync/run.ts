@@ -46,7 +46,7 @@ export type SyncDeps = {
   touch: (cursorIso: string | null, error: string | null) => Promise<void>
   /** дата окончания ключа (Bybit отключает ключи без IP через 90 дней) */
   setKeyExpiry?: (iso: string | null) => Promise<void>
-  /** номер аккаунта на бирже (0024: один аккаунт — одно подключение); ошибки здесь синхронизацию не ломают */
+  /** номер аккаунта на бирже (0025: один аккаунт — одно подключение); ошибки здесь синхронизацию не ломают */
   setAccountUid?: (uid: string) => Promise<void>
   now?: () => number
 }

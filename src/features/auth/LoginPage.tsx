@@ -8,6 +8,7 @@ import { FormError } from '@/components/FormError'
 import { PasswordInput } from '@/components/PasswordInput'
 import { pause, useShake } from '@/lib/motion'
 import { AuthLayout } from './AuthLayout'
+import { OAuthButtons } from './OAuthButtons'
 import { authErrorMessage } from './errors'
 
 /** Вход (№4): крутилка в кнопке, при ошибке форма «мотает головой» и сообщение выезжает, при успехе — галочка ~400 мс */
@@ -42,6 +43,7 @@ export function LoginPage() {
   return (
     <AuthLayout title={t.auth.login.title} cardRef={cardRef}>
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
+        <OAuthButtons />
         <FormError message={error} />
         <Input
           label={t.auth.email}

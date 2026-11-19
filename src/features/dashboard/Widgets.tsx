@@ -243,7 +243,8 @@ export function KpiRow({
       <Widget label={k.profitFactor} hint={k.hints.profitFactor} i={2}>
         <div className={big}>{s.profitFactor !== null && Number.isFinite(s.profitFactor) ? num(s.profitFactor, formatRatio) : formatRatio(s.profitFactor)}</div>
         <PfCaption pf={s.profitFactor} />
-        <div className="num flex justify-between gap-2 text-xs">
+        {/* в узкой карточке (телефон, 2 колонки) убыток переносится под прибыль, а не уходит за край */}
+        <div className="num flex flex-wrap justify-between gap-x-2 gap-y-0.5 text-xs">
           <span className={`whitespace-nowrap ${TONE.aText}`}>{formatUsd(grossWin)}</span>
           <span className={`whitespace-nowrap ${TONE.bText}`}>−{formatUsd(grossLoss)}</span>
         </div>
