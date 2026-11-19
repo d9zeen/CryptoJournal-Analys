@@ -26,6 +26,11 @@ export const en: Dict = {
     usageShort: '{used} / {limit} trades',
   },
   auth: {
+    oauth: {
+      google: 'Continue with Google',
+      or: 'or with email',
+      failed: 'Could not open Google sign-in. Try again or use your email.',
+    },
     email: 'Email',
     password: 'Password',
     passwordRepeat: 'Repeat password',

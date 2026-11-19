@@ -108,6 +108,8 @@ src/
                        «Открыть в списке сделок» (/trades?day=…), «Заметка дня» (notesApi.ts, таблица day_notes — 0017; до 2000 символов; Pro Plus — на Basic / Pro поле заблокировано + UpgradeLine,
                        в базе триггер → PLAN_FEATURE). ?day=YYYY-MM-DD в адресе — сразу этот месяц и панель (так открывает мини-календарь «Статистики»)
                        (monthSummary в lib/calc/calendar.ts: дни в плюс / минус, лучший / худший день, недели, дни недели)
+  features/auth/OAuthButtons.tsx  «Продолжить с Google» + черта «или почтой» над формой входа / регистрации (19.11.2026): видна только при VITE_AUTH_GOOGLE=1 (lib/authProviders.ts; ставится в pages.yml,
+                       когда владелец включит Google в Supabase — docs/AUTH_GOOGLE.md); signInWithOAuth → redirectTo appUrl('dashboard'). Логотип — src/assets/auth/google.svg. e2e — e2e/oauth.spec.ts (по умолчанию кнопки нет)
   features/demo/       «Открыть демо» без регистрации (0024, 19.11.2026): /demo → signInAnonymously → seedDemo (те же 60 сделок, что в превью главной, landing/demo.ts → seed.ts buildDemoRows:
                        цены с часовых свечей Bybit, если ответила за 3,5 с — точки на «Графике сделки» на линии цены; PnL как в превью, pnl_manual; external_id demo:N; депозит 5 000 $) → дашборд.
                        Гость — useAuth().isGuest (user.is_anonymous): для главной / входа / регистрации он «не вошёл»; DemoBanner над каждой страницей дневника
