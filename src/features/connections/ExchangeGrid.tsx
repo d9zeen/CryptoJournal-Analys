@@ -12,6 +12,8 @@ import { exchangeName } from '@/lib/exchanges'
 import { ExchangeLogo } from '@/components/ExchangeLogo'
 import { CONNECTABLE, errorCodeOf, type ConnectableId, type Connection } from './api'
 import { AddForm } from './ConnectionsCard'
+import { useAuth } from '@/features/auth/AuthProvider'
+import { GuestLine } from '@/features/demo/DemoBanner'
 
 type Method = 'api' | 'wallet' | 'file'
 
@@ -120,6 +122,7 @@ export function ExchangePanel({
   /** подключения этой биржи (карточки со статусом, «Обновить», «Отключить») — сверху панели; ниже — подключить ещё */
   manage?: ReactNode
 }) {
+  const guest = useAuth().isGuest
   const t = useT()
   const c = t.connections
   const g = c.grid
@@ -196,6 +199,9 @@ export function ExchangePanel({
             </Button>
             <p className="text-xs text-muted">{g.fileHint}</p>
           </div>
+        ) : guest ? (
+          // демо без регистрации: ключи и адреса — только в своём аккаунте (база тоже не пустит — GUEST_FORBIDDEN, 0024)
+          <GuestLine text={t.demo.noConnections} />
         ) : (
           <AddForm count={count} admin={admin} initial={exchange !== null && isConnectable(exchange) ? exchange : undefined} onClose={() => ref.current?.close()} />
         )}

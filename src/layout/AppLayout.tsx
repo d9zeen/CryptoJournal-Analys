@@ -9,6 +9,7 @@ import { LangSwitch } from '@/components/LangSwitch'
 import { useIsAdmin } from '@/features/admin/api'
 import { useAutoSync } from '@/features/connections/api'
 import { ActivityToast } from '@/components/ActivityToast'
+import { DemoBanner } from '@/features/demo/DemoBanner'
 import { useProfile, useUsage } from '@/features/settings/api'
 import { applyPalette, canUsePalette, isPalette } from '@/lib/palette'
 import { useEffect } from 'react'
@@ -86,6 +87,8 @@ export function AppLayout() {
 
       {/* контент — по той же ширине, что и верхняя полоса (до 2200 px) */}
       <main className="mx-auto max-w-[2200px] px-4 py-6 lg:px-8 lg:py-8">
+        {/* гость «Открыть демо»: это демо-счёт + «Создать свой аккаунт» */}
+        <DemoBanner />
         <Outlet />
       </main>
 
@@ -186,13 +189,16 @@ function TopNav({ items }: { items: NavItem[] }) {
           <UsageLine />
           <LangSwitch />
           <ThemeToggle />
-          <span
-            className="hidden size-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-xs font-semibold text-text uppercase lg:flex"
-            title={user?.email ?? ''}
-            aria-hidden
-          >
-            {(user?.email ?? '?').slice(0, 1)}
-          </span>
+          {/* буква почты; у гостя демо почты нет — кружка тоже нет */}
+          {user?.email && (
+            <span
+              className="hidden size-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-xs font-semibold text-text uppercase lg:flex"
+              title={user.email}
+              aria-hidden
+            >
+              {user.email.slice(0, 1)}
+            </span>
+          )}
           <button type="button" onClick={signOut} aria-label={t.nav.logout} title={t.nav.logout} className={headerBtn}>
             <Icon d="M15 4h3a2 2 0 012 2v12a2 2 0 01-2 2h-3M10 16l-4-4 4-4M6 12h10" />
           </button>

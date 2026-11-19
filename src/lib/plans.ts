@@ -22,16 +22,12 @@ export type PlanInfo = {
   serverSync: boolean
   /** скриншотов на сделку */
   screenshots: number
-  /** все палитры (иначе — 3 бесплатные) */
-  allPalettes: boolean
-  /** новые функции первыми */
-  earlyAccess: boolean
 }
 
 export const PLANS: PlanInfo[] = [
-  { id: 'free', price: 0, priceYear: null, tradeLimit: 50, connections: 0, exchanges: false, polymarket: false, serverSync: false, screenshots: 2, allPalettes: false, earlyAccess: false },
-  { id: 'pro', price: 10, priceYear: 96, tradeLimit: null, connections: 1, exchanges: true, polymarket: false, serverSync: false, screenshots: 10, allPalettes: true, earlyAccess: false },
-  { id: 'pro_plus', price: 15, priceYear: 144, tradeLimit: null, connections: 5, exchanges: true, polymarket: true, serverSync: true, screenshots: 10, allPalettes: true, earlyAccess: true },
+  { id: 'free', price: 0, priceYear: null, tradeLimit: 50, connections: 0, exchanges: false, polymarket: false, serverSync: false, screenshots: 2 },
+  { id: 'pro', price: 10, priceYear: 96, tradeLimit: null, connections: 1, exchanges: true, polymarket: false, serverSync: false, screenshots: 10 },
+  { id: 'pro_plus', price: 15, priceYear: 144, tradeLimit: null, connections: 5, exchanges: true, polymarket: true, serverSync: true, screenshots: 10 },
 ]
 
 /** Главный тариф — выделяется на странице тарифов и на главной */

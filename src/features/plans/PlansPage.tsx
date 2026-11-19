@@ -54,8 +54,6 @@ export function PlansTable({ current, currentNote = null }: { current?: Plan; cu
     { label: f.polymarket, cell: (plan) => flag(plan.polymarket) },
     { label: f.sync, cell: (plan) => (plan.serverSync ? f.syncServer : plan.connections ? f.syncOpen : <span className="text-muted">{f.syncNone}</span>) },
     { label: f.screenshots, cell: (plan) => num(plan.screenshots) },
-    { label: f.palettes, cell: (plan) => (plan.allPalettes ? f.palettesAll : f.palettesFree) },
-    { label: f.early, cell: (plan) => flag(plan.earlyAccess) },
   ]
   // главный тариф (Pro Plus) — колонка в рамке; над ней — плашка «Всё автоматически»
   const col = (plan: PlanInfo, edge?: 'top' | 'bottom') =>

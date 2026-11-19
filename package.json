@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "test:db": "./scripts/test-db.sh",
     "test:e2e": "playwright test",
-    "build:functions": "node scripts/build-functions.mjs"
+    "build:functions": "node scripts/build-functions.mjs",
+    "shots:diary": "GEN_SCREENS=1 SHOT_LANG=ru LANGUAGE=ru LANG=ru_RU.UTF-8 playwright test zz-diary-screens --project=desktop --trace off && GEN_SCREENS=1 SHOT_LANG=en LANGUAGE=en LANG=en_US.UTF-8 playwright test zz-diary-screens --project=desktop --trace off"
   },
   "dependencies": {
     "@fontsource-variable/jetbrains-mono": "^5.3.0",

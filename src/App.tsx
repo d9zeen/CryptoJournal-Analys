@@ -44,14 +44,16 @@ const CalendarPage = lazyPage(() => import('@/features/calendar/CalendarPage'), 
 const PortfolioPage = lazyPage(() => import('@/features/portfolio/PortfolioPage'), 'PortfolioPage')
 const SharedPortfolioPage = lazyPage(() => import('@/features/portfolio/SharedPortfolioPage'), 'SharedPortfolioPage')
 const LandingPage = lazyPage(() => import('@/features/landing/LandingPage'), 'LandingPage')
+const DemoPage = lazyPage(() => import('@/features/demo/DemoPage'), 'DemoPage')
 const PrivacyPage = lazyPage(() => import('@/features/privacy/PrivacyPage'), 'PrivacyPage')
 
 /** Главная: вошедшего — сразу в дашборд, остальным — страница о сервисе */
 function Home() {
-  const { user, loading } = useAuth()
+  const { user, isGuest, loading } = useAuth()
   const t = useT()
   if (loading) return <FullPageSpinner label={t.common.loading} />
-  if (user) return <Navigate to="/dashboard" replace />
+  // гость демо видит главную как все (вернуться в демо — «Открыть демо»)
+  if (user && !isGuest) return <Navigate to="/dashboard" replace />
   return <LandingPage />
 }
 
@@ -62,6 +64,8 @@ const router = createBrowserRouter(
     { path: '/welcome', element: <LandingPage /> },
     // «Данные и безопасность» — без входа
     { path: '/privacy', element: <PrivacyPage /> },
+    // «Открыть демо» без регистрации: вход гостем + демо-счёт → дашборд
+    { path: '/demo', element: <DemoPage /> },
     // портфель по ссылке (0022) — для всех, без входа
     { path: '/p/:token', element: <SharedPortfolioPage /> },
     // Только для незалогиненных

@@ -30,8 +30,6 @@ function useFeatures(plan: PlanInfo): { text: string; on: boolean }[] {
     { text: p.features.polymarket, on: plan.polymarket },
     { text: plan.connections ? (plan.serverSync ? p.syncServerLine : p.syncOpenLine) : p.cards.syncNone, on: plan.connections > 0 },
     { text: plural(plan.screenshots, p.screenshotsLine), on: true },
-    { text: plan.allPalettes ? p.palettesAllLine : p.palettesFreeLine, on: true },
-    { text: p.features.early, on: plan.earlyAccess },
   ]
 }
 

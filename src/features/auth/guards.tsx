@@ -20,11 +20,11 @@ export function RequireAuth() {
   return <Outlet />
 }
 
-/** Страницы входа/регистрации: залогиненного сразу уводим в приложение. */
+/** Страницы входа/регистрации: залогиненного сразу уводим в приложение (гость демо — может войти или зарегистрироваться). */
 export function GuestOnly() {
-  const { user, loading } = useAuth()
+  const { user, isGuest, loading } = useAuth()
   const t = useT()
   if (loading) return <FullPageSpinner label={t.common.loading} />
-  if (user) return <Navigate to="/dashboard" replace />
+  if (user && !isGuest) return <Navigate to="/dashboard" replace />
   return <Outlet />
 }

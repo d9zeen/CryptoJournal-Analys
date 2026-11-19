@@ -8,6 +8,7 @@
  */
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link } from 'react-router'
+import { useAuth } from '@/features/auth/AuthProvider'
 import { fmt, plural, useT } from '@/i18n'
 import { Button } from '@/components/ui/Button'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
@@ -63,6 +64,8 @@ const RANGES: PortfolioRange[] = ['24h', '7d', '1m', '3m', '1y', 'all']
 
 export function PortfolioPage() {
   const t = useT()
+  // гость демо не делится портфелем по ссылке (0024)
+  const guest = useAuth().isGuest
   const p = t.portfolio
   const { data: coins = [], isLoading: coinsLoading } = useCoins()
   const { data: holdings, isLoading } = useHoldings()
@@ -155,9 +158,11 @@ export function PortfolioPage() {
               {p.refresh}
             </Button>
           )}
-          <Button variant="secondary" onClick={() => setSharing(true)}>
-            {p.share.button}
-          </Button>
+          {!guest && (
+            <Button variant="secondary" onClick={() => setSharing(true)}>
+              {p.share.button}
+            </Button>
+          )}
           <Button onClick={() => setAdding(true)}>{p.add}</Button>
         </div>
       </div>

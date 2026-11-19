@@ -56,6 +56,9 @@ export type FakeDb = {
   costWrites?: { method: string; body: unknown }[]
   /** этап 2 (0020): история спотовых покупок / продаж */
   spotFills?: Row[]
+  /** демо без регистрации (0024): вошли гостем (signInAnonymously); анонимный вход выключен в Supabase */
+  guest?: boolean
+  anonDisabled?: boolean
   /** график сделки: какие биржи отдают свечи (по умолчанию все); куда ходил сайт */
   candleHosts?: string[]
   candleCalls?: string[]
@@ -81,7 +84,9 @@ export function makeTrade(i: number, over: Row = {}): Row {
 function session(db: FakeDb) {
   const exp = Math.floor(Date.now() / 1000) + 86400
   const jwt = `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64({ sub: UID, exp, role: 'authenticated', aal: db.aal, amr: [{ method: 'password', timestamp: 1 }] })}.sig`
-  const user = { id: UID, email: 'trader@example.com', aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z', factors: db.factors }
+  const user = db.guest
+    ? { id: UID, email: '', aud: 'authenticated', role: 'authenticated', is_anonymous: true, app_metadata: {}, user_metadata: {}, created_at: '2026-11-19T00:00:00Z', factors: [] }
+    : { id: UID, email: 'trader@example.com', aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z', factors: db.factors }
   return { access_token: jwt, refresh_token: 'r', expires_at: exp, expires_in: 86400, token_type: 'bearer', user }
 }
 
@@ -104,6 +109,16 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
     if (path === '/auth/v1/token' && db.loginFails)
       return json({ code: 'invalid_credentials', error_code: 'invalid_credentials', msg: 'Invalid login credentials' }, 400)
     if (path === '/auth/v1/token') return json(session(db))
+    // signInAnonymously — тот же /signup, но без почты: гость демо
+    if (path === '/auth/v1/signup' && !(body() as { email?: string } | null)?.email) {
+      if (db.anonDisabled) return json({ code: 'anonymous_provider_disabled', error_code: 'anonymous_provider_disabled', msg: 'Anonymous sign-ins are disabled' }, 422)
+      db.guest = true
+      return json(session(db))
+    }
+    if (path.endsWith('/rpc/delete_my_account')) {
+      ;(db.authCalls ??= []).push({ path, body: null })
+      return route.fulfill({ status: 204 })
+    }
     if (path === '/auth/v1/signup' && db.confirmEmail) return json({ ...session(db).user, identities: [{ id: 'x' }], confirmation_sent_at: new Date().toISOString() })
     if (path === '/auth/v1/signup') return json({ ...session(db), user: { ...session(db).user, identities: [{ id: 'x' }] } })
     if (path === '/auth/v1/resend' || path === '/auth/v1/recover') return json({})
@@ -253,7 +268,7 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
       return json(names.map((name, i) => ({ id: i === 0 ? 's1' : `s${i + 1}`, user_id: UID, name, archived: false, sort_order: i, created_at: '' })))
     }
     if (path === '/rest/v1/trades') {
-      if (method === 'GET') {
+      if (method === 'GET' || method === 'HEAD') {
         if (url.searchParams.get('external_id')) return json([]) // проверка дублей при импорте
         if (url.searchParams.get('id')) return json(db.trades.find((t) => `eq.${t.id}` === url.searchParams.get('id')) ?? null)
         // как настоящий Supabase: не больше 1000 строк за раз (offset/limit) и общее число в Content-Range
