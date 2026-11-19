@@ -6,6 +6,7 @@
 import { grossPnl, round, type MarketType, type Side } from '@/lib/calc/trade'
 import { normalizeSymbol } from '@/lib/import/fields'
 import type { ImportedTrade } from '@/lib/import/types'
+import { uidOf } from './cex'
 
 export type BybitClosedPnl = {
   symbol: string
@@ -129,9 +130,9 @@ export async function fetchBybitTrades(call: BybitCall, from: number, to: number
 }
 
 /** Проверка ключа: только чтение. Возвращает дату окончания ключа (Bybit: без привязки к IP — 90 дней) */
-export async function checkBybitKey(call: BybitCall): Promise<{ readOnly: boolean; expiresAt: string | null }> {
+export async function checkBybitKey(call: BybitCall): Promise<{ readOnly: boolean; expiresAt: string | null; uid: string | null }> {
   const res = await call('/v5/user/query-api', {})
   if (res.retCode !== 0) throw new BybitError(res.retCode, res.retMsg)
-  const r = res.result as { readOnly?: number; expiredAt?: string }
-  return { readOnly: r.readOnly === 1, expiresAt: r.expiredAt || null }
+  const r = res.result as { readOnly?: number; expiredAt?: string; userID?: number | string }
+  return { readOnly: r.readOnly === 1, expiresAt: r.expiredAt || null, uid: uidOf(r.userID) }
 }

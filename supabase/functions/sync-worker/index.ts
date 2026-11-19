@@ -181,6 +181,10 @@ Deno.serve(async (req) => {
         setKeyExpiry: async (iso) => {
           await update({ key_expires_at: iso })
         },
+        // номер аккаунта биржи (0025); тот же аккаунт уже подключён другим ключом — уникальный индекс не даст записать, это не ошибка синхронизации
+        setAccountUid: async (uid) => {
+          await update({ account_uid: uid })
+        },
       },
     )
     return json({ ...result, holdings: await syncBalances() })

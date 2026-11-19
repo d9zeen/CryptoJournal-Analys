@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { binanceSpotFills, bingxSpotFills, bitgetSpotFills, bybitSpotFills, fetchSpotFills, hlSpotPairs, hyperliquidSpotFills, okxSpotFills, splitPair } from './fills'
+import { binanceSpotFills, bingxSpotFills, bitgetSpotFills, bybitConvertFills, bybitSpotFills, convertFill, fetchSpotFills, hlSpotPairs, hyperliquidSpotFills, okxSpotFills, splitPair } from './fills'
 
 const DAY = 86_400_000
 
@@ -155,5 +155,49 @@ describe('откуда продолжать', () => {
     expect(await fetchSpotFills({ exchange: 'polymarket' }, async () => null, { cursor: null, assets: [] })).toBeNull()
     const r = await fetchSpotFills({ exchange: 'okx' }, async () => ({ code: '0', data: [] }), { cursor: null, assets: [], now: 123 * DAY })
     expect(r).toEqual({ fills: [], cursor: new Date(123 * DAY).toISOString() })
+  })
+})
+
+describe('Bybit: конвертация — тоже спот (цена входа)', () => {
+  it('USDT → монета — покупка по курсу обмена, монета → USDT — продажа; без долларовой стороны — мимо', () => {
+    expect(convertFill('bb:cv:1', 'USDT', '371.5', 'XAUT', '0.1', '1720071899995')).toMatchObject({ asset: 'XAUT', quote: 'USDT', side: 'buy', qty: 0.1, price: 3715, fee: 0, at: '2024-07-04T05:44:59.995Z' })
+    expect(convertFill('bb:cv:2', 'XAUT', '0.05', 'USDC', '190', '1672197760')).toMatchObject({ asset: 'XAUT', quote: 'USDC', side: 'sell', qty: 0.05, price: 3800, at: '2022-12-28T03:22:40.000Z' })
+    expect(convertFill('bb:cv:3', 'DOGE', '100', 'XAUT', '0.001', '1720071899995')).toBeNull()
+    expect(convertFill('bb:cv:4', 'USDC', '100', 'USDT', '99.9', '1720071899995')).toBeNull()
+    expect(convertFill('bb:cv:5', 'USDT', '0', 'XAUT', '0.1', '1720071899995')).toBeNull()
+  })
+  it('обе истории (новая и старый «Обмен монет»), одна конвертация в обеих — один раз, неуспешные — мимо', async () => {
+    const calls: string[] = []
+    const call = async (path: string, params: Record<string, string | number>) => {
+      calls.push(`${path}?${new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]))}`)
+      if (path === '/v5/asset/exchange/query-convert-history')
+        return { retCode: 0, result: { list: [
+          { exchangeTxId: 'a1', fromCoin: 'USDT', fromAmount: '371.5', toCoin: 'XAUT', toAmount: '0.1', exchangeStatus: 'success', createdAt: '1720071899995' },
+          { exchangeTxId: 'a2', fromCoin: 'USDT', fromAmount: '50', toCoin: 'DOGE', toAmount: '100', exchangeStatus: 'failure', createdAt: '1720071899995' },
+        ] } }
+      if (path === '/v5/asset/exchange/order-record')
+        return { retCode: 0, result: { orderBody: [
+          { exchangeTxId: 'b1', fromCoin: 'USDT', fromAmount: '371.5', toCoin: 'XAUT', toAmount: '0.100000000000000000', createdTime: '1720071899' },
+          { exchangeTxId: 'b2', fromCoin: 'APE', fromAmount: '10', toCoin: 'USDT', toAmount: '13', createdTime: '1672197760' },
+        ], nextPageCursor: '' } }
+      return { retCode: 10005, retMsg: 'no permission' }
+    }
+    const fills = await bybitConvertFills(call)
+    expect(fills.map((f) => `${f.external_id} ${f.side} ${f.asset} ${f.qty} @${f.price}`)).toEqual(['bb:cv:a1 buy XAUT 0.1 @3715', 'bb:cv:b2 sell APE 10 @1.3'])
+    expect(calls[0]).toBe('/v5/asset/exchange/query-convert-history?index=1&limit=100')
+  })
+  it('нет прав на историю конвертаций — без неё; сбой частоты запросов — ошибка (повторим в следующий раз)', async () => {
+    expect(await bybitConvertFills(async () => ({ retCode: 10005, retMsg: 'Permission denied' }))).toEqual([])
+    await expect(bybitConvertFills(async () => ({ retCode: 10006, retMsg: 'Too many visits' }))).rejects.toMatchObject({ code: 10006 })
+  })
+  it('fetchSpotFills у Bybit: спотовые исполнения + конвертации', async () => {
+    const call = async (path: string) => {
+      if (path === '/v5/execution/list') return { retCode: 0, result: { list: [], nextPageCursor: '' } }
+      if (path === '/v5/asset/exchange/query-convert-history')
+        return { retCode: 0, result: { list: [{ exchangeTxId: 'x', fromCoin: 'USDT', fromAmount: '100', toCoin: 'XAUT', toAmount: '0.025', exchangeStatus: 'success', createdAt: '1760000000000' }] } }
+      return { retCode: 0, result: { orderBody: [], nextPageCursor: '' } }
+    }
+    const r = await fetchSpotFills({ exchange: 'bybit' }, call, { cursor: '2026-11-18T00:00:00Z', assets: [], now: Date.parse('2026-11-19T00:00:00Z') })
+    expect(r!.fills).toMatchObject([{ external_id: 'bb:cv:x', asset: 'XAUT', side: 'buy', qty: 0.025, price: 4000 }])
   })
 })

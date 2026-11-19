@@ -74,12 +74,16 @@ const num = (v: unknown): number | null => {
   return Number.isFinite(x) ? x : null
 }
 
-/** Символ → монета с наибольшей капитализацией */
+/**
+ * Символ → монета с наибольшей капитализацией СРЕДИ МОНЕТ С ЦЕНОЙ (как portfolio_snapshot_for / shared_portfolio в базе:
+ * иначе сумма на экране и точка графика расходятся); цены нет ни у одной — монета с наибольшей капитализацией
+ */
 export function coinsBySymbol(coins: Coin[]): Map<string, Coin> {
   const map = new Map<string, Coin>()
+  const better = (c: Coin, prev: Coin) => (c.price !== null) !== (prev.price !== null) ? c.price !== null : (c.rank ?? Infinity) < (prev.rank ?? Infinity)
   for (const c of coins) {
     const prev = map.get(c.symbol)
-    if (!prev || (c.rank ?? Infinity) < (prev.rank ?? Infinity)) map.set(c.symbol, c)
+    if (!prev || better(c, prev)) map.set(c.symbol, c)
   }
   return map
 }
@@ -116,7 +120,9 @@ export function portfolioRows(
     // приоритет: руками → по покупкам на биржах → стейблкоин 1 $
     const avgPrice = manual ?? fromTrades ?? (STABLES.has(symbol) ? 1 : null)
     const avgSource = manual !== undefined ? 'manual' : fromTrades !== null ? 'trades' : STABLES.has(symbol) ? 'stable' : null
-    const invested = avgPrice !== null && known === null ? avgPrice * amount : null
+    // стейблкоин: цена входа 1 $ показываем, но во «вложено» и прибыль он не идёт — прибыли у него нет, а процент по монетам
+    // он бы размывал (владелец 19.11.2026: «вложено 1 687 $, −26 %», хотя монеты в минусе на 90 %)
+    const invested = avgPrice !== null && known === null && !STABLES.has(symbol) ? avgPrice * amount : null
     const pnl = invested !== null && value !== null ? value - invested : null
     rows.push({
       symbol,
@@ -203,8 +209,9 @@ export type PortfolioTotals = {
   invested: number
   pnl: number
   pnlPct: number | null
-  /** у скольких монет известна цена входа / сколько всего монет с ценой */
+  /** у скольких монет известна цена входа / у скольких она вообще бывает (монеты с ценой, кроме стейблкоинов) / сколько всего монет с ценой */
   withCost: number
+  costable: number
   priced: number
   unpriced: number
 }
@@ -216,10 +223,12 @@ export function portfolioTotals(rows: PortfolioRow[]): PortfolioTotals {
   let invested = 0
   let valueWithCost = 0
   let withCost = 0
+  let costable = 0
   let priced = 0
   for (const r of rows) {
     if (r.value === null) continue
     priced++
+    if (r.price !== null && !STABLES.has(r.symbol)) costable++
     value += r.value
     if (r.change24Usd !== null) {
       change24Usd += r.change24Usd
@@ -240,6 +249,7 @@ export function portfolioTotals(rows: PortfolioRow[]): PortfolioTotals {
     pnl,
     pnlPct: invested > 0 ? pnl / invested : null,
     withCost,
+    costable,
     priced,
     unpriced: rows.length - priced,
   }

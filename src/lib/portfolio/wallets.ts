@@ -54,7 +54,9 @@ export async function rpcBatch(url: string, reqs: RpcReq[], fetchFn: typeof fetc
     for (let k = 0; k < part.length; k++) {
       const r = byId.get(k)
       if (r && !r.error) out.push(r.result)
-      else if (soft && r) out.push(null)
+      // soft: «пусто» только если контракт сам отказал (revert — у него нет balanceOf / decimals); сбой узла, лимит частоты —
+      // ошибка всего обновления, иначе монета на час пропадёт из портфеля и на графике будет ложный провал (аудит 19.11.2026)
+      else if (soft && r && /revert/i.test(String(r.error?.message ?? ''))) out.push(null)
       else throw new Error(`RPC_ERROR ${r?.error?.message ?? 'no answer'} network`)
     }
   }

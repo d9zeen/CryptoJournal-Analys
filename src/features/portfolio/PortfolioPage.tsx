@@ -260,15 +260,17 @@ function ValueCard({
               <>
                 {totals.pnlPct !== null && <span className={`num ${pnlClass(totals.pnlPct)}`}>{signedPct(totals.pnlPct)} · </span>}
                 <span className="whitespace-nowrap">{fmt(k.investedShort, { v: formatUsd(totals.invested) })}</span>
-                {totals.withCost < totals.priced && (
+                {totals.withCost < totals.costable && (
                   <span className="block whitespace-nowrap">
                     {fmt(k.pnlHint, {
                       n: totals.withCost,
-                      total: totals.priced,
+                      total: totals.costable,
                     })}
                   </span>
                 )}
               </>
+            ) : totals.costable === 0 && totals.priced > 0 ? (
+              k.pnlStablesOnly
             ) : (
               k.pnlNone
             )}

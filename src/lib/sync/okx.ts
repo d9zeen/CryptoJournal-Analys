@@ -6,7 +6,7 @@
  */
 import { round, type MarketType, type Side } from '@/lib/calc/trade'
 import type { ImportedTrade } from '@/lib/import/types'
-import { DAY, ExchangeError, clampLeverage, num, plainSymbol, type CexCall, type CexModule, type KeyInfo } from './cex'
+import { DAY, ExchangeError, clampLeverage, num, plainSymbol, uidOf, type CexCall, type CexModule, type KeyInfo } from './cex'
 
 export type OkxPosition = {
   instId: string // BTC-USDT-SWAP
@@ -85,9 +85,9 @@ export function okxPositionToTrade(p: OkxPosition, inst: OkxInstrument | undefin
 
 /** Ключ: права только «Чтение» (perm = read_only; trade / withdraw — отказ) */
 export async function checkOkxKey(call: CexCall): Promise<KeyInfo> {
-  const [cfg] = await okxGet<{ perm?: string }>(call, '/api/v5/account/config', {})
+  const [cfg] = await okxGet<{ perm?: string; uid?: string; mainUid?: string }>(call, '/api/v5/account/config', {})
   const perms = (cfg?.perm ?? '').split(',').map((s) => s.trim()).filter(Boolean)
-  return { readOnly: perms.length > 0 && perms.every((p) => p === 'read_only') }
+  return { readOnly: perms.length > 0 && perms.every((p) => p === 'read_only'), uid: uidOf(cfg?.uid) }
 }
 
 const PAGE = 100

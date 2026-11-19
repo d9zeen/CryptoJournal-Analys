@@ -19,9 +19,18 @@ describe('портфель: строки', () => {
     const btc = rows.find((r) => r.symbol === 'BTC')!
     expect(btc).toMatchObject({ amount: 0.5, value: 50000, price: 100000, sources: ['c1', 'c2'] })
   })
+  it('символ: монета с наибольшей капитализацией среди тех, у кого есть цена (как снимок в базе)', () => {
+    const list = [
+      { id: 'x-top', symbol: 'X', name: 'X', rank: 1, price: null, change_24h: null, change_7d: null, spark: null, icon: null },
+      { id: 'x-2', symbol: 'X', name: 'X2', rank: 50, price: 2, change_24h: null, change_7d: null, spark: null, icon: null },
+    ]
+    expect(coinsBySymbol(list).get('X')!.id).toBe('x-2')
+    expect(coinsBySymbol([list[0]]).get('X')!.id).toBe('x-top')
+  })
   it('цена входа: указанная руками, стейблкоин — 1 $, иначе неизвестна', () => {
     expect(rows.find((r) => r.symbol === 'BTC')).toMatchObject({ avgPrice: 80000, avgManual: true, invested: 40000, pnl: 10000, pnlPct: 0.25 })
-    expect(rows.find((r) => r.symbol === 'USDT')).toMatchObject({ avgPrice: 1, avgManual: false, invested: 1000, pnl: 0 })
+    // стейблкоин: цена входа 1 $ видна, но во «вложено» и прибыль не идёт (иначе размывает процент по монетам)
+    expect(rows.find((r) => r.symbol === 'USDT')).toMatchObject({ avgPrice: 1, avgManual: false, avgSource: 'stable', invested: null, pnl: null })
     expect(rows.find((r) => r.symbol === 'ETH')).toMatchObject({ avgPrice: null, invested: null, pnl: null })
   })
   it('изменение за сутки в $: из стоимости сейчас и %', () => {
@@ -39,12 +48,14 @@ describe('портфель: строки', () => {
     expect(t.unpriced).toBe(1)
     expect(t.priced).toBe(4)
   })
-  it('итоги: прибыль только по монетам с ценой входа', () => {
+  it('итоги: прибыль только по монетам с ценой входа, без стейблкоинов', () => {
     const t = portfolioTotals(rows)
-    expect(t.invested).toBe(41000)
+    expect(t.invested).toBe(40000)
     expect(t.pnl).toBe(10000)
-    expect(t.withCost).toBe(2)
-    expect(t.pnlPct).toBeCloseTo(10000 / 41000, 9)
+    expect(t.withCost).toBe(1)
+    // цена входа бывает у BTC и ETH (USDT — стейблкоин, Polymarket — без цены монеты)
+    expect(t.costable).toBe(2)
+    expect(t.pnlPct).toBeCloseTo(0.25, 9)
   })
   it('доли в сумме — 100 %, сначала самые дорогие', () => {
     expect(rows.map((r) => r.symbol)).toEqual(['BTC', 'ETH', 'USDT', 'POLYMARKET', 'PEPE2'])
@@ -170,5 +181,43 @@ describe('портфель по ссылке', () => {
     // вчера: 0,6 / 1,1 + 0,4 = 0,94545… → сегодня 1 / 0,94545 − 1
     expect(sharedChange24(coins)!).toBeCloseTo(1 / (0.6 / 1.1 + 0.4) - 1, 9)
     expect(sharedChange24([{ symbol: 'X', share: 1 }])).toBeNull()
+  })
+})
+
+describe('сверка с настоящим портфелем (19.11.2026, после «только спот»)', () => {
+  // числа из базы: Bybit — фандинг, Earn и монеты единого счёта (USDT под фьючерсы туда уже не попадают)
+  const c = (symbol: string, rank: number, price: number, change_24h: number | null) => ({ id: symbol.toLowerCase(), symbol, name: symbol, rank, price, change_24h, change_7d: null, spark: null, icon: null })
+  const coins = [c('USDT', 3, 1, 0), c('XAUT', 30, 3707.93, -1.0988), c('DOGE', 13, 0.059258, 0.10358), c('APE', 287, 0.079842, -1.64462), c('NIGHT', 82, 0.04423547, -4.5092), c('NEAR', 21, 3.38, 1.57936), c('HYPE', 10, 68.19, -0.55822), c('SERAPH', 3279, 0.00197368, null)]
+  const hs = [h('HYPE', 0.00012248, 'b'), h('NEAR', 0.007, 'b'), h('SERAPH', 0.0772, 'b'), h('NIGHT', 1.52474361, 'b'), h('XAUT', 0.005139, 'b'), h('APE', 5.58449, 'b'), h('DOGE', 519.064, 'b'), h('USDT', 1002.5712, 'b'), h('USDT', 199.8508, 'b'), h('APE', 204.77502, 'b'), h('XAUT', 0.099845, 'b')]
+  const f = (asset: string, side: 'buy' | 'sell', qty: number, price: number, fee: number, fee_asset: string, at: string) => ({ asset, quote: 'USDT', side, qty, price, fee, fee_asset, at })
+  const fills = [
+    f('APE', 'buy', 148.14, 1.35, 0.14814, 'APE', '2025-01-06T14:37:04Z'),
+    f('APE', 'buy', 56.84, 1.35, 0.05684, 'APE', '2025-01-06T23:31:48Z'),
+    f('DOGE', 'buy', 520, 0.38455, 0.936, 'DOGE', '2024-11-21T19:39:24Z'),
+    f('NEAR', 'buy', 213, 2.35, 0.213, 'NEAR', '2026-06-16T02:30:41Z'),
+    f('NEAR', 'sell', 212.78, 2.5, 0.53195, 'USDT', '2026-09-09T10:26:51Z'),
+  ]
+  const basis = costBasis(fills)
+  const t = portfolioTotals(portfolioRows(hs, coins, {}, null, basis))
+  it('стоимость = Σ количество × цена; USDT фандинга и Earn — по 1 $', () => {
+    expect(t.value).toBeCloseTo(1639.35, 1)
+    expect(t.priced).toBe(8)
+  })
+  it('вложено и прибыль — по средней цене покупок (APE 1,35, DOGE 0,385) и стейблкоину по 1 $', () => {
+    expect(t.withCost).toBe(3) // APE, DOGE, NEAR (USDT — стейблкоин, не в счёт; SERAPH в этом наборе без покупок)
+    expect(t.costable).toBe(7)
+    expect(basis.APE.avg).toBeCloseTo(1.3514, 3)
+    expect(basis.DOGE.avg).toBeCloseTo(0.38524, 4)
+    // вложено — только монеты: APE 284 $ + DOGE 200 $ + NEAR; прибыль −436 $ = −90 % (раньше USDT размывал до −26 %)
+    expect(t.invested).toBeCloseTo(284.27 + 199.966 + 0.01645, 0)
+    expect(t.pnl).toBeCloseTo(16.8 + 30.76 + 0.024 - t.invested, 0)
+    expect(t.pnlPct).toBeCloseTo(-0.9, 1)
+  })
+  it('зафиксировано: NEAR купили по 2,35 (комиссия монетами → средняя 2,3524), продали по 2,5 — +30,88 $ за вычетом комиссии', () => {
+    const avg = (213 * 2.35) / (213 - 0.213)
+    expect(realizedTotal(basis)).toBeCloseTo((2.5 - avg) * 212.78 - 0.53195, 2)
+  })
+  it('за 24 ч: XAUT −1,1 % от 389 $ и APE −1,6 % от 17 $ — около −4,6 $', () => {
+    expect(t.change24Usd).toBeCloseTo(-4.58, 1)
   })
 })

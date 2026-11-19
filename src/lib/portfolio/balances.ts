@@ -13,6 +13,7 @@
  *  - символы — заглавными, только буквы / цифры; нули и отрицательные (заём) отбрасываем.
  */
 import { BybitError, type BybitCall } from '@/lib/sync/bybit'
+import { ExchangeError } from '@/lib/sync/cex'
 import { binanceGet } from '@/lib/sync/binance'
 import { okxGet } from '@/lib/sync/okx'
 import { bingxGet } from '@/lib/sync/bingx'
@@ -76,11 +77,26 @@ export function spotOnlyUnified(list: Balance[]): Balance[] {
   return list.filter((b) => !STABLES.has(cleanSymbol(b.symbol) ?? ''))
 }
 
-/** Дополнительный счёт: ошибка — пусто (основной уже ответил) */
+/**
+ * Ошибка временная (сеть, биржа «лежит», частота запросов, неизвестная) — тогда НЕ притворяемся, что счёт пустой:
+ * иначе на час из портфеля выпадут деньги фандинга / Earn и на графике будет ложный провал (аудит 19.11.2026).
+ * Постоянная — биржа ответила отказом по этому счёту (нет прав ключа, продукт недоступен): счёта просто нет.
+ */
+export function isTransient(e: unknown): boolean {
+  if (e instanceof BybitError) return e.code === 10006 || e.code === 10018 || e.code === 10016 || e.code === 10000
+  if (e instanceof ExchangeError) return e.kind === 'RATE_LIMIT'
+  return true
+}
+
+/**
+ * Дополнительный счёт (фандинг, Earn): отказ биржи — пусто; временная ошибка — ошибка всего обновления,
+ * старые балансы остаются (как при сбое основного счёта)
+ */
 async function optional(fn: () => Promise<Balance[]>): Promise<Balance[]> {
   try {
     return await fn()
-  } catch {
+  } catch (e) {
+    if (isTransient(e)) throw e
     return []
   }
 }
@@ -149,9 +165,17 @@ export async function binanceBalances(call: CexCall): Promise<Balance[]> {
 
 // ---------- OKX ----------
 export async function okxBalances(call: CexCall): Promise<Balance[]> {
-  // торговый счёт OKX — единый (спот + фьючерсы): монеты по cashBal (без нереализованного PnL), стейблкоины — маржа, не считаем
+  // торговый счёт OKX: монеты по cashBal (без нереализованного PnL). Режим «Спот» (acctLv 1) — фьючерсов там нет, стейблкоины — обычный спот;
+  // режимы с маржой (2–4) — счёт единый, стейблкоины на нём — маржа фьючерсов, не считаем. Режим не узнали — считаем единым
   const trading = await okxGet<Obj>(call, '/api/v5/account/balance', {})
-  const out: Balance[] = spotOnlyUnified(arr(trading[0]?.details).map((x) => ({ account: 'spot', symbol: String(x.ccy), amount: n(x.cashBal ?? x.eq) })))
+  let spotMode = false
+  try {
+    spotMode = String((await okxGet<Obj>(call, '/api/v5/account/config', {}))[0]?.acctLv) === '1'
+  } catch (e) {
+    if (isTransient(e)) throw e
+  }
+  const coins: Balance[] = arr(trading[0]?.details).map((x) => ({ account: 'spot', symbol: String(x.ccy), amount: n(x.cashBal ?? x.eq) }))
+  const out: Balance[] = spotMode ? coins : spotOnlyUnified(coins)
   out.push(
     ...(await optional(async () => (await okxGet<Obj>(call, '/api/v5/asset/balances', {})).map((x) => ({ account: 'fund' as const, symbol: String(x.ccy), amount: n(x.bal) })))),
     ...(await optional(async () =>
