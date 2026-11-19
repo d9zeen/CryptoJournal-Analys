@@ -1142,9 +1142,16 @@ export const en: Dict = {
     curve: {
       works: 'working',
       worksN: 'working · trades: {n}',
-      caption: 'all time · trades: {n} · since {since}',
       open: '{name}: connection and settings',
-      empty: 'Trades from your exchanges will form a curve here as soon as the first ones arrive.',
+    },
+    linked: {
+      title: 'Connected: {names}',
+      more: 'and {n} more',
+      textPro: 'Trades and balances arrive on their own — on the server every 3 hours, even when the site is closed. Click an exchange in the list: status, refresh, disconnect.',
+      textFree: 'Trades and balances arrive on their own while the site is open. Click an exchange in the list: status, refresh, disconnect.',
+      cta: 'Connect another',
+      list: 'Connected exchanges and wallets',
+      wallet: 'wallet · {addr}',
     },
     hubCaption: 'Exchanges connected: {n} · the lights are trades flowing into your journal',
     searching: 'Looking for new trades…',

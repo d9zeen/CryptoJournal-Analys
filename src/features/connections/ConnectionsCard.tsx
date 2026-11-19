@@ -28,7 +28,7 @@ import { PolymarketDemoDialog } from './PolymarketDemoDialog'
 import { PasswordInput } from '@/components/PasswordInput'
 import { CheckMark } from '@/components/CheckMark'
 import { ExchangeGrid, ExchangePanel } from './ExchangeGrid'
-import { ArrivalsCurve } from './ArrivalsCurve'
+import { LinkedOrbit } from './LinkedOrbit'
 import { Orbit } from '@/components/fx/Orbit'
 import { useMediaQuery } from '@/lib/useMediaQuery'
 import { Shimmer } from '@/components/fx/Shimmer'
@@ -119,7 +119,6 @@ export function ConnectionsCard({ onPickFile }: { onPickFile?: (exchange: string
   const issues = conns
     .map((cn) => ({ conn: cn, issue: active.has(cn.id) ? connIssue(cn, now, t) : null }))
     .filter((x): x is { conn: Connection; issue: Issue } => x.issue !== null)
-  const wallets = conns.filter((cn) => PORTFOLIO_ONLY.has(cn.exchange))
   // панель биржи, которая уже подключена: сверху её подключения (статус, «Обновить», «Отключить»)
   const panelConns = panel && panel !== 'picker' ? conns.filter((cn) => cn.exchange === panel) : []
 
@@ -211,27 +210,9 @@ export function ConnectionsCard({ onPickFile }: { onPickFile?: (exchange: string
         </div>
       ) : (
         <>
-        {/* «Сделки собирают кривую» (вариант S3, 17.11.2026): частицы из логотипа биржи собирают кривую из всех сделок подключённых бирж.
-            Отдельных карточек подключений больше нет (владелец 17.11.2026): статус — в строке биржи, управление — в панели биржи (нажатие на строку или карточку в сетке) */}
-        {/* кошельки (EVM / Solana) сделок не дают — если подключены только они, блока нет */}
-        {conns.some((cn) => !PORTFOLIO_ONLY.has(cn.exchange)) && <ArrivalsCurve conns={conns} active={active} onOpen={setPanel} />}
-        {/* кошельки — только портфель: компактно, нажатие — панель кошелька */}
-        {wallets.length > 0 && (
-          <div data-wallets className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-muted">{c.walletsTitle}</span>
-            {wallets.map((w) => {
-              const st = !active.has(w.id) ? 'paused' : w.last_error ? 'error' : 'ok'
-              return (
-                <button key={w.id} type="button" data-wallet={w.exchange} onClick={() => setPanel(w.exchange)} className="flex items-center gap-2 rounded-full border border-border bg-surface py-1 pr-3 pl-1 text-xs hover:bg-surface-2">
-                  <ExchangeLogo id={w.exchange} className="size-6 rounded-full" />
-                  <span className="font-medium">{exchangeName(w.exchange, '')}</span>
-                  <span className="num text-muted">{shortKey(w.api_key)}</span>
-                  <i aria-hidden className={`size-1.5 rounded-full ${st === 'ok' ? 'bg-up' : st === 'error' ? 'bg-down' : 'bg-muted'}`} />
-                </button>
-              )
-            })}
-          </div>
-        )}
+        {/* подключения есть — та же «Орбита» (владелец 19.11.2026 вместо «Сделки собирают кривую»): подключённые ярко,
+            справа — их строки со статусом, нажатие — панель биржи. Кошельки — тоже строками */}
+        <LinkedOrbit conns={conns} active={active} pro={pro} onOpen={setPanel} onAdd={() => setPanel('picker')} />
         {/* ключ не работает / скоро истечёт — видно сразу, без нажатий */}
         {issues.length > 0 && (
           <ul className="flex flex-col gap-1.5">

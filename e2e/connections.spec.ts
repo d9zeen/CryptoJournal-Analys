@@ -194,8 +194,8 @@ test('Pro: старое подключение Polymarket не удаляетс�
   ]
   await fakeSupabase(page, db)
   await page.goto('import')
-  // в блоке кривой — «На паузе», подробности и «Обновить» (недоступно) — в панели биржи
-  await expect(page.locator('[data-arrivals-curve] [data-curve-source="polymarket"]')).toHaveAttribute('data-state', 'paused')
+  // в блоке «Подключено» — «На паузе», подробности и «Обновить» (недоступно) — в панели биржи
+  await expect(page.locator('[data-linked-orbit] [data-linked="polymarket"]')).toHaveAttribute('data-state', 'paused')
   const row = await openConn(page, 'polymarket')
   await expect(row).toHaveAttribute('data-status', 'paused')
   await expect(row.locator('[data-pill]')).toHaveText('На паузе')
@@ -336,13 +336,13 @@ test('Мост: подключение Bybit из карточки — шаги 
   await expect(page.locator('[data-exchange="bybit"]')).toContainText('Подключена')
 })
 
-test('Анимации «Бирж»: без подключений — «Орбита», с подключением — «Сделки собирают кривую», синхронизация — луч по рамке и мерцающий текст', async ({ page, db }) => {
+test('«Биржи»: без подключений — «Орбита» с шагами, с подключением — та же «Орбита»: биржа подсвечена, справа её строка; синхронизация — луч по рамке и мерцающий текст', async ({ page, db }) => {
   db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
   await fakeSupabase(page, db)
   await page.goto('import')
   await expect(page.locator('[data-empty-orbit]')).toContainText('Подключи первую биржу')
-  await expect(page.locator('[data-arrivals-curve]')).toHaveCount(0)
-  // подключаем Bybit — появляется блок кривой: Bybit «работает», ниже биржа, которую можно подключить
+  await expect(page.locator('[data-linked-orbit]')).toHaveCount(0)
+  // подключаем Bybit — вместо шагов «как подключить» его строка, на орбите Bybit яркий, остальные приглушены
   await page.locator('[data-exchange="bybit"]').click()
   const panel = page.getByRole('dialog', { name: 'Bybit' })
   await panel.getByLabel('API Key').fill('AbCdEf123456')
@@ -351,11 +351,17 @@ test('Анимации «Бирж»: без подключений — «Орб�
   await expect(panel.locator('[data-bridge]')).toHaveAttribute('data-stage', 'done', { timeout: 20_000 })
   await page.keyboard.press('Escape')
   await expect(page.locator('[data-empty-orbit]')).toHaveCount(0)
-  const curve = page.locator('[data-arrivals-curve]')
-  await expect(curve.locator('[data-curve-source="bybit"]')).toBeVisible()
-  // в блоке только подключённые — «можно подключить» нет (это в сетке ниже)
-  await expect(curve.locator('[data-curve-next]')).toHaveCount(0)
-  await expect(curve.locator('[data-curve-source]')).toHaveCount(1)
+  const block = page.locator('[data-linked-orbit]')
+  await expect(block).toContainText('Подключено: Bybit')
+  await expect(block.locator('[data-linked]')).toHaveCount(1)
+  await expect(block.locator('[data-orbit-sat="bybit"]')).toHaveAttribute('data-lit', 'on')
+  await expect(block.locator('[data-orbit-sat="binance"]')).toHaveAttribute('data-lit', 'off')
+  // старого блока с частицами больше нет
+  await expect(page.locator('[data-arrivals-curve], canvas')).toHaveCount(0)
+  // «Подключить ещё» — общая панель выбора биржи
+  await block.getByRole('button', { name: 'Подключить ещё' }).click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await page.keyboard.press('Escape')
   // «Обновить»: пока идёт синхронизация — луч по рамке карточки и «Ищем новые сделки…»
   await page.route('**/functions/v1/exchange-proxy', async (route) => {
     await new Promise((r) => setTimeout(r, 800))
@@ -368,8 +374,7 @@ test('Анимации «Бирж»: без подключений — «Орб�
   await expect(tile).not.toHaveClass(/beam-run/, { timeout: 20_000 })
 })
 
-test('«Сделки собирают кривую»: все сделки подключённых бирж за всё время (по API и файлом) — итог набегает до суммы и остаётся; чужая биржа не считается', async ({ page, db }) => {
-  test.setTimeout(45_000)
+test('«Подключено»: число сделок — за всё время, по API и файлом; сделки неподключённой биржи не считаются; на телефоне без прокрутки вбок', async ({ page, db }) => {
   db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
   db.connections = [{ id: 'c1', exchange: 'bybit', label: null, api_key: 'AbCdEf123456', last_sync_at: new Date().toISOString(), cursor_at: new Date().toISOString(), last_error: null, created_at: '' }]
   const at = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString()
@@ -377,38 +382,36 @@ test('«Сделки собирают кривую»: все сделки под
     makeTrade(1, { pnl: 100, source: 'api', entry_at: at(30), exit_at: at(29), external_id: 'o:1' }),
     makeTrade(2, { pnl: -40, source: 'api', entry_at: at(20), exit_at: at(19), external_id: 'o:2' }),
     makeTrade(3, { pnl: 60.5, source: 'api', entry_at: at(10), exit_at: at(9), external_id: 'o:3' }),
-    // из файла и давно — тоже на кривой (за всё время, владелец 17.11.2026)
+    // из файла и давно — тоже считается (за всё время, владелец 17.11.2026)
     makeTrade(4, { pnl: 999, source: 'import', entry_at: at(2000), exit_at: at(1999), external_id: 'f:4' }),
-    // биржа не подключена — не на кривой
+    // биржа не подключена — не считается
     makeTrade(5, { exchange: 'okx', pnl: 5000, source: 'import', entry_at: at(5), exit_at: at(4), external_id: 'f:5' }),
   ]
   await fakeSupabase(page, db)
+  await page.route('**/functions/v1/exchange-proxy', (route) => route.fulfill({ status: 500, body: '' }))
   await page.goto('import')
-  const curve = page.locator('[data-arrivals-curve]')
-  await expect(curve.locator('canvas')).toBeVisible()
-  await expect(curve).toContainText('за всё время · сделок: 4')
-  // итог набегает по мере сборки и останавливается на сумме всех сделок Bybit
-  await expect(curve.locator('[data-curve-sum]')).toHaveText(/\+1\s?119,50/, { timeout: 15_000 })
-  // собралась один раз и стоит — не гаснет и не собирается заново (владелец 17.11.2026)
-  await page.waitForTimeout(8000)
-  await expect(curve.locator('[data-curve-sum]')).toHaveText(/\+1\s?119,50/)
+  const block = page.locator('[data-linked-orbit]')
+  await expect(block.locator('[data-linked="bybit"]')).toContainText('работает · сделок: 4')
+  await expect(block.locator('[data-linked="okx"]')).toHaveCount(0)
   await page.setViewportSize({ width: 390, height: 844 })
+  await expect(block.locator('[data-linked="bybit"]')).toBeVisible()
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
   expect(overflow).toBeLessThanOrEqual(0)
 })
 
-test('«Сделки собирают кривую»: сделок с бирж ещё нет — без кривой, понятная строка', async ({ page, db }) => {
+test('«Подключено»: сделок с биржи ещё нет — просто «работает», без числа', async ({ page, db }) => {
   db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
   db.connections = [{ id: 'c1', exchange: 'bybit', label: null, api_key: 'AbCdEf123456', last_sync_at: new Date().toISOString(), cursor_at: new Date().toISOString(), last_error: null, created_at: '' }]
   await fakeSupabase(page, db)
   await page.route('**/functions/v1/exchange-proxy', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ retCode: 0, result: { list: [] } }) }))
   await page.goto('import')
-  const curve = page.locator('[data-arrivals-curve]')
-  await expect(curve).toContainText('соберутся здесь в кривую')
-  await expect(curve.locator('canvas')).toHaveCount(0)
+  const row = page.locator('[data-linked-orbit] [data-linked="bybit"]')
+  await expect(row).toHaveAttribute('data-state', 'ok')
+  await expect(row).toContainText('работает')
+  await expect(row).not.toContainText('сделок')
 })
 
-test('«Сделки собирают кривую»: пять бирж — все в списке с числом сделок, без «можно подключить»', async ({ page, db }) => {
+test('«Подключено»: пять бирж — все строками с числом сделок, все подсвечены на орбите; больше трёх в заголовке — «и ещё N»', async ({ page, db }) => {
   db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
   const all = ['bybit', 'binance', 'okx', 'bitget', 'bingx']
   db.connections = all.map((e, i) => ({ id: `c${i}`, exchange: e, label: null, api_key: `AbCdEf12345${i}`, last_sync_at: new Date().toISOString(), cursor_at: new Date().toISOString(), last_error: null, created_at: `2026-11-0${i + 1}T00:00:00Z` }))
@@ -421,15 +424,16 @@ test('«Сделки собирают кривую»: пять бирж — вс
   await fakeSupabase(page, db)
   await page.route('**/functions/v1/exchange-proxy', (route) => route.fulfill({ status: 500, body: '' }))
   await page.goto('import')
-  const curve = page.locator('[data-arrivals-curve]')
-  await expect(curve.locator('[data-curve-source]')).toHaveCount(5)
-  await expect(curve.locator('[data-curve-next]')).toHaveCount(0)
-  await expect(curve.locator('[data-curve-source="okx"]')).toContainText('сделок: 2')
-  await expect(curve.locator('[data-curve-source="bybit"]')).toContainText('сделок: 1')
-  await expect(curve.locator('[data-curve-source="binance"]')).toContainText('работает')
+  const block = page.locator('[data-linked-orbit]')
+  await expect(block.locator('[data-linked]')).toHaveCount(5)
+  await expect(block.locator('[data-linked="okx"]')).toContainText('сделок: 2')
+  await expect(block.locator('[data-linked="bybit"]')).toContainText('сделок: 1')
+  await expect(block.locator('[data-linked="binance"]')).toContainText('работает')
+  await expect(block).toContainText('Подключено: Bybit, Binance, OKX и ещё 2')
+  for (const ex of all) await expect(block.locator(`[data-orbit-sat="${ex}"]`)).toHaveAttribute('data-lit', 'on')
 })
 
-test('«Сделки собирают кривую»: статусы бирж — ошибка, пауза сверх тарифа; кошельки в блок не попадают', async ({ page, db }) => {
+test('«Подключено»: статусы — ошибка ключа, пауза сверх тарифа; кошелёк — строкой с адресом и на орбите', async ({ page, db }) => {
   // Pro: одно подключение работает, второе (по дате) — «на паузе»; у первого ошибка
   db.usage = { plan: 'pro', trades_created: 3, trade_limit: null }
   db.connections = [
@@ -439,24 +443,24 @@ test('«Сделки собирают кривую»: статусы бирж �
   ]
   await fakeSupabase(page, db)
   await page.route('**/functions/v1/exchange-proxy', (route) => route.fulfill({ status: 500, body: '' }))
+  await page.route('https://*.publicnode.com/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }))
   await page.goto('import')
-  const curve = page.locator('[data-arrivals-curve]')
-  await expect(curve.locator('[data-curve-source="bybit"]')).toHaveAttribute('data-state', /error|syncing/)
-  await expect(curve.locator('[data-curve-source="okx"]')).toHaveAttribute('data-state', 'paused')
-  await expect(curve.locator('[data-curve-source="okx"]')).toContainText('На паузе')
-  await expect(curve.locator('[data-curve-source="evm"]')).toHaveCount(0)
+  const block = page.locator('[data-linked-orbit]')
+  await expect(block.locator('[data-linked="bybit"]')).toHaveAttribute('data-state', /error|syncing/)
+  await expect(block.locator('[data-linked="okx"]')).toHaveAttribute('data-state', 'paused')
+  await expect(block.locator('[data-linked="okx"]')).toContainText('На паузе')
+  await expect(block.locator('[data-orbit-sat="evm"]')).toHaveAttribute('data-lit', 'on')
 })
 
-test('«Сделки собирают кривую»: подключены только кошельки — блока нет; одна сделка — уже кривая', async ({ page, db }) => {
+test('«Подключено»: подключены только кошельки — строкой с адресом, нажатие — панель с «Отключить»; добавили биржу — у неё число сделок', async ({ page, db }) => {
   db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
   db.connections = [{ id: 'w1', exchange: 'solana', label: null, api_key: '7'.repeat(43), last_sync_at: null, cursor_at: null, last_error: null, created_at: '' }]
   await fakeSupabase(page, db)
   await page.route('https://solana-rpc.publicnode.com/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }))
   await page.goto('import')
-  await expect(page.locator('[data-wallets] [data-wallet="solana"]')).toBeVisible()
-  await expect(page.locator('[data-arrivals-curve]')).toHaveCount(0)
-  // нажатие на кошелёк — его панель с «Отключить»
-  await page.locator('[data-wallet="solana"]').click()
+  const block = page.locator('[data-linked-orbit]')
+  await expect(block.locator('[data-linked="solana"]')).toContainText('кошелёк · 777777…7777')
+  await block.locator('[data-linked="solana"] button').click()
   await expect(page.locator('[data-panel-manage] [data-conn="solana"]').getByRole('button', { name: 'Отключить' })).toBeVisible()
   await page.keyboard.press('Escape')
 
@@ -464,13 +468,11 @@ test('«Сделки собирают кривую»: подключены то�
   db.trades = [makeTrade(1, { pnl: 42.5, source: 'api', entry_at: new Date(Date.now() - 7_200_000).toISOString(), exit_at: new Date(Date.now() - 3_600_000).toISOString(), external_id: 'o:1' })]
   await page.route('**/functions/v1/exchange-proxy', (route) => route.fulfill({ status: 500, body: '' }))
   await page.reload()
-  const curve = page.locator('[data-arrivals-curve]')
-  await expect(curve.locator('canvas')).toBeVisible()
-  await expect(curve.locator('[data-curve-sum]')).toHaveText(/\+42,50/, { timeout: 10_000 })
-  await expect(curve).toContainText('за всё время · сделок: 1')
+  await expect(block.locator('[data-linked="bybit"]')).toContainText('сделок: 1')
+  await expect(block.locator('[data-linked]')).toHaveCount(2)
 })
 
-test('«Сделки собирают кривую»: 400 сделок за неделю — собирается не дольше ~9 с', async ({ page, db }) => {
+test('«Подключено»: 400 сделок — число сразу, без ожидания анимации', async ({ page, db }) => {
   db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
   db.connections = [{ id: 'c1', exchange: 'bybit', label: null, api_key: 'AbCdEf123456', last_sync_at: new Date().toISOString(), cursor_at: new Date().toISOString(), last_error: null, created_at: '' }]
   db.trades = Array.from({ length: 400 }, (_, i) => {
@@ -480,20 +482,20 @@ test('«Сделки собирают кривую»: 400 сделок за не
   await fakeSupabase(page, db)
   await page.route('**/functions/v1/exchange-proxy', (route) => route.fulfill({ status: 500, body: '' }))
   await page.goto('import')
-  await expect(page.locator('[data-arrivals-curve] [data-curve-sum]')).toHaveText(/\+400,00/, { timeout: 11_000 })
+  await expect(page.locator('[data-linked-orbit] [data-linked="bybit"]')).toContainText('сделок: 400', { timeout: 5_000 })
 })
 
 /**
  * Владелец 17.11.2026: «подключил Bybit — у тебя Bybit, подключил Binance — Binance… подключил одну — именно она».
- * В блоке «Сделки собирают кривую» — ровно подключённые биржи, ни одной лишней («можно подключить» — только в сетке ниже).
- * Lighter подключить пока нельзя («Скоро»), кошельки EVM / Solana сделок не дают — в блоке их нет никогда.
+ * В блоке «Подключено» — ровно подключённые биржи, ни одной лишней («можно подключить» — только в сетке ниже).
+ * Lighter подключить пока нельзя («Скоро»).
  */
 const TRADE_EXCHANGES = ['bybit', 'binance', 'okx', 'bingx', 'bitget', 'hyperliquid', 'polymarket'] as const
 const keyFor = (ex: string, i = 0) => (ex === 'hyperliquid' || ex === 'polymarket' ? '0x' + String(i + 1).repeat(40) : `AbCdEf12345${i}`)
 const connRow = (ex: string, i = 0) => ({ id: `c-${ex}`, exchange: ex, label: null, api_key: keyFor(ex, i), last_sync_at: new Date().toISOString(), cursor_at: new Date().toISOString(), last_error: null, created_at: `2026-11-0${i + 1}T00:00:00Z` })
 
 for (const ex of TRADE_EXCHANGES)
-  test(`«Сделки собирают кривую»: подключена только ${ex} — в блоке именно она и больше ничего`, async ({ page, db }) => {
+  test(`«Подключено»: подключена только ${ex} — в блоке именно она и больше ничего`, async ({ page, db }) => {
     db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
     db.connections = [connRow(ex)]
     // сделки и у других бирж — в блок они не попадают
@@ -505,16 +507,14 @@ for (const ex of TRADE_EXCHANGES)
     await page.route('**/functions/v1/exchange-proxy', (route) => route.fulfill({ status: 500, body: '' }))
     await page.route('https://api.hyperliquid.xyz/**', (route) => route.fulfill({ status: 500, body: '' }))
     await page.goto('import')
-    const curve = page.locator('[data-arrivals-curve]')
-    await expect(curve.locator('[data-curve-source]')).toHaveCount(1)
-    await expect(curve.locator(`[data-curve-source="${ex}"]`)).toBeVisible()
-    await expect(curve.locator('[data-curve-next]')).toHaveCount(0)
-    // кривая — только из сделок этой биржи
-    await expect(curve).toContainText('сделок: 1')
-    await expect(curve.locator('[data-curve-sum]')).toHaveText(/\+10,00/, { timeout: 10_000 })
+    const block = page.locator('[data-linked-orbit]')
+    await expect(block.locator('[data-linked]')).toHaveCount(1)
+    await expect(block.locator(`[data-linked="${ex}"]`)).toContainText('сделок: 1')
+    await expect(block.locator(`[data-orbit-sat="${ex}"]`)).toHaveAttribute('data-lit', 'on')
+    await expect(block.locator('[data-orbit-sat][data-lit="on"]')).toHaveCount(1)
   })
 
-test('«Сделки собирают кривую»: две биржи — ровно эти две; добавили кошелёк — в блоке по-прежнему две', async ({ page, db }) => {
+test('«Подключено»: две биржи и кошелёк — ровно три строки; Lighter нигде не подключён', async ({ page, db }) => {
   db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
   db.connections = [connRow('okx', 0), connRow('hyperliquid', 1), { ...connRow('evm', 2), api_key: '0x' + 'c'.repeat(40) }]
   await fakeSupabase(page, db)
@@ -522,10 +522,8 @@ test('«Сделки собирают кривую»: две биржи — ро
   await page.route('https://api.hyperliquid.xyz/**', (route) => route.fulfill({ status: 500, body: '' }))
   await page.route('https://*.publicnode.com/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }))
   await page.goto('import')
-  const sources = page.locator('[data-arrivals-curve] [data-curve-source]')
-  await expect(sources).toHaveCount(2)
-  expect((await sources.evaluateAll((els) => els.map((e) => e.getAttribute('data-curve-source')))).sort()).toEqual(['hyperliquid', 'okx'])
-  // кошелёк — отдельным чипом, не в блоке; Lighter нигде не подключён
-  await expect(page.locator('[data-wallets] [data-wallet="evm"]')).toBeVisible()
-  await expect(page.locator('[data-arrivals-curve] [data-curve-source="lighter"]')).toHaveCount(0)
+  const rows = page.locator('[data-linked-orbit] [data-linked]')
+  await expect(rows).toHaveCount(3)
+  expect((await rows.evaluateAll((els) => els.map((e) => e.getAttribute('data-linked')))).sort()).toEqual(['evm', 'hyperliquid', 'okx'])
+  await expect(page.locator('[data-linked-orbit] [data-linked="lighter"]')).toHaveCount(0)
 })
