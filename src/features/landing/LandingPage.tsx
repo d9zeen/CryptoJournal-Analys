@@ -15,6 +15,7 @@ import { formatDayShort, formatPnl, pnlClass } from '@/lib/format'
 import { Reveal } from './Reveal'
 import { SideBadge } from '@/components/SideBadge'
 import { PlanCards } from './PlanCards'
+import { DiaryTabs } from './DiaryTabs'
 import { HeroCandles } from './HeroCandles'
 import { DEMO_FEATURED, demoAccount, demoMistakeRows, demoWeek } from './demo'
 import { compactPnl } from '@/lib/calc/calendar'
@@ -234,6 +235,16 @@ export function LandingPage() {
               <WeekVisual trades={demo.trades} mark={demo.featuredId} />
             </PathStep>
           </ol>
+        </section>
+
+        {/* как выглядит дневник изнутри: вкладки над одним окном со снимком экрана (вариант А, 19.11.2026) */}
+        <section id="inside" className={`${wrap} scroll-mt-20 ${section}`}>
+          <Reveal as="h2" className="mb-6 text-center text-3xl font-bold tracking-tight sm:text-4xl">
+            {l.inside.title}
+          </Reveal>
+          <Reveal>
+            <DiaryTabs />
+          </Reveal>
         </section>
 
         {/* тарифы */}

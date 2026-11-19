@@ -1280,6 +1280,18 @@ export const en: Dict = {
         mistake: { late: 'with a late entry', nostop: 'without a stop', hold: 'holding a loser' },
       },
     },
+    inside: {
+      title: 'What the journal looks like inside',
+      tabsLabel: 'Journal screens',
+      tabs: { trade: 'Logging a trade', list: 'Trade list', analysis: 'Review', chart: 'Trade chart' },
+      lines: {
+        trade: 'Pair, entry, exit and stop. The journal works out PnL and R; setup, emotion and mistakes take one click.',
+        list: 'Every trade in one table: filter by pair, side and setup, sort by PnL and R.',
+        analysis: 'Which pairs and setups make money and which mistakes cost you the most.',
+        chart: 'Entry and exit on the real price, the best and worst point of the trade, and how much of the move you kept.',
+      },
+      alt: 'The “{name}” screen in CryptoJournal on the demo account',
+    },
     pricingTitle: 'Pricing',
     pricingHint: 'New users get Pro Plus free for 7 days.',
     faq: {

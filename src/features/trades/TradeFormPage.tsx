@@ -383,7 +383,7 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
       <FormError message={submitError} />
 
       {/* компьютер и планшет: панель действий прилипает к низу экрана, пока форма длиннее экрана; на телефоне её нет — «Сохранить» в заголовке */}
-      <div className="sticky bottom-4 z-10 hidden items-center justify-end gap-3 rounded-lg border border-border bg-surface/95 px-4 py-3 backdrop-blur md:flex">
+      <div data-trade-actions className="sticky bottom-4 z-10 hidden items-center justify-end gap-3 rounded-lg border border-border bg-surface/95 px-4 py-3 backdrop-blur md:flex">
         <Button type="button" variant="secondary" onClick={() => navigate('/trades')}>
           {t.common.cancel}
         </Button>
