@@ -91,14 +91,14 @@ test.describe('главная на английском (как у нового 
     }
   })
 
-  test('шапка телефона: «Start free» вместо «Log in», всё помещается на 360px', async ({ page, db }) => {
+  test('шапка телефона: «Log in» и «Start free», всё помещается на 360px', async ({ page, db }) => {
     await page.setViewportSize({ width: 360, height: 760 })
     await fakeSupabase(page, db, { signedIn: false })
     await page.goto('')
     const header = page.locator('header')
     await expect(header.getByRole('link', { name: 'Start free' })).toBeVisible()
-    await expect(header.getByRole('link', { name: 'Log in' })).toHaveCount(0)
-    await expect(page.getByRole('link', { name: 'Log in' }).first()).toBeVisible() // на первом экране
+    // «Log in» в шапке телефона — тоже (19.11.2026: без него непонятно, как войти)
+    await expect(header.getByRole('link', { name: 'Log in' })).toBeVisible()
     const box = (await header.getByRole('link', { name: 'Start free' }).boundingBox())!
     expect(box.x + box.width).toBeLessThanOrEqual(360)
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360)
@@ -128,14 +128,14 @@ test.describe('главная на английском (как у нового 
         expect(Math.max(...btnBottom) - Math.min(...btnBottom)).toBeLessThan(2)
       }
     }
-    // один и тот же список из 8 строк; чего нет в тарифе — ✕, зачёркнуто, для экранных чтецов «not included»
+    // один и тот же список из 6 строк (палитры и «новые функции первыми» убраны 19.11.2026); чего нет в тарифе — ✕, зачёркнуто, для экранных чтецов «not included»
     for (const [id, off] of [
-      ['free', 4],
-      ['pro', 2],
+      ['free', 3],
+      ['pro', 1],
       ['pro_plus', 0],
     ] as const) {
       const items = page.locator(`[data-plan="${id}"] li`)
-      await expect(items).toHaveCount(8)
+      await expect(items).toHaveCount(6)
       await expect(page.locator(`[data-plan="${id}"] li[data-on="false"]`)).toHaveCount(off)
       await expect(page.locator(`[data-plan="${id}"] li[data-on="false"] .line-through`)).toHaveCount(off)
       await expect(page.locator(`[data-plan="${id}"] li[data-on="false"]`).filter({ hasText: 'not included' })).toHaveCount(off)
@@ -170,12 +170,12 @@ test.describe('главная на английском (как у нового 
       const tops = async (id: string) => page.locator(`[data-plan="${id}"] li`).evaluateAll((els) => els.map((e) => e.getBoundingClientRect().top))
       const a = await tops('free')
       const b = await tops('pro')
-      expect(a).toHaveLength(8)
-      for (let i = 0; i < 8; i++) expect(Math.abs(a[i] - b[i]), `ширина ${width}, строка ${i + 1}`).toBeLessThanOrEqual(2)
+      expect(a).toHaveLength(6)
+      for (let i = 0; i < 6; i++) expect(Math.abs(a[i] - b[i]), `ширина ${width}, строка ${i + 1}`).toBeLessThanOrEqual(2)
       // внутри карточки (без учёта подъёма и масштаба 94 %) строки стоят одинаково у всех трёх, Pro Plus тоже
       const inside = async (id: string) => page.locator(`[data-plan="${id}"] li`).evaluateAll((els) => els.map((e) => (e as HTMLElement).offsetTop))
       const [x, y, z] = [await inside('free'), await inside('pro'), await inside('pro_plus')]
-      for (let i = 0; i < 8; i++) expect(Math.max(x[i], y[i], z[i]) - Math.min(x[i], y[i], z[i]), `ширина ${width}, строка ${i + 1} внутри карточек`).toBeLessThanOrEqual(2)
+      for (let i = 0; i < 6; i++) expect(Math.max(x[i], y[i], z[i]) - Math.min(x[i], y[i], z[i]), `ширина ${width}, строка ${i + 1} внутри карточек`).toBeLessThanOrEqual(2)
     }
   })
 })
@@ -197,7 +197,7 @@ for (const lang of ['ru', null] as const)
         await page.locator('[data-plan="pro_plus"]').scrollIntoViewIfNeeded()
         await page.mouse.move(1, 1)
         await page.waitForTimeout(800)
-        await expect(page.locator('[data-plan] li')).toHaveCount(24)
+        await expect(page.locator('[data-plan] li')).toHaveCount(18)
         const tall = await page.locator('[data-plan] li').evaluateAll((els) =>
           els
             .filter((e) => (e as HTMLElement).offsetHeight > parseFloat(getComputedStyle(e).lineHeight) * 1.6)
