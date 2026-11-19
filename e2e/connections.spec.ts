@@ -342,7 +342,7 @@ test('«Биржи»: без подключений — «Орбита» с ша
   await page.goto('import')
   await expect(page.locator('[data-empty-orbit]')).toContainText('Подключи первую биржу')
   await expect(page.locator('[data-linked-orbit]')).toHaveCount(0)
-  // подключаем Bybit — вместо шагов «как подключить» его строка, на орбите Bybit яркий, остальные приглушены
+  // подключаем Bybit — вместо шагов «как подключить» его строка, на орбите Bybit подсвечен
   await page.locator('[data-exchange="bybit"]').click()
   const panel = page.getByRole('dialog', { name: 'Bybit' })
   await panel.getByLabel('API Key').fill('AbCdEf123456')
