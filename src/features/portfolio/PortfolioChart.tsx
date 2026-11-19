@@ -5,7 +5,7 @@
  * До первого снимка — оценка по нынешнему составу (est): та же линия, «оценка» — только в подсказке.
  * «Если бы всё было в BTC» — тоже в подсказке, отдельной линии нет.
  */
-import { useId, useMemo, useRef } from 'react'
+import { useEffect, useId, useMemo, useRef } from 'react'
 import { Area, AreaChart, CartesianGrid, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useT } from '@/i18n'
 import { formatDateTime, formatPercent, formatUsd, formatUsdShort } from '@/lib/format'
@@ -42,6 +42,19 @@ export function PortfolioChart({
   const p = t.portfolio.chart
   const id = useId().replace(/:/g, '')
   const inside = useRef(false)
+  const box = useRef<HTMLDivElement>(null)
+  // запасной путь: событие «ушёл с графика» может потеряться (резкий прыжок мыши) — любое движение мыши вне графика
+  // тоже возвращает крупную цифру к «сейчас»
+  useEffect(() => {
+    if (!onScrub) return
+    const away = (e: PointerEvent) => {
+      if (!inside.current || (e.target instanceof Node && box.current?.contains(e.target))) return
+      inside.current = false
+      onScrub(null)
+    }
+    window.addEventListener('pointermove', away)
+    return () => window.removeEventListener('pointermove', away)
+  }, [onScrub])
   const wide = useMediaQuery('(min-width: 640px)')
   const money = (v: number) => (pct ? signedPct((v - 100) / 100) : formatUsd(v))
   const moneyShort = (v: number) => (pct ? signedPct((v - 100) / 100, 0) : formatUsdShort(v))
@@ -79,6 +92,7 @@ export function PortfolioChart({
     // запоздавшее движение снова ставило точку — крупная цифра «застревала» на прошлом значении
     <div
       key={String(drawKey)}
+      ref={box}
       className="eq-draw relative h-full"
       onPointerMove={() => (inside.current = true)}
       onPointerLeave={() => {
