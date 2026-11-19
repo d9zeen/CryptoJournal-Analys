@@ -72,8 +72,8 @@ test('портфель: балансы Bybit приходят сами, икон
   await expect(page.locator('[data-spot-only]')).toContainText('только спот')
   const kpis = page.locator('[data-portfolio-kpis]')
   await expect(kpis.locator('dt')).toHaveText(['За 24 часа', 'Прибыль', 'Зафиксировано'])
-  // прибыль: у BTC цена входа — из покупки на Bybit, у USDT — 1 $ (стейблкоин), у остальных — не указана
-  await expect(kpis).toContainText('по цене входа у 2 из 4')
+  // прибыль: у BTC цена входа — из покупки на Bybit; USDT — стейблкоин, в прибыль не идёт; у ETH и SHIB — не указана
+  await expect(kpis).toContainText('по цене входа у 1 из 3')
   await expect(kpis.locator('[data-kpi-realized]')).toContainText('Зафиксировано')
 
   // график (3 снимка + «сейчас») и полоса долей: от большей к меньшей, проценты на блоках, суммы в легенде

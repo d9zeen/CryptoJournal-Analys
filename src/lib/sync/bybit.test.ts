@@ -69,7 +69,7 @@ describe('fetchBybitTrades', () => {
 describe('checkBybitKey', () => {
   it('readOnly = 1 → только чтение', async () => {
     const call: BybitCall = async () => ({ retCode: 0, retMsg: 'OK', result: { readOnly: 1, expiredAt: '2027-01-01T00:00:00Z' } })
-    expect(await checkBybitKey(call)).toEqual({ readOnly: true, expiresAt: '2027-01-01T00:00:00Z' })
+    expect(await checkBybitKey(call)).toMatchObject({ readOnly: true, expiresAt: '2027-01-01T00:00:00Z' })
   })
   it('ключ с правом торговли', async () => {
     const call: BybitCall = async () => ({ retCode: 0, retMsg: 'OK', result: { readOnly: 0 } })

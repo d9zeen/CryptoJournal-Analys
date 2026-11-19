@@ -46,6 +46,8 @@ export type SyncDeps = {
   touch: (cursorIso: string | null, error: string | null) => Promise<void>
   /** дата окончания ключа (Bybit отключает ключи без IP через 90 дней) */
   setKeyExpiry?: (iso: string | null) => Promise<void>
+  /** номер аккаунта на бирже (0024: один аккаунт — одно подключение); ошибки здесь синхронизацию не ломают */
+  setAccountUid?: (uid: string) => Promise<void>
   now?: () => number
 }
 
@@ -96,6 +98,7 @@ export async function runSync(conn: SyncConnection, deps: SyncDeps): Promise<Syn
       const info = await checkBybitKey(call)
       if (!info.readOnly) throw new SyncError('KEY_NOT_READONLY')
       await deps.setKeyExpiry?.(info.expiresAt)
+      if (info.uid) await deps.setAccountUid?.(info.uid).catch(() => undefined)
       // с запасом в 2 дня: Bybit может отдать закрытие чуть позже, дубли всё равно отсеются
       const from = conn.cursor_at ? Date.parse(conn.cursor_at) - 2 * DAY : now - BYBIT_HISTORY_DAYS * DAY
       trades = await fetchBybitTrades(call, from, now)
@@ -105,6 +108,7 @@ export async function runSync(conn: SyncConnection, deps: SyncDeps): Promise<Syn
       const info = await m.check(deps.cexCall)
       if (!info.readOnly) throw new SyncError('KEY_NOT_READONLY')
       if (info.expiresAt !== undefined) await deps.setKeyExpiry?.(info.expiresAt)
+      if (info.uid) await deps.setAccountUid?.(info.uid).catch(() => undefined)
       const from = conn.cursor_at ? Date.parse(conn.cursor_at) - m.overlapMs : now - m.historyDays * DAY
       const res = await m.fetch(deps.cexCall, Math.max(from, now - m.historyDays * DAY), now)
       trades = res.trades

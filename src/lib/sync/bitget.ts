@@ -7,7 +7,7 @@
  */
 import { round, type MarketType, type Side } from '@/lib/calc/trade'
 import type { ImportedTrade } from '@/lib/import/types'
-import { DAY, ExchangeError, clampLeverage, num, plainSymbol, windows, type CexCall, type CexModule, type KeyInfo } from './cex'
+import { DAY, ExchangeError, clampLeverage, num, plainSymbol, uidOf, windows, type CexCall, type CexModule, type KeyInfo } from './cex'
 
 /** Запись истории: поля UTA (v3) и классического аккаунта (v2) */
 export type BitgetPosition = {
@@ -103,15 +103,15 @@ export function bitgetPositionToTrade(p: BitgetPosition, product: Product): Impo
  */
 const WRITE_RIGHT = /trade|transfer|withdraw|write|order/i
 export async function checkBitgetKey(call: CexCall): Promise<KeyInfo> {
-  const r = (await call('/api/v3/account/info', {})) as BitgetReply<{ permType?: string }> | null
-  if (r?.code === '00000') return { readOnly: r.data?.permType === 'read-only' }
+  const r = (await call('/api/v3/account/info', {})) as BitgetReply<{ permType?: string; userId?: string; uid?: string }> | null
+  if (r?.code === '00000') return { readOnly: r.data?.permType === 'read-only', uid: uidOf(r.data?.userId ?? r.data?.uid) }
   const err = bitgetError(r)
   if (err.kind !== 'EXCHANGE') throw err // неверный ключ, IP, частота — сразу
   // классический аккаунт: права ключа из информации о споте
-  const info = (await call('/api/v2/spot/account/info', {})) as BitgetReply<{ authorities?: unknown }> | null
+  const info = (await call('/api/v2/spot/account/info', {})) as BitgetReply<{ authorities?: unknown; userId?: string }> | null
   if (info?.code === '00000' && Array.isArray(info.data?.authorities)) {
     const rights = info.data.authorities.map(String)
-    return { readOnly: rights.length > 0 && !rights.some((a) => WRITE_RIGHT.test(a)) }
+    return { readOnly: rights.length > 0 && !rights.some((a) => WRITE_RIGHT.test(a)), uid: uidOf(info.data.userId) }
   }
   // прав не прислали: проверяем, что ключ вообще работает
   await bitgetGet(call, '/api/v2/mix/position/history-position', { productType: 'USDT-FUTURES', limit: 1 })

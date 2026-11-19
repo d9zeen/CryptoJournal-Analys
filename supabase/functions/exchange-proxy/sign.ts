@@ -20,6 +20,8 @@ export const READ_PATHS: Record<CexId, ReadonlySet<string>> = {
     '/v5/position/closed-pnl', '/v5/user/query-api', '/v5/execution/list',
     // портфель (0019): балансы единого счёта, фандинга (это запрос, не перевод) и Earn
     '/v5/account/wallet-balance', '/v5/asset/transfer/query-account-coins-balance', '/v5/earn/position',
+    // портфель: история конвертаций (тоже спот — цена входа) — только чтение истории
+    '/v5/asset/exchange/query-convert-history', '/v5/asset/exchange/order-record',
   ]),
   bingx: new Set([
     '/openApi/swap/v2/trade/positionHistory', '/openApi/swap/v2/user/income', '/openApi/v1/account/apiPermissions',
@@ -54,7 +56,7 @@ export const POST_PATHS: ReadonlySet<string> = new Set(['/sapi/v1/asset/get-fund
 
 /** Какие параметры можно передать бирже (всё остальное отбрасываем) */
 const PARAMS: Record<CexId, ReadonlySet<string>> = {
-  bybit: new Set(['category', 'symbol', 'startTime', 'endTime', 'limit', 'cursor', 'accountType', 'coin']),
+  bybit: new Set(['category', 'symbol', 'startTime', 'endTime', 'limit', 'cursor', 'accountType', 'coin', 'index']),
   bingx: new Set(['symbol', 'currency', 'incomeType', 'startTime', 'endTime', 'limit', 'pageIndex', 'pageSize']),
   okx: new Set(['instType', 'instId', 'after', 'before', 'limit']),
   bitget: new Set(['productType', 'category', 'symbol', 'startTime', 'endTime', 'limit', 'idLessThan', 'cursor']),

@@ -120,7 +120,9 @@ export function portfolioRows(
     // приоритет: руками → по покупкам на биржах → стейблкоин 1 $
     const avgPrice = manual ?? fromTrades ?? (STABLES.has(symbol) ? 1 : null)
     const avgSource = manual !== undefined ? 'manual' : fromTrades !== null ? 'trades' : STABLES.has(symbol) ? 'stable' : null
-    const invested = avgPrice !== null && known === null ? avgPrice * amount : null
+    // стейблкоин: цена входа 1 $ показываем, но во «вложено» и прибыль он не идёт — прибыли у него нет, а процент по монетам
+    // он бы размывал (владелец 19.11.2026: «вложено 1 687 $, −26 %», хотя монеты в минусе на 90 %)
+    const invested = avgPrice !== null && known === null && !STABLES.has(symbol) ? avgPrice * amount : null
     const pnl = invested !== null && value !== null ? value - invested : null
     rows.push({
       symbol,
@@ -207,8 +209,9 @@ export type PortfolioTotals = {
   invested: number
   pnl: number
   pnlPct: number | null
-  /** у скольких монет известна цена входа / сколько всего монет с ценой */
+  /** у скольких монет известна цена входа / у скольких она вообще бывает (монеты с ценой, кроме стейблкоинов) / сколько всего монет с ценой */
   withCost: number
+  costable: number
   priced: number
   unpriced: number
 }
@@ -220,10 +223,12 @@ export function portfolioTotals(rows: PortfolioRow[]): PortfolioTotals {
   let invested = 0
   let valueWithCost = 0
   let withCost = 0
+  let costable = 0
   let priced = 0
   for (const r of rows) {
     if (r.value === null) continue
     priced++
+    if (r.price !== null && !STABLES.has(r.symbol)) costable++
     value += r.value
     if (r.change24Usd !== null) {
       change24Usd += r.change24Usd
@@ -244,6 +249,7 @@ export function portfolioTotals(rows: PortfolioRow[]): PortfolioTotals {
     pnl,
     pnlPct: invested > 0 ? pnl / invested : null,
     withCost,
+    costable,
     priced,
     unpriced: rows.length - priced,
   }

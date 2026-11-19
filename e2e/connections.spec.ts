@@ -44,6 +44,27 @@ test('Hyperliquid: подключение кошелька и первая си�
   await expect(hl).toContainText(/Обновлено (только что|.+ назад)/)
 })
 
+test('один аккаунт биржи — одно подключение: тот же аккаунт Bybit другим ключом не подключить (деньги посчитались бы дважды)', async ({ page, db }) => {
+  db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
+  db.connections = [{ id: 'c1', exchange: 'bybit', label: 'Основной', api_key: 'firstkey1234', last_sync_at: new Date().toISOString(), cursor_at: null, last_error: null, key_expires_at: null, created_at: '2026-11-01T10:00:00Z', account_uid: '1001' }]
+  db.bybitUid = 1001
+  await fakeSupabase(page, db)
+  await page.goto('import')
+  await page.getByRole('button', { name: '+ Подключить' }).click()
+  await page.getByLabel('API Key').fill('SecondKey9876')
+  await page.getByLabel('API Secret').fill('SuperSecret123456')
+  await page.getByRole('button', { name: 'Подключить', exact: true }).click()
+  await expect(page.getByText('Этот аккаунт биржи уже подключён')).toBeVisible()
+  expect(db.connCalls?.map((c) => c.fn)).toEqual(['add_exchange_connection', 'exchange-proxy', 'set_connection_account', 'delete_exchange_connection'])
+  expect(db.connections?.map((c) => c.api_key)).toEqual(['firstkey1234'])
+  // другой аккаунт (другой номер) — подключается
+  db.bybitUid = 2002
+  await page.getByLabel('API Key').fill('ThirdKey55555')
+  await page.getByRole('button', { name: 'Подключить', exact: true }).click()
+  await expect.poll(() => db.connections?.[1]?.account_uid).toBe('2002')
+  expect(db.connections?.map((c) => c.api_key)).toEqual(['firstkey1234', 'thirdkey55555'])
+})
+
 test('Bybit: ключ с правом торговли не принимаем', async ({ page, db }) => {
   db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
   db.bybitReadOnly = 0

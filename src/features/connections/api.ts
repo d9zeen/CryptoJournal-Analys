@@ -182,6 +182,9 @@ export function syncConnection(conn: Connection, remaining: () => Promise<number
     setKeyExpiry: async (iso) => {
       await supabase.rpc('set_connection_key_expiry', { p_id: conn.id, p_expires: iso })
     },
+    setAccountUid: async (uid) => {
+      await supabase.rpc('set_connection_account', { p_id: conn.id, p_uid: uid })
+    },
   })
     .then(
       (r) => {
@@ -246,6 +249,12 @@ export function useAddConnection() {
           const info = mod ? await mod.check(call) : await checkBybitKey(call as BybitCall)
           if (!info.readOnly) throw new SyncError('KEY_NOT_READONLY')
           if (info.expiresAt !== undefined) await supabase.rpc('set_connection_key_expiry', { p_id: connId, p_expires: info.expiresAt })
+          // один аккаунт биржи — одно подключение (0024): тот же аккаунт другим ключом посчитал бы деньги и сделки дважды.
+          // Другие ошибки (функции ещё нет в базе) подключение не ломают
+          if (info.uid) {
+            const { error: dup } = await supabase.rpc('set_connection_account', { p_id: connId, p_uid: info.uid })
+            if (dup && /DUPLICATE_ACCOUNT/.test(dup.message)) throw new SyncError('DUPLICATE_ACCOUNT')
+          }
         } catch (e) {
           await supabase.rpc('delete_exchange_connection', { p_id: connId })
           throw toSyncError(e)

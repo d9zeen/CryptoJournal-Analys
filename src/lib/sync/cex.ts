@@ -19,7 +19,8 @@ export class ExchangeError extends Error {
   }
 }
 
-export type KeyInfo = { readOnly: boolean; expiresAt?: string | null }
+/** uid — номер аккаунта на бирже: один аккаунт — одно подключение (0024; нет у биржи такого — не передаём) */
+export type KeyInfo = { readOnly: boolean; expiresAt?: string | null; uid?: string | null }
 
 export type CexModule = {
   /** первая синхронизация — за столько дней (сколько хранит биржа) */
@@ -33,6 +34,12 @@ export type CexModule = {
 }
 
 export const DAY = 86_400_000
+
+/** Номер аккаунта биржи → строка (0 / пусто / мусор — null) */
+export const uidOf = (v: unknown): string | null => {
+  const s = typeof v === 'number' || typeof v === 'string' ? String(v).trim() : ''
+  return s && s !== '0' && s.length <= 64 ? s : null
+}
 
 /** Число из строки биржи; пусто / мусор — null */
 export const num = (v: unknown): number | null => {

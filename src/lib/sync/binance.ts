@@ -9,7 +9,7 @@
 import { round, type Side } from '@/lib/calc/trade'
 import type { ImportedTrade } from '@/lib/import/types'
 import { USD_COINS } from '@/lib/import/fields'
-import { DAY, ExchangeError, inBatches, num, windows, type CexCall, type CexModule, type KeyInfo } from './cex'
+import { DAY, ExchangeError, inBatches, num, uidOf, windows, type CexCall, type CexModule, type KeyInfo } from './cex'
 
 export type BinanceFill = {
   id: number
@@ -48,7 +48,14 @@ export async function checkBinanceKey(call: CexCall): Promise<KeyInfo> {
   const r = await binanceGet<Record<string, unknown>>(call, '/sapi/v1/account/apiRestrictions', {})
   if (!r || r.enableReading !== true) return { readOnly: false }
   const rights = Object.entries(r).filter(([k]) => /^(enable|permits)/.test(k) && k !== 'enableReading')
-  return { readOnly: rights.every(([, v]) => v === false) }
+  // номер аккаунта — из /api/v3/account (в правах ключа его нет); не ответил — без номера, ключ всё равно проверен
+  let uid: string | null = null
+  try {
+    uid = uidOf((await binanceGet<Record<string, unknown>>(call, '/api/v3/account', { omitZeroBalances: 'true' }))?.uid)
+  } catch {
+    /* без номера */
+  }
+  return { readOnly: rights.every(([, v]) => v === false), uid }
 }
 
 const EPS = 1e-9

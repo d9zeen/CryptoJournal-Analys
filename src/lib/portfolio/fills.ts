@@ -3,7 +3,9 @@
  * Из них считается средняя цена входа и зафиксированная прибыль (lib/calc/portfolio.ts → costBasis).
  * Общий код для браузера (через exchange-proxy) и сервера (sync-worker): запросы приходят снаружи (CexCall), только чтение.
  *
- *  - Bybit: /v5/execution/list?category=spot — окна по 7 дней, первый раз за 2 года;
+ *  - Bybit: /v5/execution/list?category=spot — окна по 7 дней, первый раз за 2 года; плюс «Конвертация» (владелец 19.11.2026: тоже спот) —
+ *    /v5/asset/exchange/query-convert-history (новая, с 10.09.2025 и с сайта) и /v5/asset/exchange/order-record (старый «Обмен монет»):
+ *    USDT → монета = покупка по курсу обмена, монета → USDT = продажа; монета ↔ монета и стейбл ↔ стейбл — без долларовой цены, мимо;
  *  - Binance: /api/v3/myTrades — по парам монет, которые сейчас на балансе (к USDT / USDC / FDUSD), с первой сделки по номерам;
  *  - OKX: /api/v5/trade/fills-history?instType=SPOT — последние 3 месяца (больше OKX не хранит);
  *  - Bitget: единый аккаунт — /api/v3/trade/fills?category=SPOT (окна по 30 дней), классический — /api/v2/spot/trade/fills; 90 дней;
@@ -17,7 +19,7 @@ import { okxGet } from '@/lib/sync/okx'
 import { bitgetGet } from '@/lib/sync/bitget'
 import { bingxGet } from '@/lib/sync/bingx'
 import { HL_API, fetchHlFills, type HlFill } from '@/lib/sync/hyperliquid'
-import { cleanSymbol } from '@/lib/portfolio/balances'
+import { cleanSymbol, isTransient } from '@/lib/portfolio/balances'
 import { DAY, ExchangeError, inBatches, windows, type CexCall } from '@/lib/sync/cex'
 
 export type SpotFill = {
@@ -96,6 +98,67 @@ export async function bybitSpotFills(call: CexCall, from: number, to: number): P
     }
   })
   return out
+}
+
+/**
+ * Обмен «из → в» как исполнение: из доллара в монету — покупка (цена = сколько отдал / сколько получил),
+ * из монеты в доллар — продажа; иначе — null (нет долларовой цены). Комиссия у конвертации уже внутри курса
+ */
+export function convertFill(id: string, fromCoin: unknown, fromAmount: unknown, toCoin: unknown, toAmount: unknown, ts: unknown): SpotFill | null {
+  const from = cleanSymbol(fromCoin)
+  const to = cleanSymbol(toCoin)
+  const fa = n(fromAmount)
+  const ta = n(toAmount)
+  if (!from || !to || fa <= 0 || ta <= 0) return null
+  if (USD_QUOTES.has(from) && !USD_QUOTES.has(to)) return fill(id, { asset: to, quote: from }, 'buy', ta, fa / ta, 0, null, ts)
+  if (USD_QUOTES.has(to) && !USD_QUOTES.has(from)) return fill(id, { asset: from, quote: to }, 'sell', fa, ta / fa, 0, null, ts)
+  return null
+}
+
+/** Конвертации Bybit (обе истории). Нет прав / не поддерживается — пусто; временный сбой — наверх (повторим в следующий раз) */
+export async function bybitConvertFills(call: CexCall): Promise<SpotFill[]> {
+  const c = call as BybitCall
+  const out: SpotFill[] = []
+  const safe = async (fn: () => Promise<void>) => {
+    try {
+      await fn()
+    } catch (e) {
+      if (isTransient(e)) throw e
+    }
+  }
+  const get = async (path: string, params: Record<string, string | number>) => {
+    const r = await c(path, params)
+    if (!r || r.retCode !== 0) throw new BybitError(r?.retCode ?? -1, r?.retMsg ?? 'no response')
+    return r.result as Record<string, unknown>
+  }
+  await safe(async () => {
+    for (let index = 1; index <= 50; index++) {
+      const list = ((await get('/v5/asset/exchange/query-convert-history', { index, limit: 100 })).list ?? []) as Record<string, unknown>[]
+      for (const x of list) {
+        if (x.exchangeStatus !== undefined && String(x.exchangeStatus).toLowerCase() !== 'success') continue
+        out.push(...only([convertFill(`bb:cv:${x.exchangeTxId}`, x.fromCoin, x.fromAmount, x.toCoin, x.toAmount, x.createdAt)]))
+      }
+      if (list.length < 100) break
+    }
+  })
+  await safe(async () => {
+    let cursor = ''
+    for (let page = 0; page < 50; page++) {
+      const res = await get('/v5/asset/exchange/order-record', { limit: 50, ...(cursor ? { cursor } : {}) })
+      const list = (res.orderBody ?? []) as Record<string, unknown>[]
+      for (const x of list) out.push(...only([convertFill(`bb:cv:${x.exchangeTxId}`, x.fromCoin, x.fromAmount, x.toCoin, x.toAmount, x.createdTime)]))
+      cursor = String(res.nextPageCursor ?? '')
+      if (!cursor || !list.length) break
+    }
+  })
+  // одна и та же конвертация в обеих историях: тот же номер — или та же монета, сторона и количество в ту же минуту
+  const seen = new Set<string>()
+  return out.filter((f) => {
+    const keys = [f.external_id, `${f.asset}|${f.side}|${f.qty.toPrecision(10)}|${f.at.slice(0, 16)}`]
+    if (keys.some((k) => seen.has(k))) return false
+    keys.forEach((k) => seen.add(k))
+    return true
+  })
 }
 
 // ---------- Binance ----------
@@ -283,7 +346,8 @@ export async function fetchSpotFills(
   let fills: SpotFill[]
   switch (conn.exchange) {
     case 'bybit':
-      fills = await bybitSpotFills(call, back(BYBIT_SPOT_DAYS), now)
+      // конвертации — вся история каждый раз (она короткая, номерами), повторы база отбросит
+      fills = [...(await bybitSpotFills(call, back(BYBIT_SPOT_DAYS), now)), ...(await bybitConvertFills(call))]
       break
     case 'binance':
       fills = await binanceSpotFills(call, opts.assets, since)

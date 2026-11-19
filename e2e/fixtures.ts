@@ -26,6 +26,8 @@ export type FakeDb = {
   connCalls?: { fn: string; body: Record<string, unknown> }[]
   /** ответ Bybit на проверку ключа: 1 — только чтение */
   bybitReadOnly?: number
+  /** номер аккаунта Bybit в ответе query-api (0024) */
+  bybitUid?: number
   /** права ключа OKX (по умолчанию read_only) */
   okxPerm?: string
   /** палитра в профиле (0015) */
@@ -186,7 +188,18 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
       ]
       return json(items.length)
     }
-    if (path === '/rest/v1/exchange_connections') return json(db.connections ?? [])
+    if (path === '/rest/v1/exchange_connections') return json((db.connections ?? []).map(({ account_uid: _uid, ...c }) => c))
+    // 0024: номер аккаунта биржи; тот же аккаунт уже подключён другим ключом — DUPLICATE_ACCOUNT (как уникальный индекс в базе)
+    if (path.endsWith('/rpc/set_connection_account')) {
+      const b = (body() ?? {}) as { p_id?: string; p_uid?: string }
+      ;(db.connCalls ??= []).push({ fn: 'set_connection_account', body: b as Record<string, unknown> })
+      const conns = db.connections ?? []
+      const me = conns.find((c) => c.id === b.p_id)
+      if (me && conns.some((c) => c.id !== me.id && c.exchange === me.exchange && c.account_uid === b.p_uid))
+        return json({ message: 'DUPLICATE_ACCOUNT', code: 'P0001' }, 400)
+      if (me) me.account_uid = b.p_uid
+      return route.fulfill({ status: 204 })
+    }
     if (path.endsWith('_exchange_connection') || path === '/functions/v1/exchange-proxy') {
       const b = (body() ?? {}) as Record<string, unknown>
       const fn = path.split('/').pop()!
@@ -236,7 +249,7 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
         return json({ retCode: 0, retMsg: 'OK', result: { balance: [{ coin: 'ETH', walletBalance: '2' }, { coin: 'USDT', walletBalance: '1200.5' }] } })
       if (b.path === '/v5/earn/position') return json({ retCode: 0, retMsg: 'OK', result: { list: [] } })
       // exchange-proxy: ответы Bybit
-      if (b.path === '/v5/user/query-api') return json({ retCode: 0, retMsg: 'OK', result: { readOnly: db.bybitReadOnly ?? 1 } })
+      if (b.path === '/v5/user/query-api') return json({ retCode: 0, retMsg: 'OK', result: { readOnly: db.bybitReadOnly ?? 1, userID: db.bybitUid ?? 1001 } })
       const recent = params.category === 'linear' && Number(params.endTime) > Date.now() - 7 * 86_400_000 && !params.cursor
       const item = { symbol: 'ETHUSDT', orderId: 'bb-1', side: 'Buy', closedSize: '1', cumEntryValue: '3000', avgEntryPrice: '3000', cumExitValue: '2900', avgExitPrice: '2900', closedPnl: '98', leverage: '5', createdTime: String(Date.now() - 3_600_000), updatedTime: String(Date.now() - 3_600_000) }
       return json({ retCode: 0, retMsg: 'OK', result: { list: recent ? [item] : [], nextPageCursor: '' } })

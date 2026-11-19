@@ -846,6 +846,36 @@ select pg_temp.check(shared_portfolio(:'s_token') is null, 'выключил с�
 reset role;
 delete from auth.users where id = '88888888-0000-0000-0000-000000000008';
 
+-- 0024: один аккаунт биржи — одно подключение (тот же аккаунт другим ключом — DUPLICATE_ACCOUNT)
+insert into exchange_connections (user_id, exchange, api_key) values
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'okx', 'OKXKEY-ONE'),
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'okx', 'OKXKEY-TWO'),
+  ('bbbbbbbb-0000-0000-0000-000000000002', 'okx', 'OKXKEY-B');
+select id as okx1 from exchange_connections where api_key = 'OKXKEY-ONE' \gset
+select id as okx2 from exchange_connections where api_key = 'OKXKEY-TWO' \gset
+select id as okxb from exchange_connections where api_key = 'OKXKEY-B' \gset
+set role authenticated;
+set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
+select set_connection_account(:'okx1', '777');
+select set_connection_account(:'okx1', '777');
+select pg_temp.check(true, 'номер аккаунта своего подключения сохраняется (повторно — без ошибки)');
+select pg_temp.expect_error(format('select set_connection_account(%L, %L)', :'okx2', '777'), 'DUPLICATE_ACCOUNT');
+select pg_temp.check(true, 'тот же аккаунт биржи другим ключом — DUPLICATE_ACCOUNT');
+select pg_temp.expect_error($$select account_uid from exchange_connections$$, 'permission denied');
+select pg_temp.check(true, 'номер аккаунта из браузера не читается');
+select pg_temp.expect_error(format('update exchange_connections set account_uid = %L where id = %L', '888', :'okx2'), 'permission denied');
+select pg_temp.check(true, 'номер аккаунта напрямую не записать — только функцией');
+select set_connection_account(:'okxb', '999');
+reset role;
+select pg_temp.check((select account_uid from exchange_connections where id = :'okxb') is null, 'A не может записать номер в подключение B');
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';
+select set_connection_account(:'okxb', '777');
+reset role;
+select pg_temp.check((select account_uid from exchange_connections where id = :'okxb') = '777', 'у другого человека тот же номер — не конфликт (свои подключения)');
+select pg_temp.check((select account_uid from exchange_connections where id = :'okx2') is null, 'второе подключение A без номера');
+delete from exchange_connections where api_key in ('OKXKEY-ONE', 'OKXKEY-TWO', 'OKXKEY-B');
+
 -- Удаление аккаунта чистит всё
 set role authenticated;
 set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';

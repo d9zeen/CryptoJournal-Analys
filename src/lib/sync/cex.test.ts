@@ -53,8 +53,8 @@ describe('OKX', () => {
   })
   it('права ключа: read_only — да, trade / withdraw — нет', async () => {
     const call = (perm: string): CexCall => async () => ({ code: '0', data: [{ perm }] })
-    expect(await checkOkxKey(call('read_only'))).toEqual({ readOnly: true })
-    expect(await checkOkxKey(call('read_only,trade'))).toEqual({ readOnly: false })
+    expect(await checkOkxKey(call('read_only'))).toMatchObject({ readOnly: true })
+    expect(await checkOkxKey(call('read_only,trade'))).toMatchObject({ readOnly: false })
     await expect(checkOkxKey(async () => ({ code: '50110', msg: 'IP' }))).rejects.toMatchObject({ kind: 'KEY_IP' })
   })
 })
@@ -93,18 +93,18 @@ describe('Bitget', () => {
     expect(seen.filter((s) => s.startsWith('/api/v2/'))).toEqual(['/api/v2/mix/position/history-position USDT-FUTURES', '/api/v2/mix/position/history-position USDC-FUTURES', '/api/v2/mix/position/history-position COIN-FUTURES'])
   })
   it('права ключа: read-only — да, read-and-write — нет; неверный ключ — KEY_INVALID', async () => {
-    expect(await checkBitgetKey(async () => ({ code: '00000', data: { permType: 'read-only' } }))).toEqual({ readOnly: true })
-    expect(await checkBitgetKey(async () => ({ code: '00000', data: { permType: 'read-and-write' } }))).toEqual({ readOnly: false })
+    expect(await checkBitgetKey(async () => ({ code: '00000', data: { permType: 'read-only' } }))).toMatchObject({ readOnly: true })
+    expect(await checkBitgetKey(async () => ({ code: '00000', data: { permType: 'read-and-write' } }))).toMatchObject({ readOnly: false })
     await expect(checkBitgetKey(async () => ({ code: '40037', msg: 'Apikey does not exist' }))).rejects.toMatchObject({ kind: 'KEY_INVALID' })
     // классический аккаунт: v3 отвечает ошибкой, права — из /api/v2/spot/account/info
     const classic = (authorities: unknown) => async (path: string) =>
       path === '/api/v3/account/info' ? { code: '40084', msg: 'not uta' } : path === '/api/v2/spot/account/info' ? { code: '00000', data: { authorities } } : { code: '00000', data: { list: [] } }
-    expect(await checkBitgetKey(classic(['readonly']))).toEqual({ readOnly: true })
-    expect(await checkBitgetKey(classic(['trade', 'readonly']))).toEqual({ readOnly: false })
-    expect(await checkBitgetKey(classic(['readonly', 'withdraw']))).toEqual({ readOnly: false })
-    expect(await checkBitgetKey(classic([]))).toEqual({ readOnly: false })
+    expect(await checkBitgetKey(classic(['readonly']))).toMatchObject({ readOnly: true })
+    expect(await checkBitgetKey(classic(['trade', 'readonly']))).toMatchObject({ readOnly: false })
+    expect(await checkBitgetKey(classic(['readonly', 'withdraw']))).toMatchObject({ readOnly: false })
+    expect(await checkBitgetKey(classic([]))).toMatchObject({ readOnly: false })
     // прав не прислали — ключ рабочий, принимаем
-    expect(await checkBitgetKey(classic(undefined))).toEqual({ readOnly: true })
+    expect(await checkBitgetKey(classic(undefined))).toMatchObject({ readOnly: true })
   })
 })
 
@@ -141,8 +141,8 @@ describe('BingX', () => {
     expect(seen.filter((s) => s.endsWith('positionHistory'))).toHaveLength(1)
   })
   it('права ключа: только «Чтение» (2)', async () => {
-    expect(await checkBingxKey(async () => ({ apiKey: 'x', permissions: [2], ipAddresses: [] }))).toEqual({ readOnly: true })
-    expect(await checkBingxKey(async () => ({ code: 0, data: { permissions: [1, 2] } }))).toEqual({ readOnly: false })
+    expect(await checkBingxKey(async () => ({ apiKey: 'x', permissions: [2], ipAddresses: [] }))).toMatchObject({ readOnly: true })
+    expect(await checkBingxKey(async () => ({ code: 0, data: { permissions: [1, 2] } }))).toMatchObject({ readOnly: false })
     await expect(checkBingxKey(async () => ({ code: 100413, msg: 'Incorrect apiKey' }))).rejects.toMatchObject({ kind: 'KEY_INVALID' })
   })
 })
@@ -200,8 +200,8 @@ describe('Binance', () => {
   })
   it('права ключа: только чтение; ошибка ключа -2015 → KEY_INVALID', async () => {
     const base = { ipRestrict: false, enableReading: true, enableWithdrawals: false, enableFutures: false, enableSpotAndMarginTrading: false, permitsUniversalTransfer: false, enableMargin: false }
-    expect(await checkBinanceKey(async () => base)).toEqual({ readOnly: true })
-    expect(await checkBinanceKey(async () => ({ ...base, enableFutures: true }))).toEqual({ readOnly: false })
+    expect(await checkBinanceKey(async () => base)).toMatchObject({ readOnly: true })
+    expect(await checkBinanceKey(async () => ({ ...base, enableFutures: true }))).toMatchObject({ readOnly: false })
     await expect(checkBinanceKey(async () => ({ code: -2015, msg: 'Invalid API-key, IP, or permissions for action.' }))).rejects.toMatchObject({ kind: 'KEY_INVALID' })
   })
 })
