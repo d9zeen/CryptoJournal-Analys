@@ -74,12 +74,16 @@ const num = (v: unknown): number | null => {
   return Number.isFinite(x) ? x : null
 }
 
-/** Символ → монета с наибольшей капитализацией */
+/**
+ * Символ → монета с наибольшей капитализацией СРЕДИ МОНЕТ С ЦЕНОЙ (как portfolio_snapshot_for / shared_portfolio в базе:
+ * иначе сумма на экране и точка графика расходятся); цены нет ни у одной — монета с наибольшей капитализацией
+ */
 export function coinsBySymbol(coins: Coin[]): Map<string, Coin> {
   const map = new Map<string, Coin>()
+  const better = (c: Coin, prev: Coin) => (c.price !== null) !== (prev.price !== null) ? c.price !== null : (c.rank ?? Infinity) < (prev.rank ?? Infinity)
   for (const c of coins) {
     const prev = map.get(c.symbol)
-    if (!prev || (c.rank ?? Infinity) < (prev.rank ?? Infinity)) map.set(c.symbol, c)
+    if (!prev || better(c, prev)) map.set(c.symbol, c)
   }
   return map
 }

@@ -59,6 +59,18 @@ describe('Bybit', () => {
     expect(b).toContainEqual({ account: 'earn', symbol: 'ETH', amount: 3 })
     expect(b.find((x) => x.symbol === 'DOGE')).toBeUndefined()
   })
+  it('фандинг / Earn: временный сбой (сеть, частота запросов) — ошибка всего обновления, а не «денег нет»', async () => {
+    const base = { '/v5/account/wallet-balance': { retCode: 0, result: { list: [{ coin: [{ coin: 'BTC', walletBalance: '1' }] }] } } }
+    const down = async (path: string) => {
+      if (path in base) return base[path as keyof typeof base]
+      throw new Error('EXCHANGE_HTTP_502 network')
+    }
+    await expect(bybitBalances(down)).rejects.toThrow(/network/)
+    const limited = fake({ ...base, '/v5/asset/transfer/query-account-coins-balance': { retCode: 10006, retMsg: 'Too many visits' } })
+    await expect(bybitBalances(limited)).rejects.toMatchObject({ code: 10006 })
+    // отказ биржи (нет прав на Earn) — просто без этого счёта
+    expect(await bybitBalances(fake(base))).toEqual([{ account: 'spot', symbol: 'BTC', amount: 1 }])
+  })
   it('основной счёт не ответил — ошибка ключа, а не пустой портфель', async () => {
     await expect(bybitBalances(fake({}))).rejects.toMatchObject({ code: 10005 })
   })
@@ -103,6 +115,23 @@ describe('OKX', () => {
       { account: 'fund', symbol: 'USDT', amount: 7.7 },
       { account: 'earn', symbol: 'USDC', amount: 100 },
     ])
+  })
+})
+
+describe('OKX: режим счёта', () => {
+  const ok = (data: unknown) => ({ code: '0', msg: '', data })
+  const answers = (acctLv: string) => ({
+    '/api/v5/account/config': ok([{ acctLv }]),
+    '/api/v5/account/balance': ok([{ details: [{ ccy: 'BTC', cashBal: '0.5' }, { ccy: 'USDT', cashBal: '12' }] }]),
+  })
+  it('режим «Спот» (acctLv 1): фьючерсов нет — USDT на торговом счёте считается', async () => {
+    expect(await okxBalances(fake(answers('1')))).toEqual([
+      { account: 'spot', symbol: 'BTC', amount: 0.5 },
+      { account: 'spot', symbol: 'USDT', amount: 12 },
+    ])
+  })
+  it('режимы с маржой (2–4): USDT торгового счёта — маржа фьючерсов, не считается', async () => {
+    for (const lv of ['2', '3', '4']) expect(await okxBalances(fake(answers(lv)))).toEqual([{ account: 'spot', symbol: 'BTC', amount: 0.5 }])
   })
 })
 

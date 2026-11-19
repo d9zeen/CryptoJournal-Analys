@@ -79,6 +79,10 @@ describe('кошелёк EVM', () => {
     })
     expect(await evmChainBalances(EVM_CHAINS[0], ADDR, COINS, f)).toEqual([])
   })
+  it('сбой узла на токене (лимит частоты) — ошибка целиком, а не «монеты нет» (иначе ложный провал на графике)', async () => {
+    const f = node((_u, r) => (r.method === 'eth_getBalance' ? '0x0' : new Error('rate limit exceeded')))
+    await expect(evmChainBalances(EVM_CHAINS[0], ADDR, COINS, f)).rejects.toThrow(/RPC_ERROR/)
+  })
 })
 
 describe('кошелёк Solana', () => {

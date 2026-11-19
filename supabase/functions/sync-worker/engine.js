@@ -2679,7 +2679,7 @@ async function rpcBatch(url, reqs, fetchFn = fetch, soft = false) {
 		for (let k = 0; k < part.length; k++) {
 			const r = byId.get(k);
 			if (r && !r.error) out.push(r.result);
-			else if (soft && r) out.push(null);
+			else if (soft && r && /revert/i.test(String(r.error?.message ?? ""))) out.push(null);
 			else throw new Error(`RPC_ERROR ${r?.error?.message ?? "no answer"} network`);
 		}
 	}
@@ -2865,11 +2865,25 @@ function mergeBalances(list) {
 function spotOnlyUnified(list) {
 	return list.filter((b) => !STABLES.has(cleanSymbol(b.symbol) ?? ""));
 }
-/** Дополнительный счёт: ошибка — пусто (основной уже ответил) */
+/**
+* Ошибка временная (сеть, биржа «лежит», частота запросов, неизвестная) — тогда НЕ притворяемся, что счёт пустой:
+* иначе на час из портфеля выпадут деньги фандинга / Earn и на графике будет ложный провал (аудит 19.11.2026).
+* Постоянная — биржа ответила отказом по этому счёту (нет прав ключа, продукт недоступен): счёта просто нет.
+*/
+function isTransient(e) {
+	if (e instanceof BybitError) return e.code === 10006 || e.code === 10018 || e.code === 10016 || e.code === 1e4;
+	if (e instanceof ExchangeError) return e.kind === "RATE_LIMIT";
+	return true;
+}
+/**
+* Дополнительный счёт (фандинг, Earn): отказ биржи — пусто; временная ошибка — ошибка всего обновления,
+* старые балансы остаются (как при сбое основного счёта)
+*/
 async function optional(fn) {
 	try {
 		return await fn();
-	} catch {
+	} catch (e) {
+		if (isTransient(e)) throw e;
 		return [];
 	}
 }
@@ -2928,11 +2942,18 @@ async function binanceBalances(call) {
 }
 async function okxBalances(call) {
 	const trading = await okxGet(call, "/api/v5/account/balance", {});
-	const out = spotOnlyUnified(arr(trading[0]?.details).map((x) => ({
+	let spotMode = false;
+	try {
+		spotMode = String((await okxGet(call, "/api/v5/account/config", {}))[0]?.acctLv) === "1";
+	} catch (e) {
+		if (isTransient(e)) throw e;
+	}
+	const coins = arr(trading[0]?.details).map((x) => ({
 		account: "spot",
 		symbol: String(x.ccy),
 		amount: n$1(x.cashBal ?? x.eq)
-	})));
+	}));
+	const out = spotMode ? coins : spotOnlyUnified(coins);
 	out.push(...await optional(async () => (await okxGet(call, "/api/v5/asset/balances", {})).map((x) => ({
 		account: "fund",
 		symbol: String(x.ccy),
