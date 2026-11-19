@@ -846,6 +846,38 @@ select pg_temp.check(shared_portfolio(:'s_token') is null, 'выключил с�
 reset role;
 delete from auth.users where id = '88888888-0000-0000-0000-000000000008';
 
+-- Демо без регистрации (0024): гость — анонимный пользователь. Сделки — можно; биржи, ссылка «поделиться», скриншоты — нет
+insert into auth.users (id, email, is_anonymous) values ('77777777-0000-0000-0000-000000000007', null, true);
+set role authenticated;
+set request.jwt.claim.sub = '77777777-0000-0000-0000-000000000007';
+set request.jwt.claims = '{"is_anonymous":true}';
+select pg_temp.check(is_guest(), 'анонимный пользователь — гость');
+insert into trades (id, exchange, symbol, side, entry_at, entry_price, size_usd)
+values ('77777777-1111-0000-0000-000000000000', 'bybit', 'BTCUSDT', 'long', now(), 90000, 1000);
+select pg_temp.check((select count(*) from trades) = 1, 'гость записывает свои сделки (демо-счёт)');
+select pg_temp.expect_error($$select add_exchange_connection('hyperliquid', '0x5555555555555555555555555555555555555555')$$, 'GUEST_FORBIDDEN');
+select pg_temp.expect_error($$select add_exchange_connection('bybit', 'KEY12345678', 'SuperSecret123')$$, 'GUEST_FORBIDDEN');
+select pg_temp.expect_error($$select share_portfolio(true)$$, 'GUEST_FORBIDDEN');
+select pg_temp.expect_error($$insert into trade_screenshots (trade_id, path) values ('77777777-1111-0000-0000-000000000000', '77777777-0000-0000-0000-000000000007/77777777-1111-0000-0000-000000000000/a.webp')$$, 'GUEST_FORBIDDEN');
+select pg_temp.expect_error($$insert into storage.objects (bucket_id, name) values ('screenshots', '77777777-0000-0000-0000-000000000007/77777777-1111-0000-0000-000000000000/a.webp')$$, 'row-level security');
+-- тот же человек сохранил аккаунт (почта) — токен уже без is_anonymous: всё можно
+set request.jwt.claims = '{"is_anonymous":false}';
+select pg_temp.check(not is_guest(), 'после сохранения аккаунта — не гость');
+reset request.jwt.claims;
+reset role;
+-- чистка: гости старше 7 дней удаляются со сделками, свежие гости и обычные пользователи — нет
+insert into auth.users (id, email, is_anonymous, created_at) values ('66666666-0000-0000-0000-000000000006', null, true, now() - interval '3 days');
+update auth.users set created_at = now() - interval '8 days' where id = '77777777-0000-0000-0000-000000000007';
+select pg_temp.check(cleanup_guests() = 1, 'чистка удалила одного старого гостя');
+select pg_temp.check((select count(*) from auth.users where id = '77777777-0000-0000-0000-000000000007') = 0
+  and (select count(*) from trades where user_id = '77777777-0000-0000-0000-000000000007') = 0, 'старый гость удалён вместе со сделками');
+select pg_temp.check((select count(*) from auth.users where id = '66666666-0000-0000-0000-000000000006') = 1
+  and (select count(*) from auth.users where id = 'aaaaaaaa-0000-0000-0000-000000000001') = 1, 'свежий гость и обычный пользователь остались');
+delete from auth.users where id = '66666666-0000-0000-0000-000000000006';
+set role authenticated;
+select pg_temp.expect_error($$select cleanup_guests()$$, 'permission denied');
+reset role;
+
 -- Удаление аккаунта чистит всё
 set role authenticated;
 set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';

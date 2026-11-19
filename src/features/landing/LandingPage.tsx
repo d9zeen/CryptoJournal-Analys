@@ -56,7 +56,9 @@ export function LandingPage() {
   useTilt(previewRef, 4)
   const pathRef = useRef<HTMLOListElement>(null)
   useSpotlight(pathRef)
-  const { user } = useAuth()
+  const { user: authUser, isGuest } = useAuth()
+  // гость демо для главной — «не вошёл» (видит «Войти» / «Начать», а в демо возвращается через «Открыть демо»)
+  const user = isGuest ? null : authUser
 
   return (
     <div className="min-h-dvh">
@@ -153,8 +155,10 @@ export function LandingPage() {
                 >
                   {l.start}
                 </Link>
-                <Link to="/login" className={`${btnSecondary} !px-5 !py-3`}>
-                  {l.login}
+                {/* «Открыть демо» — сразу в дневник с демо-сделками, без регистрации (0024); «Войти» — в шапке и подвале */}
+                <Link to="/demo" data-open-demo className={`${btnSecondary} !px-5 !py-3 gap-2`}>
+                  {l.openDemo}
+                  <span className="text-xs font-normal text-muted">{l.openDemoHint}</span>
                 </Link>
               </div>
             </div>
@@ -170,7 +174,10 @@ export function LandingPage() {
                 <i className="mt-[3px] size-2.5 shrink-0 rounded-full bg-border" />
                 <i className="mt-[3px] size-2.5 shrink-0 rounded-full bg-border" />
                 {/* на телефоне подпись переносится на вторую строку, а не обрезается многоточием */}
-                <span className="ml-2 min-w-0 text-xs leading-snug text-muted">{l.previewLabel}</span>
+                <span className="ml-2 min-w-0 flex-1 text-xs leading-snug text-muted">{l.previewLabel}</span>
+                <Link to="/demo" className="shrink-0 text-xs font-medium text-primary hover:underline">
+                  {l.openDemo} →
+                </Link>
               </div>
               <div className="flex flex-col gap-3 rounded-lg bg-bg p-3 sm:p-4">
                 <KpiRow summary={demo.summary} score={demo.score} startingBalance={demo.balance} equity={demo.equity} days={demo.days} />

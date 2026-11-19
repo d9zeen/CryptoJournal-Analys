@@ -10,7 +10,8 @@ create table auth.users (
   email text,
   raw_user_meta_data jsonb default '{}'::jsonb,
   created_at timestamptz default now(),
-  last_sign_in_at timestamptz
+  last_sign_in_at timestamptz,
+  is_anonymous boolean not null default false
 );
 create function auth.uid() returns uuid language sql stable as $$
   select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid

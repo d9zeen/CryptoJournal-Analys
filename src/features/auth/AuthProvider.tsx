@@ -8,6 +8,8 @@ import { getLang, subscribeLang } from '@/lib/locale'
 type AuthState = {
   session: Session | null
   user: User | null
+  /** гость демо-счёта (анонимный вход «Открыть демо», 0024): для главной и входа он «не вошёл», биржи / ссылки / скриншоты — нельзя */
+  isGuest: boolean
   /** true, пока не узнали, залогинен ли пользователь */
   loading: boolean
   signOut: () => Promise<void>
@@ -48,6 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value: AuthState = {
     session,
     user: session?.user ?? null,
+    isGuest: session?.user?.is_anonymous === true,
     loading,
     signOut: async () => {
       await supabase.auth.signOut()

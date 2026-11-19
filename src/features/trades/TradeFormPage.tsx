@@ -10,6 +10,8 @@ import { buildTrade, computeDerived, emptyForm, formFromTrade, type FormErrors, 
 import { ListSelect } from './ListSelect'
 import { MistakePicker } from './MistakePicker'
 import { ScreenshotsField } from './ScreenshotsField'
+import { useAuth } from '@/features/auth/AuthProvider'
+import { GuestLine } from '@/features/demo/DemoBanner'
 import type { TradeScreenshot } from '@/types/db'
 import { useUsage } from '@/features/settings/api'
 import { Card } from '@/components/ui/Card'
@@ -66,6 +68,7 @@ export function TradeFormPage() {
 
 function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data'] }) {
   const t = useT()
+  const guest = useAuth().isGuest
   const navigate = useNavigate()
   const isNew = !existing
   const [tradeId] = useState(() => existing?.id ?? crypto.randomUUID())
@@ -365,13 +368,14 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
             />
           </div>
           <div className="min-w-0">
-            <ScreenshotsField
+            {/* демо без регистрации: скриншоты (файлы в Storage) — только в своём аккаунте */}
+            {guest ? <GuestLine text={t.demo.noScreenshots} /> : <ScreenshotsField
               saved={savedShots}
               pending={addShots}
               onAdd={(blobs) => setAddShots((a) => [...a, ...blobs])}
               onRemoveSaved={(s) => setRemoveShots((r) => [...r, s])}
               onRemovePending={(i) => setAddShots((a) => a.filter((_, j) => j !== i))}
-            />
+            />}
           </div>
         </div>
       </Section>
