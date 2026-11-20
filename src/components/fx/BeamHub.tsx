@@ -5,6 +5,7 @@
  * При «уменьшить движение» огоньки стоят (видна часть линии).
  */
 import { ExchangeLogo } from '@/components/ExchangeLogo'
+import { LogoMark } from '@/components/Logo'
 import { useId } from 'react'
 
 export type HubNode = { id: string; mono: string; name: string; on: boolean; fast?: boolean; note?: string }
@@ -82,12 +83,8 @@ export function BeamHub({ nodes, caption, className = '' }: { nodes: HubNode[]; 
             </div>
           )
         })}
-        <div className="absolute top-1/2 left-1/2 grid size-16 -translate-1/2 place-items-center rounded-2xl border border-primary/60 bg-primary/14 text-primary sm:size-20">
-          <svg viewBox="0 0 24 24" className="size-7 sm:size-8" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M3 17l5-5 4 4 8-9" />
-            <path d="M14 7h6v6" />
-          </svg>
-        </div>
+        {/* в центре — значок дневника, как у названия CryptoJournal (владелец 20.11.2026) */}
+        <LogoMark className="absolute top-1/2 left-1/2 size-16 -translate-1/2 sm:size-20" />
       </div>
       {caption && <p className="mt-2 text-center text-xs text-muted">{caption}</p>}
     </div>

@@ -1,11 +1,12 @@
 /**
- * №5 «Орбита» (образец — 21st.dev orbiting-circles): вокруг логотипа дневника на двух орбитах медленно кружат биржи.
+ * №5 «Орбита» (образец — 21st.dev orbiting-circles): вокруг значка дневника (LogoMark) на двух орбитах медленно кружат биржи.
  * Кольцо вращается (transform rotate), значки — в обратную сторону, поэтому всегда стоят ровно. Без мигания.
  * «Биржи» без подключений, первый вход; с подключениями (владелец 19.11.2026) — lit: все биржи обычные, подключённая — чуть подсвечена
  * (тонкая рамка и лёгкий ореол цвета кнопок; «не надо излишков» — без приглушения остальных); подключённые кошельки (EVM / Solana) встают на внутреннюю орбиту.
  * Линии орбит — заметные (muted, владелец 19.11.2026: «сделай их более яркими»).
  */
 import { ExchangeLogo } from '@/components/ExchangeLogo'
+import { LogoMark } from '@/components/Logo'
 
 const OUTER = ['bybit', 'binance', 'okx', 'bingx', 'bitget']
 const INNER = ['hyperliquid', 'polymarket', 'mexc']
@@ -43,12 +44,8 @@ export function Orbit({ size = 260, lit }: { size?: number; lit?: ReadonlySet<st
       <div className="absolute top-1/2 left-1/2 -translate-1/2 rounded-full border-[1.5px] border-dashed border-muted/80" style={{ width: inner * 2, height: inner * 2 }} />
       <Ring items={OUTER} radius={outer} lit={lit} />
       <Ring items={innerItems} radius={inner} reverse lit={lit} />
-      <div className="absolute top-1/2 left-1/2 grid size-13 -translate-1/2 place-items-center rounded-2xl border border-primary/50 bg-primary/12 text-primary">
-        <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 17l5-5 4 4 8-9" />
-          <path d="M14 7h6v6" />
-        </svg>
-      </div>
+      {/* в центре — значок дневника, тот же, что у названия CryptoJournal (владелец 20.11.2026) */}
+      <LogoMark className="absolute top-1/2 left-1/2 size-14 -translate-1/2" />
     </div>
   )
 }
