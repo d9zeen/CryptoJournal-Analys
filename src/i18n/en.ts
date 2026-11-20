@@ -1260,6 +1260,7 @@ export const en: Dict = {
       api: 'Auto-sync via API',
       file: 'Upload CSV / Excel',
       other: 'any other exchange',
+      vortexCount: 'trades in the journal: {n}',
     },
     path: {
       title: 'The path of one trade',

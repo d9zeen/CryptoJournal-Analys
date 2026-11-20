@@ -7,6 +7,8 @@ const FILES = import.meta.glob<string>('../assets/exchanges/*.svg', { eager: tru
 const LOGOS: Record<string, string> = Object.fromEntries(Object.entries(FILES).map(([path, url]) => [path.split('/').pop()!.replace('.svg', ''), url]))
 
 export const hasExchangeLogo = (id: string) => id in LOGOS
+/** Адрес файла логотипа (для <image> внутри SVG, например «Воронка» на главной) */
+export const exchangeLogoUrl = (id: string): string | undefined => LOGOS[id]
 
 export function ExchangeLogo({ id, mono, className = 'size-7 rounded-lg', dim = false }: { id: string; mono?: string; className?: string; dim?: boolean }) {
   const src = LOGOS[id]

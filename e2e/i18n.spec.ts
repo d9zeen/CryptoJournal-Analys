@@ -73,8 +73,9 @@ test.describe('главная на английском (как у нового 
     await expect(ex.getByText('Auto-sync via API')).toBeVisible()
     await expect(ex.getByText('Upload CSV / Excel')).toBeVisible()
     for (const name of ['Bybit', 'Hyperliquid', 'Polymarket', 'Binance', 'OKX', 'BingX', 'Bitget', 'MEXC', 'any other exchange']) await expect(ex.locator('dl').getByText(name, { exact: true })).toBeVisible()
-    // №1 «Поток в дневник»: шесть бирж по API, по линиям бегут огоньки
-    await expect(ex.locator('[data-beam-hub] [data-hub-node][data-on]')).toHaveCount(6)
+    // «Воронка»: семь бирж по API кружат вокруг дневника, под значком — счёт сделок
+    await expect(ex.locator('[data-vortex] [data-vortex-node]')).toHaveCount(7)
+    await expect(ex.locator('[data-vortex]')).toContainText('trades in the journal: 1,24')
     await expect(page.getByText(/Coming via API/)).toHaveCount(0)
     // шаг 3 — неделя: 7 дней, день сделки выделен, итог недели и подпись из данных демо
     const path = page.locator('#features')
