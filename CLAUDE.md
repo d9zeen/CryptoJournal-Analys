@@ -40,6 +40,8 @@ src/
                        border-border, text-text, text-muted, text-primary (фиолет: кнопки), text-accent (мята: данные),
                        text-profit, text-loss, font-display (заголовки), num (цифры моно), rise (появление, --i), card-lift, field-focus (фокус своих <input>: рамка + кольцо, как у ui/Input).
                        Без пульсаций и кричащих градиентов. Разрешены только: мягкая подсветка под курсором (spotlight) и отблеск заготовок при загрузке (skeleton) — сайт не должен выглядеть «сгенерированным». Светлая тема — :root[data-theme='light'] в том же файле
+  components/Logo.tsx  логотип (20.11.2026, выбор владельца из 12 вариантов): звезда с тонкими лучами в «разорванном» шестиугольнике (открыт слева и справа), плоский цвет без градиентов и свечения;
+                       токены --color-logo-tile / -tile-border / --color-logo (тёмная — плитка #141418, светлая — цвета карточек с рамкой); public/favicon.svg — всегда тёмная версия
   lib/theme.ts         светлая (по умолчанию) / тёмная тема (localStorage; до загрузки приложения — public/theme-init.js, без вспышки), useTheme / setTheme; кнопка — components/ThemeToggle.tsx
   lib/palette.ts       палитра прибыли / убытка (по умолчанию classic — зелёный / красный; classic, teal_salmon, sky_coral — всем, остальные 5 — Pro / Pro Plus, проверка и триггером 0015; выбор — полоска PaletteStrip под календарём и в «Настройки → Оформление», features/palette):
                        data-palette на <html>, цвета в theme.css; --color-up / --color-down = profit / loss

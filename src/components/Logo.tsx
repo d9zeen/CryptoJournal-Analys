@@ -1,12 +1,24 @@
 import { useT } from '@/i18n'
 
-/** Значок: линия капитала цветом текста, последний отрезок — мятный (без градиентов и свечения) */
+/**
+ * Значок (20.11.2026, выбор владельца): четырёхлучевая звезда в «разорванном» шестиугольнике — открыт слева и справа,
+ * горизонтальные лучи выходят наружу. Плоский цвет, без градиентов и свечения. Цвета — токены --color-logo* (theme.css):
+ * в тёмной теме плитка тёмная, в светлой — цвета карточек с рамкой.
+ */
 export function LogoMark({ className = 'size-7' }: { className?: string }) {
   return (
-    <svg viewBox="0 0 32 32" className={`${className} shrink-0`} aria-hidden>
-      <rect x="0.75" y="0.75" width="30.5" height="30.5" rx="7" className="fill-surface-2 stroke-border" strokeWidth={1.5} />
-      <path d="M7 21.5l5.5-6.5 4.5 3.5" fill="none" className="stroke-text" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M17 18.5l8-9.5" fill="none" className="stroke-accent" strokeWidth={2.6} strokeLinecap="round" />
+    <svg viewBox="0 0 64 64" className={`${className} shrink-0`} aria-hidden>
+      <rect x="1" y="1" width="62" height="62" rx="14" className="fill-logo-tile stroke-logo-tile-border" strokeWidth={1.5} />
+      <path
+        d="M14.68 26V22L32 12L49.32 22V26M14.68 38V42L32 52L49.32 42V38"
+        fill="none"
+        className="stroke-logo"
+        strokeOpacity={0.55}
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M32 9C34 30 34 30 56 32C34 34 34 34 32 55C30 34 30 34 8 32C30 30 30 30 32 9Z" className="fill-logo" />
     </svg>
   )
 }
