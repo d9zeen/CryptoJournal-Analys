@@ -194,8 +194,7 @@ test('Pro: старое подключение Polymarket не удаляетс�
   ]
   await fakeSupabase(page, db)
   await page.goto('import')
-  // в блоке «Подключено» — «На паузе», подробности и «Обновить» (недоступно) — в панели биржи
-  await expect(page.locator('[data-linked-orbit] [data-linked="polymarket"]')).toHaveAttribute('data-state', 'paused')
+  // «На паузе», подробности и «Обновить» (недоступно) — в панели биржи
   const row = await openConn(page, 'polymarket')
   await expect(row).toHaveAttribute('data-status', 'paused')
   await expect(row.locator('[data-pill]')).toHaveText('На паузе')
@@ -336,13 +335,13 @@ test('Мост: подключение Bybit из карточки — шаги 
   await expect(page.locator('[data-exchange="bybit"]')).toContainText('Подключена')
 })
 
-test('«Биржи»: без подключений — «Орбита» с шагами, с подключением — та же «Орбита»: биржа подсвечена, справа её строка; синхронизация — луч по рамке и мерцающий текст', async ({ page, db }) => {
+test('«Биржи»: без подключений — «Орбита» с шагами, с подключением — та же «Орбита»: биржа подсвечена, списка справа нет; синхронизация — луч по рамке и мерцающий текст', async ({ page, db }) => {
   db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
   await fakeSupabase(page, db)
   await page.goto('import')
   await expect(page.locator('[data-empty-orbit]')).toContainText('Подключи первую биржу')
   await expect(page.locator('[data-linked-orbit]')).toHaveCount(0)
-  // подключаем Bybit — вместо шагов «как подключить» его строка, на орбите Bybit подсвечен
+  // подключаем Bybit — вместо шагов «как подключить» «Подключено: Bybit», на орбите Bybit подсвечен
   await page.locator('[data-exchange="bybit"]').click()
   const panel = page.getByRole('dialog', { name: 'Bybit' })
   await panel.getByLabel('API Key').fill('AbCdEf123456')
@@ -353,7 +352,7 @@ test('«Биржи»: без подключений — «Орбита» с ша
   await expect(page.locator('[data-empty-orbit]')).toHaveCount(0)
   const block = page.locator('[data-linked-orbit]')
   await expect(block).toContainText('Подключено: Bybit')
-  await expect(block.locator('[data-linked]')).toHaveCount(1)
+  await expect(block.locator('[data-linked]')).toHaveCount(0)
   await expect(block.locator('[data-orbit-sat="bybit"]')).toHaveAttribute('data-lit', 'on')
   await expect(block.locator('[data-orbit-sat="binance"]')).toHaveAttribute('data-lit', 'off')
   // старого блока с частицами больше нет
@@ -374,115 +373,49 @@ test('«Биржи»: без подключений — «Орбита» с ша
   await expect(tile).not.toHaveClass(/beam-run/, { timeout: 20_000 })
 })
 
-test('«Подключено»: число сделок — за всё время, по API и файлом; сделки неподключённой биржи не считаются; на телефоне без прокрутки вбок', async ({ page, db }) => {
+test('«Подключено»: на телефоне без прокрутки вбок; списка подключений справа нет (владелец 20.11.2026)', async ({ page, db }) => {
   db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
   db.connections = [{ id: 'c1', exchange: 'bybit', label: null, api_key: 'AbCdEf123456', last_sync_at: new Date().toISOString(), cursor_at: new Date().toISOString(), last_error: null, created_at: '' }]
-  const at = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString()
-  db.trades = [
-    makeTrade(1, { pnl: 100, source: 'api', entry_at: at(30), exit_at: at(29), external_id: 'o:1' }),
-    makeTrade(2, { pnl: -40, source: 'api', entry_at: at(20), exit_at: at(19), external_id: 'o:2' }),
-    makeTrade(3, { pnl: 60.5, source: 'api', entry_at: at(10), exit_at: at(9), external_id: 'o:3' }),
-    // из файла и давно — тоже считается (за всё время, владелец 17.11.2026)
-    makeTrade(4, { pnl: 999, source: 'import', entry_at: at(2000), exit_at: at(1999), external_id: 'f:4' }),
-    // биржа не подключена — не считается
-    makeTrade(5, { exchange: 'okx', pnl: 5000, source: 'import', entry_at: at(5), exit_at: at(4), external_id: 'f:5' }),
-  ]
   await fakeSupabase(page, db)
   await page.route('**/functions/v1/exchange-proxy', (route) => route.fulfill({ status: 500, body: '' }))
   await page.goto('import')
   const block = page.locator('[data-linked-orbit]')
-  await expect(block.locator('[data-linked="bybit"]')).toContainText('работает · сделок: 4')
-  await expect(block.locator('[data-linked="okx"]')).toHaveCount(0)
+  await expect(block).toContainText('Подключено: Bybit')
+  await expect(block.locator('[data-linked], ul')).toHaveCount(0)
+  await expect(block.locator('[data-orbit-sat="bybit"]')).toHaveAttribute('data-lit', 'on')
   await page.setViewportSize({ width: 390, height: 844 })
-  await expect(block.locator('[data-linked="bybit"]')).toBeVisible()
+  await expect(block).toBeVisible()
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
   expect(overflow).toBeLessThanOrEqual(0)
 })
 
-test('«Подключено»: сделок с биржи ещё нет — просто «работает», без числа', async ({ page, db }) => {
-  db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
-  db.connections = [{ id: 'c1', exchange: 'bybit', label: null, api_key: 'AbCdEf123456', last_sync_at: new Date().toISOString(), cursor_at: new Date().toISOString(), last_error: null, created_at: '' }]
-  await fakeSupabase(page, db)
-  await page.route('**/functions/v1/exchange-proxy', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ retCode: 0, result: { list: [] } }) }))
-  await page.goto('import')
-  const row = page.locator('[data-linked-orbit] [data-linked="bybit"]')
-  await expect(row).toHaveAttribute('data-state', 'ok')
-  await expect(row).toContainText('работает')
-  await expect(row).not.toContainText('сделок')
-})
-
-test('«Подключено»: пять бирж — все строками с числом сделок, все подсвечены на орбите; больше трёх в заголовке — «и ещё N»', async ({ page, db }) => {
+test('«Подключено»: пять бирж — все подсвечены на орбите; больше трёх в заголовке — «и ещё N»', async ({ page, db }) => {
   db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
   const all = ['bybit', 'binance', 'okx', 'bitget', 'bingx']
   db.connections = all.map((e, i) => ({ id: `c${i}`, exchange: e, label: null, api_key: `AbCdEf12345${i}`, last_sync_at: new Date().toISOString(), cursor_at: new Date().toISOString(), last_error: null, created_at: `2026-11-0${i + 1}T00:00:00Z` }))
-  const at = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString()
-  db.trades = [
-    makeTrade(1, { exchange: 'bybit', pnl: 10, source: 'api', entry_at: at(30), exit_at: at(29), external_id: 'o:1' }),
-    makeTrade(2, { exchange: 'okx', pnl: 20, source: 'api', entry_at: at(20), exit_at: at(19), external_id: 'o:2' }),
-    makeTrade(3, { exchange: 'okx', pnl: 30, source: 'api', entry_at: at(10), exit_at: at(9), external_id: 'o:3' }),
-  ]
   await fakeSupabase(page, db)
   await page.route('**/functions/v1/exchange-proxy', (route) => route.fulfill({ status: 500, body: '' }))
   await page.goto('import')
   const block = page.locator('[data-linked-orbit]')
-  await expect(block.locator('[data-linked]')).toHaveCount(5)
-  await expect(block.locator('[data-linked="okx"]')).toContainText('сделок: 2')
-  await expect(block.locator('[data-linked="bybit"]')).toContainText('сделок: 1')
-  await expect(block.locator('[data-linked="binance"]')).toContainText('работает')
   await expect(block).toContainText('Подключено: Bybit, Binance, OKX и ещё 2')
   for (const ex of all) await expect(block.locator(`[data-orbit-sat="${ex}"]`)).toHaveAttribute('data-lit', 'on')
 })
 
-test('«Подключено»: статусы — ошибка ключа, пауза сверх тарифа; кошелёк — строкой с адресом и на орбите', async ({ page, db }) => {
-  // Pro: одно подключение работает, второе (по дате) — «на паузе»; у первого ошибка
-  db.usage = { plan: 'pro', trades_created: 3, trade_limit: null }
-  db.connections = [
-    { id: 'c1', exchange: 'bybit', label: null, api_key: 'AbCdEf123456', last_sync_at: new Date().toISOString(), cursor_at: null, last_error: 'retCode 10003: API key is invalid', created_at: '2026-11-01T00:00:00Z' },
-    { id: 'c2', exchange: 'okx', label: null, api_key: 'AbCdEf654321', last_sync_at: null, cursor_at: null, last_error: null, created_at: '2026-11-02T00:00:00Z' },
-    { id: 'c3', exchange: 'evm', label: null, api_key: '0x' + 'b'.repeat(40), last_sync_at: null, cursor_at: null, last_error: null, created_at: '2026-11-03T00:00:00Z' },
-  ]
-  await fakeSupabase(page, db)
-  await page.route('**/functions/v1/exchange-proxy', (route) => route.fulfill({ status: 500, body: '' }))
-  await page.route('https://*.publicnode.com/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }))
-  await page.goto('import')
-  const block = page.locator('[data-linked-orbit]')
-  await expect(block.locator('[data-linked="bybit"]')).toHaveAttribute('data-state', /error|syncing/)
-  await expect(block.locator('[data-linked="okx"]')).toHaveAttribute('data-state', 'paused')
-  await expect(block.locator('[data-linked="okx"]')).toContainText('На паузе')
-  await expect(block.locator('[data-orbit-sat="evm"]')).toHaveAttribute('data-lit', 'on')
-})
-
-test('«Подключено»: подключены только кошельки — строкой с адресом, нажатие — панель с «Отключить»; добавили биржу — у неё число сделок', async ({ page, db }) => {
+test('«Подключено»: кошелёк — на орбите и в заголовке; добавили биржу — подсвечены оба', async ({ page, db }) => {
   db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
   db.connections = [{ id: 'w1', exchange: 'solana', label: null, api_key: '7'.repeat(43), last_sync_at: null, cursor_at: null, last_error: null, created_at: '' }]
   await fakeSupabase(page, db)
   await page.route('https://solana-rpc.publicnode.com/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }))
   await page.goto('import')
   const block = page.locator('[data-linked-orbit]')
-  await expect(block.locator('[data-linked="solana"]')).toContainText('кошелёк · 777777…7777')
-  await block.locator('[data-linked="solana"] button').click()
-  await expect(page.locator('[data-panel-manage] [data-conn="solana"]').getByRole('button', { name: 'Отключить' })).toBeVisible()
-  await page.keyboard.press('Escape')
+  await expect(block.locator('[data-orbit-sat="solana"]')).toHaveAttribute('data-lit', 'on')
+  await expect(block.locator('[data-orbit-sat][data-lit="on"]')).toHaveCount(1)
 
   db.connections.push({ id: 'c1', exchange: 'bybit', label: null, api_key: 'AbCdEf123456', last_sync_at: new Date().toISOString(), cursor_at: new Date().toISOString(), last_error: null, created_at: '' })
-  db.trades = [makeTrade(1, { pnl: 42.5, source: 'api', entry_at: new Date(Date.now() - 7_200_000).toISOString(), exit_at: new Date(Date.now() - 3_600_000).toISOString(), external_id: 'o:1' })]
   await page.route('**/functions/v1/exchange-proxy', (route) => route.fulfill({ status: 500, body: '' }))
   await page.reload()
-  await expect(block.locator('[data-linked="bybit"]')).toContainText('сделок: 1')
-  await expect(block.locator('[data-linked]')).toHaveCount(2)
-})
-
-test('«Подключено»: 400 сделок — число сразу, без ожидания анимации', async ({ page, db }) => {
-  db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
-  db.connections = [{ id: 'c1', exchange: 'bybit', label: null, api_key: 'AbCdEf123456', last_sync_at: new Date().toISOString(), cursor_at: new Date().toISOString(), last_error: null, created_at: '' }]
-  db.trades = Array.from({ length: 400 }, (_, i) => {
-    const exit = new Date(Date.now() - (400 - i) * 20 * 60_000).toISOString()
-    return makeTrade(i + 1, { pnl: 1, source: 'api', entry_at: new Date(Date.parse(exit) - 60_000).toISOString(), exit_at: exit, external_id: `o:${i}` })
-  })
-  await fakeSupabase(page, db)
-  await page.route('**/functions/v1/exchange-proxy', (route) => route.fulfill({ status: 500, body: '' }))
-  await page.goto('import')
-  await expect(page.locator('[data-linked-orbit] [data-linked="bybit"]')).toContainText('сделок: 400', { timeout: 5_000 })
+  await expect(block).toContainText('Bybit')
+  await expect(block.locator('[data-orbit-sat][data-lit="on"]')).toHaveCount(2)
 })
 
 /**
@@ -508,13 +441,11 @@ for (const ex of TRADE_EXCHANGES)
     await page.route('https://api.hyperliquid.xyz/**', (route) => route.fulfill({ status: 500, body: '' }))
     await page.goto('import')
     const block = page.locator('[data-linked-orbit]')
-    await expect(block.locator('[data-linked]')).toHaveCount(1)
-    await expect(block.locator(`[data-linked="${ex}"]`)).toContainText('сделок: 1')
     await expect(block.locator(`[data-orbit-sat="${ex}"]`)).toHaveAttribute('data-lit', 'on')
     await expect(block.locator('[data-orbit-sat][data-lit="on"]')).toHaveCount(1)
   })
 
-test('«Подключено»: две биржи и кошелёк — ровно три строки; Lighter нигде не подключён', async ({ page, db }) => {
+test('«Подключено»: две биржи и кошелёк — ровно три подсвечены на орбите; Lighter нигде не подключён', async ({ page, db }) => {
   db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
   db.connections = [connRow('okx', 0), connRow('hyperliquid', 1), { ...connRow('evm', 2), api_key: '0x' + 'c'.repeat(40) }]
   await fakeSupabase(page, db)
@@ -522,8 +453,8 @@ test('«Подключено»: две биржи и кошелёк — ровн
   await page.route('https://api.hyperliquid.xyz/**', (route) => route.fulfill({ status: 500, body: '' }))
   await page.route('https://*.publicnode.com/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }))
   await page.goto('import')
-  const rows = page.locator('[data-linked-orbit] [data-linked]')
-  await expect(rows).toHaveCount(3)
-  expect((await rows.evaluateAll((els) => els.map((e) => e.getAttribute('data-linked')))).sort()).toEqual(['evm', 'hyperliquid', 'okx'])
-  await expect(page.locator('[data-linked-orbit] [data-linked="lighter"]')).toHaveCount(0)
+  const lit = page.locator('[data-linked-orbit] [data-orbit-sat][data-lit="on"]')
+  await expect(lit).toHaveCount(3)
+  expect((await lit.evaluateAll((els) => els.map((e) => e.getAttribute('data-orbit-sat')))).sort()).toEqual(['evm', 'hyperliquid', 'okx'])
+  await expect(page.locator('[data-linked-orbit] [data-orbit-sat="lighter"]')).toHaveCount(0)
 })
