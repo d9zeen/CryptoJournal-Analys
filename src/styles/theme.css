@@ -40,6 +40,11 @@
   --color-on-primary: #ffffff;
   --color-accent: #4ee6c2;        /* мятный: данные, графики */
 
+  /* Логотип (20.11.2026, выбор владельца — «разорванный» шестиугольник со звездой): плитка, её рамка, звезда и шестиугольник */
+  --color-logo-tile: #141418;
+  --color-logo-tile-border: transparent;
+  --color-logo: var(--color-primary);
+
   /* Торговые цвета: прибыль — фирменная неоновая мята, убыток — красный как в стаканах бирж */
   --color-profit: #4dffb0;      /* прибыль, long */
   --color-loss: #f6465d;        /* убыток, short */
@@ -196,6 +201,9 @@
   --color-primary-hover: #4c36d6;
   --color-on-primary: #ffffff;
   --color-accent: #0b9f84;
+  --color-logo-tile: var(--color-surface);
+  --color-logo-tile-border: var(--color-border);
+  --color-logo: var(--color-primary);
   --color-profit: #0a9b6a;
   --color-loss: #dc2f4a;
   --color-warning: #b0700a;
