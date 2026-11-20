@@ -70,8 +70,9 @@ test.describe('главная на английском (как у нового 
     await fakeSupabase(page, db, { signedIn: false })
     await page.goto('')
     const ex = page.getByRole('region', { name: 'Works with' })
-    await expect(ex.getByText('Auto-sync via API')).toBeVisible()
-    await expect(ex.getByText('Upload CSV / Excel')).toBeVisible()
+    await expect(ex.getByText('Trades arrive on their own')).toBeVisible()
+    await expect(ex.getByText(/read-only exchange key/)).toBeVisible()
+    await expect(ex.getByText('Or upload a file')).toBeVisible()
     for (const name of ['Bybit', 'Hyperliquid', 'Polymarket', 'Binance', 'OKX', 'BingX', 'Bitget', 'MEXC', 'any other exchange']) await expect(ex.locator('dl').getByText(name, { exact: true })).toBeVisible()
     // «Воронка»: семь бирж по API кружат вокруг дневника, под значком — счёт сделок
     await expect(ex.locator('[data-vortex] [data-vortex-node]')).toHaveCount(7)

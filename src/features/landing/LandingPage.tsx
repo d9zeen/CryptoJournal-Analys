@@ -183,30 +183,42 @@ export function LandingPage() {
           </div>
         </section>
 
-        {/* биржи: две строки — «сами по API» (с зелёной точкой) и «файлом»; на телефоне подпись строки над пилюлями */}
+        {/* биржи: два способа — «приходят сами» (ключ только для чтения / адрес) и «файлом»; у каждого заголовок, как это работает, и биржи пилюлями */}
         <section className="border-y border-border" aria-label={l.exchanges.title}>
-          <Reveal className={`${wrap} grid items-center gap-6 py-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-10`}>
+          <Reveal className={`${wrap} grid items-center gap-8 py-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-12`}>
             {/* «Воронка» (вариант B владельца 20.11.2026): биржи кружат вокруг дневника, сделки по спирали затягиваются в него */}
             <ExchangeVortex className="max-w-2xl justify-self-center lg:order-2" />
-            <dl className="grid gap-x-5 gap-y-4 justify-self-center sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center lg:justify-self-start">
-              <dt className="text-xs font-semibold tracking-[0.12em] text-muted uppercase">{l.exchanges.api}</dt>
-              <dd className="-mt-2 flex flex-wrap gap-2 sm:mt-0">
-                {VIA_API.map((name) => (
-                  <span key={name} className={pill}>
-                    <i aria-hidden className="size-1.5 rounded-full bg-up" />
-                    {name}
-                  </span>
-                ))}
-              </dd>
-              <dt className="text-xs font-semibold tracking-[0.12em] text-muted uppercase">{l.exchanges.file}</dt>
-              <dd className="-mt-2 flex flex-wrap gap-2 sm:mt-0">
-                {VIA_FILE.map((name) => (
-                  <span key={name} className={pill}>
-                    {name}
-                  </span>
-                ))}
-                <span className={`${pill} text-muted`}>{l.exchanges.other}</span>
-              </dd>
+            <dl data-ways className="grid max-w-xl gap-8 justify-self-center lg:justify-self-start">
+              <div className="grid gap-3">
+                <dt className="flex items-center gap-2 font-display text-xl font-semibold sm:text-2xl">
+                  <i aria-hidden className="size-2 rounded-full bg-up" />
+                  {l.exchanges.api}
+                </dt>
+                <dd className="grid gap-3">
+                  <p className="text-base text-muted">{l.exchanges.apiText}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {VIA_API.map((name) => (
+                      <span key={name} className={pill}>
+                        {name}
+                      </span>
+                    ))}
+                  </div>
+                </dd>
+              </div>
+              <div className="grid gap-3">
+                <dt className="font-display text-xl font-semibold sm:text-2xl">{l.exchanges.file}</dt>
+                <dd className="grid gap-3">
+                  <p className="text-base text-muted">{l.exchanges.fileText}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {VIA_FILE.map((name) => (
+                      <span key={name} className={pill}>
+                        {name}
+                      </span>
+                    ))}
+                    <span className={`${pill} text-muted`}>{l.exchanges.other}</span>
+                  </div>
+                </dd>
+              </div>
             </dl>
           </Reveal>
         </section>
