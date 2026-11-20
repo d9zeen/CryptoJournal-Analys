@@ -116,6 +116,9 @@ src/
                        когда владелец включит Google в Supabase — docs/AUTH_GOOGLE.md); signInWithOAuth → redirectTo appUrl('dashboard'). Логотип — src/assets/auth/google.svg. e2e — e2e/oauth.spec.ts (по умолчанию кнопки нет)
   features/demo/       «Открыть демо» без регистрации (0024, 19.11.2026): /demo → signInAnonymously → seedDemo (те же 60 сделок, что в превью главной, landing/demo.ts → seed.ts buildDemoRows:
                        цены с часовых свечей Bybit, если ответила за 3,5 с — точки на «Графике сделки» на линии цены; PnL как в превью, pnl_manual; external_id demo:N; депозит 5 000 $) → дашборд.
+                       Демо-портфель (20.11.2026, features/demo/portfolio.ts): seedDemoPortfolio — известные монеты (BTC, ETH, SOL, HYPE, BNB, XRP, LINK, SUI, DOGE, TON + USDT) «вручную» (holdings, account manual)
+                       по НЫНЕШНИМ ценам из coins на ~12 500 $, цены входа (asset_costs) — часть в плюсе, часть в минусе; кладётся при входе в демо и сам на «Портфеле», если монет нет (демо открыто раньше).
+                       История графика гостю — demoSnapshots в браузере (снимки пишет только база): 7 дней — по мини-графикам монет (estimateHistory), раньше — блуждание за полгода, одинаковое при каждом открытии.
                        Гость — useAuth().isGuest (user.is_anonymous): для главной / входа / регистрации он «не вошёл»; DemoBanner над каждой страницей дневника
                        («Создать свой аккаунт» / «Выйти из демо» — leaveDemo: delete_my_account сразу, переход, потом выход); GuestLine вместо подключения бирж, скриншотов; кнопки «Поделиться» нет.
                        В базе: триггер guest_forbidden (exchange_connections, portfolio_shares, trade_screenshots), Storage screenshots_no_guest, чистка гостей старше 7 дней (cj-guests). e2e — e2e/demo.spec.ts (fixtures: db.guest / anonDisabled)

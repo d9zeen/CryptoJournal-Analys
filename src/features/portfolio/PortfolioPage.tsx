@@ -57,10 +57,36 @@ import { CoinIcon } from './CoinIcon'
 import { ShareDialog } from './ShareDialog'
 import type { Scrub } from './PortfolioChart'
 import { radioKeys } from '@/lib/radioKeys'
+import { useQueryClient } from '@tanstack/react-query'
+import { seedDemoPortfolio } from '@/features/demo/api'
+import { demoSnapshots } from '@/features/demo/portfolio'
 
 const PortfolioChart = lazy(() => import('./PortfolioChart').then((m) => ({ default: m.PortfolioChart })))
 
 const RANGES: PortfolioRange[] = ['24h', '7d', '1m', '3m', '1y', 'all']
+
+/**
+ * Демо-гость зашёл, а монет нет (демо открыто до этой версии, или портфель не успел лечь при входе) — кладём демо-портфель.
+ * Пока кладём — заготовка страницы, а не «пустой портфель». Гость удалил все монеты сам — второй раз не кладём (до перезагрузки).
+ */
+let demoSeedTried = false
+function useDemoPortfolio(guest: boolean, holdings: unknown[] | undefined): boolean {
+  const qc = useQueryClient()
+  const need = guest && holdings !== undefined && holdings.length === 0 && !demoSeedTried
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    if (!need) return
+    demoSeedTried = true
+    setBusy(true)
+    seedDemoPortfolio()
+      .then(async (added) => {
+        if (added) await Promise.all([qc.invalidateQueries({ queryKey: ['holdings'] }), qc.invalidateQueries({ queryKey: ['asset_costs'] })])
+      })
+      .catch(() => undefined)
+      .finally(() => setBusy(false))
+  }, [need, qc])
+  return busy || need
+}
 
 export function PortfolioPage() {
   const t = useT()
@@ -80,6 +106,7 @@ export function PortfolioPage() {
   const refresh = useRefreshPortfolio()
   const refreshing = useRefreshing()
   useAutoRefreshPortfolio(holdings)
+  const demoSeeding = useDemoPortfolio(guest, holdings)
 
   const [source, setSource] = useState<string | null>(null)
   const [range, setRange] = useState<PortfolioRange>('1m')
@@ -95,7 +122,9 @@ export function PortfolioPage() {
   const btcPrice = useMemo(() => coins.find((c) => c.symbol === 'BTC')?.price ?? null, [coins])
   // до первых снимков — оценка по нынешнему составу (все монеты, без фильтра по источнику — как и снимки)
   const estimate = useMemo(() => estimateHistory(portfolioRows(list, coins, costs, null, basis), coins, Date.now()), [list, coins, costs, basis])
-  const series = useMemo(() => portfolioSeries(snaps, range, Date.now(), { value: allTotals.value, btcPrice }, estimate), [snaps, range, allTotals.value, btcPrice, estimate])
+  // демо-гость: снимков у него нет (их пишет база раз в час) — выдуманная история за полгода, последние 7 дней — по настоящим мини-графикам монет
+  const history = useMemo(() => (guest ? demoSnapshots(estimate, Date.now(), allTotals.value, btcPrice) : snaps), [guest, estimate, allTotals.value, btcPrice, snaps])
+  const series = useMemo(() => portfolioSeries(history, range, Date.now(), { value: allTotals.value, btcPrice }, estimate), [history, range, allTotals.value, btcPrice, estimate])
   const hasEstimate = series.some((x) => x.value === null)
   const shown = hideDust ? rows.filter((r) => r.value !== null && r.value >= DUST_USD) : rows
   const dust = rows.length - shown.length
@@ -113,7 +142,7 @@ export function PortfolioPage() {
   const newest = Math.max(0, ...list.filter((h) => h.connection_id).map((h) => Date.parse(h.updated_at)))
   const ago = newest ? Date.now() - newest : null
 
-  if (isLoading || coinsLoading) return <PortfolioSkeleton />
+  if (isLoading || coinsLoading || demoSeeding) return <PortfolioSkeleton />
 
   if (!list.length && !conns.length)
     return (

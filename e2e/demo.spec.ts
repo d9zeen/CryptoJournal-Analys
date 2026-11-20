@@ -59,3 +59,53 @@ test('вошёл по-настоящему — «Открыть демо» ве�
   expect(db.authCalls?.some((c) => c.path === '/auth/v1/signup') ?? false).toBe(false)
   await expect(page.locator('[data-demo-banner]')).toHaveCount(0)
 })
+
+// демо-портфель: известные монеты по нынешним ценам (~12 500 $), цены входа, график за полгода
+const DEMO_PRICES: Record<string, number> = { BTC: 95000, ETH: 3200, SOL: 145, HYPE: 28, BNB: 900, XRP: 2.2, LINK: 14, SUI: 1.7, DOGE: 0.17, TON: 2.4, USDT: 1 }
+export const DEMO_COINS = Object.entries(DEMO_PRICES).map(([symbol, price], i) => ({
+  id: symbol.toLowerCase(), symbol, name: symbol, rank: i + 1, price, change_24h: i % 3 ? 2.4 : -1.8, change_7d: i % 2 ? 5 : -3,
+  spark: Array.from({ length: 42 }, (_, k) => price * (1 + Math.sin(k / 5 + i) / 40)), icon: null,
+}))
+
+test('демо: «Портфель» не пустой — известные монеты, цены входа и график; второй раз не кладётся', async ({ page, db }) => {
+  db.usage = { plan: 'pro_plus', trades_created: 0, trade_limit: null }
+  db.coins = DEMO_COINS
+  await fakeSupabase(page, db, { signedIn: false })
+  await page.goto('')
+  await page.locator('main [data-open-demo]').click()
+  await expect(page).toHaveURL(/\/dashboard$/)
+  // при входе в демо монеты легли одной пачкой: BTC, ETH, SOL, HYPE… и USDT
+  expect(db.holdingInserts).toHaveLength(1)
+  expect(db.holdingInserts![0].map((h) => h.symbol)).toEqual(['BTC', 'ETH', 'SOL', 'HYPE', 'BNB', 'XRP', 'LINK', 'SUI', 'DOGE', 'TON', 'USDT'])
+  expect(db.holdingInserts![0].every((h) => h.account === 'manual')).toBe(true)
+  expect(db.costs?.length).toBe(10)
+
+  await page.goto('portfolio')
+  await expect(page.locator('[data-portfolio-empty]')).toHaveCount(0)
+  await expect(page.locator('[data-portfolio]')).toBeVisible()
+  // около 12 500 $ (цифра набегает — ждём итог)
+  await expect.poll(async () => Number((await page.locator('[data-hero]').innerText()).replace(/[^\d,]/g, '').replace(',', '.'))).toBeGreaterThan(12_300)
+  expect(Number((await page.locator('[data-hero]').innerText()).replace(/[^\d,]/g, '').replace(',', '.'))).toBeLessThan(12_700)
+  // график есть, и на «3 месяца» тоже (история за полгода)
+  await expect(page.locator('[data-portfolio-chart] svg').first()).toBeVisible()
+  await page.getByRole('radio', { name: '3 м', exact: true }).click()
+  await expect(page.locator('[data-portfolio-chart] svg').first()).toBeVisible()
+  await expect(page.getByText('HYPE').first()).toBeVisible()
+
+  // вернулся на страницу — второй раз монеты не кладутся
+  await page.reload()
+  await expect(page.locator('[data-portfolio]')).toBeVisible()
+  expect(db.holdingInserts).toHaveLength(1)
+})
+
+test('демо, открытое раньше (портфеля ещё не было): «Портфель» сам кладёт монеты, а не показывает «пусто»', async ({ page, db }) => {
+  db.usage = { plan: 'pro_plus', trades_created: 0, trade_limit: null }
+  db.coins = DEMO_COINS
+  db.guest = true
+  await fakeSupabase(page, db)
+  await page.goto('portfolio')
+  await expect(page.locator('[data-portfolio]')).toBeVisible()
+  await expect(page.locator('[data-portfolio-empty]')).toHaveCount(0)
+  expect(db.holdingInserts).toHaveLength(1)
+  await expect(page.getByText('BTC').first()).toBeVisible()
+})
