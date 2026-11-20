@@ -21,18 +21,9 @@ import { DEMO_FEATURED, demoAccount, demoMistakeRows, demoWeek } from './demo'
 import { compactPnl } from '@/lib/calc/calendar'
 import type { ClosedTrade } from '@/lib/calc/stats'
 
-import { BeamHub, type HubNode } from '@/components/fx/BeamHub'
+import { ExchangeVortex } from '@/components/fx/ExchangeVortex'
 
 /** №1 «Поток в дневник» на главной: шесть бирж по API, все «подключены» — огоньки бегут к дневнику */
-const HUB: HubNode[] = [
-  { id: 'bybit', mono: 'BY', name: 'Bybit', on: true },
-  { id: 'binance', mono: 'BN', name: 'Binance', on: true },
-  { id: 'okx', mono: 'OK', name: 'OKX', on: true },
-  { id: 'bingx', mono: 'BX', name: 'BingX', on: true },
-  { id: 'bitget', mono: 'BG', name: 'Bitget', on: true },
-  { id: 'hyperliquid', mono: 'HL', name: 'Hyperliquid', on: true },
-]
-
 const EquityChart = lazy(() => import('@/features/dashboard/charts').then((m) => ({ default: m.EquityChart })))
 
 /** Полоса бирж: две честные строки — что подключается само по API и что загружается файлом (названия не переводятся) */
@@ -195,7 +186,8 @@ export function LandingPage() {
         {/* биржи: две строки — «сами по API» (с зелёной точкой) и «файлом»; на телефоне подпись строки над пилюлями */}
         <section className="border-y border-border" aria-label={l.exchanges.title}>
           <Reveal className={`${wrap} grid items-center gap-6 py-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-10`}>
-            <BeamHub nodes={HUB} className="max-w-xl justify-self-center lg:order-2" />
+            {/* «Воронка» (вариант B владельца 20.11.2026): биржи кружат вокруг дневника, сделки по спирали затягиваются в него */}
+            <ExchangeVortex className="max-w-2xl justify-self-center lg:order-2" />
             <dl className="grid gap-x-5 gap-y-4 justify-self-center sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center lg:justify-self-start">
               <dt className="text-xs font-semibold tracking-[0.12em] text-muted uppercase">{l.exchanges.api}</dt>
               <dd className="-mt-2 flex flex-wrap gap-2 sm:mt-0">

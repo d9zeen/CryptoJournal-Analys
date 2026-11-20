@@ -1,5 +1,9 @@
 import { useT } from '@/i18n'
 
+/** Контуры значка (viewBox 64): «разорванный» шестиугольник и звезда — общие для LogoMark и «Воронки» на главной (fx/ExchangeVortex) */
+export const LOGO_HEX = 'M14.68 26V22L32 12L49.32 22V26M14.68 38V42L32 52L49.32 42V38'
+export const LOGO_STAR = 'M32 9C34 30 34 30 56 32C34 34 34 34 32 55C30 34 30 34 8 32C30 30 30 30 32 9Z'
+
 /**
  * Значок (20.11.2026, выбор владельца): четырёхлучевая звезда в «разорванном» шестиугольнике — открыт слева и справа,
  * горизонтальные лучи выходят наружу. Плоский цвет, без градиентов и свечения. Цвета — токены --color-logo* (theme.css):
@@ -10,7 +14,7 @@ export function LogoMark({ className = 'size-7' }: { className?: string }) {
     <svg viewBox="0 0 64 64" className={`${className} shrink-0`} aria-hidden>
       <rect x="1" y="1" width="62" height="62" rx="14" className="fill-logo-tile stroke-logo-tile-border" strokeWidth={1.5} />
       <path
-        d="M14.68 26V22L32 12L49.32 22V26M14.68 38V42L32 52L49.32 42V38"
+        d={LOGO_HEX}
         fill="none"
         className="stroke-logo"
         strokeOpacity={0.55}
@@ -18,7 +22,7 @@ export function LogoMark({ className = 'size-7' }: { className?: string }) {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <path d="M32 9C34 30 34 30 56 32C34 34 34 34 32 55C30 34 30 34 8 32C30 30 30 30 32 9Z" className="fill-logo" />
+      <path d={LOGO_STAR} className="fill-logo" />
     </svg>
   )
 }
