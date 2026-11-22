@@ -8,8 +8,11 @@
 import { ExchangeLogo } from '@/components/ExchangeLogo'
 import { LogoMark } from '@/components/Logo'
 
-const OUTER = ['bybit', 'binance', 'okx', 'bingx', 'bitget']
-const INNER = ['hyperliquid', 'polymarket', 'mexc']
+/** Биржи на внешней / внутренней орбите (те же — в 3D-планетарии) */
+export const ORBIT_OUTER = ['bybit', 'binance', 'okx', 'bingx', 'bitget']
+export const ORBIT_INNER = ['hyperliquid', 'polymarket', 'mexc']
+const OUTER = ORBIT_OUTER
+const INNER = ORBIT_INNER
 
 function Ring({ items, radius, reverse, lit }: { items: string[]; radius: number; reverse?: boolean; lit?: ReadonlySet<string> }) {
   return (

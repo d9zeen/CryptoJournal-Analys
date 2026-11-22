@@ -212,7 +212,7 @@ export function ConnectionsCard({ onPickFile }: { onPickFile?: (exchange: string
         <>
         {/* подключения есть — та же «Орбита» (владелец 19.11.2026 вместо «Сделки собирают кривую»): подключённые чуть подсвечены;
             списка подключений справа нет (владелец 20.11.2026) — биржа открывается карточкой в сетке ниже */}
-        <LinkedOrbit conns={conns} pro={pro} onAdd={() => setPanel('picker')} />
+        <LinkedOrbit conns={conns} pro={pro} onAdd={() => setPanel('picker')} onOpen={setPanel} onRefresh={() => void refreshAll()} refreshing={syncingAll} />
         {/* ключ не работает / скоро истечёт — видно сразу, без нажатий */}
         {issues.length > 0 && (
           <ul className="flex flex-col gap-1.5">

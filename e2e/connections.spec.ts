@@ -353,10 +353,11 @@ test('«Биржи»: без подключений — «Орбита» с ша
   const block = page.locator('[data-linked-orbit]')
   await expect(block).toContainText('Подключено: Bybit')
   await expect(block.locator('[data-linked]')).toHaveCount(0)
-  await expect(block.locator('[data-orbit-sat="bybit"]')).toHaveAttribute('data-lit', 'on')
-  await expect(block.locator('[data-orbit-sat="binance"]')).toHaveAttribute('data-lit', 'off')
-  // старого блока с частицами больше нет
-  await expect(page.locator('[data-arrivals-curve], canvas')).toHaveCount(0)
+  await expect(block.locator('[data-planet-sat="bybit"]')).toHaveAttribute('data-lit', 'on')
+  await expect(block.locator('[data-planet-sat="binance"]')).toHaveAttribute('data-lit', 'off')
+  // старого блока с частицами больше нет; вместо плоской «Орбиты» — 3D-планетарий (canvas WebGL)
+  await expect(page.locator('[data-arrivals-curve]')).toHaveCount(0)
+  await expect(block.locator('canvas[data-planet-canvas]')).toHaveCount(1)
   // «Подключить ещё» — общая панель выбора биржи
   await block.getByRole('button', { name: 'Подключить ещё' }).click()
   await expect(page.getByRole('dialog')).toBeVisible()
@@ -381,8 +382,8 @@ test('«Подключено»: на телефоне без прокрутки 
   await page.goto('import')
   const block = page.locator('[data-linked-orbit]')
   await expect(block).toContainText('Подключено: Bybit')
-  await expect(block.locator('[data-linked], ul')).toHaveCount(0)
-  await expect(block.locator('[data-orbit-sat="bybit"]')).toHaveAttribute('data-lit', 'on')
+  await expect(block.locator('[data-linked]')).toHaveCount(0)
+  await expect(block.locator('[data-planet-sat="bybit"]')).toHaveAttribute('data-lit', 'on')
   await page.setViewportSize({ width: 390, height: 844 })
   await expect(block).toBeVisible()
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
@@ -398,7 +399,7 @@ test('«Подключено»: пять бирж — все подсвечен�
   await page.goto('import')
   const block = page.locator('[data-linked-orbit]')
   await expect(block).toContainText('Подключено: Bybit, Binance, OKX и ещё 2')
-  for (const ex of all) await expect(block.locator(`[data-orbit-sat="${ex}"]`)).toHaveAttribute('data-lit', 'on')
+  for (const ex of all) await expect(block.locator(`[data-planet-sat="${ex}"]`)).toHaveAttribute('data-lit', 'on')
 })
 
 test('«Подключено»: кошелёк — на орбите и в заголовке; добавили биржу — подсвечены оба', async ({ page, db }) => {
@@ -408,14 +409,14 @@ test('«Подключено»: кошелёк — на орбите и в за�
   await page.route('https://solana-rpc.publicnode.com/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }))
   await page.goto('import')
   const block = page.locator('[data-linked-orbit]')
-  await expect(block.locator('[data-orbit-sat="solana"]')).toHaveAttribute('data-lit', 'on')
-  await expect(block.locator('[data-orbit-sat][data-lit="on"]')).toHaveCount(1)
+  await expect(block.locator('[data-planet-sat="solana"]')).toHaveAttribute('data-lit', 'on')
+  await expect(block.locator('[data-planet-sat][data-lit="on"]')).toHaveCount(1)
 
   db.connections.push({ id: 'c1', exchange: 'bybit', label: null, api_key: 'AbCdEf123456', last_sync_at: new Date().toISOString(), cursor_at: new Date().toISOString(), last_error: null, created_at: '' })
   await page.route('**/functions/v1/exchange-proxy', (route) => route.fulfill({ status: 500, body: '' }))
   await page.reload()
   await expect(block).toContainText('Bybit')
-  await expect(block.locator('[data-orbit-sat][data-lit="on"]')).toHaveCount(2)
+  await expect(block.locator('[data-planet-sat][data-lit="on"]')).toHaveCount(2)
 })
 
 /**
@@ -441,8 +442,8 @@ for (const ex of TRADE_EXCHANGES)
     await page.route('https://api.hyperliquid.xyz/**', (route) => route.fulfill({ status: 500, body: '' }))
     await page.goto('import')
     const block = page.locator('[data-linked-orbit]')
-    await expect(block.locator(`[data-orbit-sat="${ex}"]`)).toHaveAttribute('data-lit', 'on')
-    await expect(block.locator('[data-orbit-sat][data-lit="on"]')).toHaveCount(1)
+    await expect(block.locator(`[data-planet-sat="${ex}"]`)).toHaveAttribute('data-lit', 'on')
+    await expect(block.locator('[data-planet-sat][data-lit="on"]')).toHaveCount(1)
   })
 
 test('«Подключено»: две биржи и кошелёк — ровно три подсвечены на орбите; Lighter нигде не подключён', async ({ page, db }) => {
@@ -453,8 +454,46 @@ test('«Подключено»: две биржи и кошелёк — ровн
   await page.route('https://api.hyperliquid.xyz/**', (route) => route.fulfill({ status: 500, body: '' }))
   await page.route('https://*.publicnode.com/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }))
   await page.goto('import')
-  const lit = page.locator('[data-linked-orbit] [data-orbit-sat][data-lit="on"]')
+  const lit = page.locator('[data-linked-orbit] [data-planet-sat][data-lit="on"]')
   await expect(lit).toHaveCount(3)
-  expect((await lit.evaluateAll((els) => els.map((e) => e.getAttribute('data-orbit-sat')))).sort()).toEqual(['evm', 'hyperliquid', 'okx'])
-  await expect(page.locator('[data-linked-orbit] [data-orbit-sat="lighter"]')).toHaveCount(0)
+  expect((await lit.evaluateAll((els) => els.map((e) => e.getAttribute('data-planet-sat')))).sort()).toEqual(['evm', 'hyperliquid', 'okx'])
+  await expect(page.locator('[data-linked-orbit] [data-planet-sat="lighter"]')).toHaveCount(0)
+})
+
+test('3D-планетарий: наведение — подпись, клик по кристаллу — «Обновить все», по бирже — её панель (и с клавиатуры)', async ({ page, db }) => {
+  db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
+  db.connections = [
+    { id: 'c1', exchange: 'bybit', label: null, api_key: 'AbCdEf123456', last_sync_at: new Date(Date.now() - 12 * 60_000).toISOString(), cursor_at: new Date().toISOString(), last_error: null, created_at: '' },
+    { id: 'c2', exchange: 'okx', label: null, api_key: 'okx-key-123456', last_sync_at: new Date().toISOString(), cursor_at: null, last_error: 'KEY_INVALID | 50113', created_at: '' },
+  ]
+  await fakeSupabase(page, db)
+  await page.route('**/functions/v1/exchange-proxy', async (route) => {
+    await new Promise((r) => setTimeout(r, 1500))
+    await route.fulfill({ status: 500, body: '' })
+  })
+  await page.goto('import')
+  const planet = page.locator('[data-planet]')
+  await expect(planet.locator('canvas[data-planet-canvas]')).toHaveCount(1)
+  // все биржи на орбитах; подключённые подсвечены; у сломанного ключа — «Ключ не работает»
+  await expect(planet.locator('[data-planet-sat]')).toHaveCount(8)
+  await expect(planet.locator('[data-planet-sat="bybit"]')).toHaveAttribute('data-lit', 'on')
+  await expect(planet.locator('[data-planet-sat="binance"]')).toHaveAttribute('data-lit', 'off')
+  await expect(planet.locator('[data-planet-sat="bybit"]')).toContainText('Работает · обновлено 12 мин назад')
+  await expect(planet.locator('[data-planet-sat="okx"]')).toContainText('Ключ не работает')
+  await expect(planet.locator('[data-planet-sat="binance"]')).toContainText('Не подключена')
+
+  if ((page.viewportSize()?.width ?? 0) >= 768) {
+    // мышь на кристалл в центре — подпись «Обновить все биржи»; клик — синхронизация всех работающих
+    const box = (await planet.locator('canvas').boundingBox())!
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await expect(planet.getByRole('status')).toContainText('Обновить все биржи')
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+    // пошла синхронизация обеих бирж — окошко фоновых загрузок
+    await expect(page.getByText('Загружаем 2 источника')).toBeVisible()
+  }
+  // с клавиатуры: фокус на бирже — подпись с её статусом, Enter — панель этой биржи
+  await planet.locator('[data-planet-sat="binance"]').focus()
+  await expect(planet.getByRole('status')).toContainText('Binance')
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('dialog', { name: 'Binance' })).toBeVisible()
 })
