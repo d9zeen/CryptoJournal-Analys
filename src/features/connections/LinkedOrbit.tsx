@@ -62,7 +62,7 @@ export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }
 
   // высота сцены (ширина — ×1,3); на телефоне — по ширине экрана
   const phoneW = typeof window === 'undefined' ? 390 : window.innerWidth
-  const size = huge ? 460 : wide ? 400 : mid ? 340 : Math.min(300, Math.floor((phoneW - 80) / 1.3))
+  const size = huge ? 540 : wide ? 460 : mid ? 360 : Math.min(300, Math.floor((phoneW - 80) / 1.3))
   const flat = <Orbit size={wide ? 380 : mid ? 320 : 250} lit={lit} />
 
   return (
