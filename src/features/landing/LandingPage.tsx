@@ -6,7 +6,8 @@ import { Fragment, lazy, Suspense, useMemo, useRef } from 'react'
 import { useSpotlight, useTilt } from '@/lib/motion'
 import { Link } from 'react-router'
 import { fmt, plural, useT } from '@/i18n'
-import { Logo, LogoMark } from '@/components/Logo'
+import { Logo } from '@/components/Logo'
+import { EyeMark } from '@/components/EyeMark'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { LangSwitch } from '@/components/LangSwitch'
 import { useAuth } from '@/features/auth/AuthProvider'
@@ -60,7 +61,7 @@ export function LandingPage() {
           {/* уже 440px название не помещается рядом с «Войти» и «Начать» — только значок */}
           <Link to="/" aria-label={t.app.name} className="shrink-0">
             <span className="min-[440px]:hidden">
-              <LogoMark />
+              <EyeMark />
             </span>
             <span className="hidden min-[440px]:block">
               <Logo />

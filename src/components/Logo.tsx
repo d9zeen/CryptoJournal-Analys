@@ -1,4 +1,5 @@
 import { useT } from '@/i18n'
+import { EyeMark } from '@/components/EyeMark'
 
 /** Контуры значка (viewBox 64): «разорванный» шестиугольник и звезда — общие для LogoMark и «Воронки» на главной (fx/ExchangeVortex) */
 export const LOGO_HEX = 'M14.68 26V22L32 12L49.32 22V26M14.68 38V42L32 52L49.32 42V38'
@@ -27,11 +28,12 @@ export function LogoMark({ className = 'size-7' }: { className?: string }) {
   )
 }
 
+/** Логотип: живой глаз из кода (EyeMark, 22.11.2026) + название. Звезда (LogoMark) осталась в «Орбите» и значке вкладки */
 export function Logo({ size = 'md' }: { size?: 'md' | 'lg' }) {
   const t = useT()
   return (
     <span className="flex items-center gap-2.5">
-      <LogoMark className={size === 'lg' ? 'size-9' : 'size-7'} />
+      <EyeMark className={size === 'lg' ? 'size-9' : 'size-7'} />
       <span className={`font-display font-semibold tracking-tight ${size === 'lg' ? 'text-2xl' : 'text-[15px]'}`}>{t.app.name}</span>
     </span>
   )

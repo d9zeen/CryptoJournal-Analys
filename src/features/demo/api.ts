@@ -1,6 +1,6 @@
 /**
  * «Открыть демо» без регистрации (0024): гость = анонимный пользователь Supabase.
- * startDemo — вход гостем + демо-счёт (60 сделок из превью главной, депозит 5 000 $).
+ * startDemo — вход гостем + демо-счёт (60 сделок из превью главной, депозит 5 000 $) и демо-портфель (известные монеты, ~12 500 $).
  * leaveDemo — гость решил завести свой аккаунт: демо-аккаунт удаляется сразу (не ждём ночной чистки), выход.
  */
 import { supabase } from '@/lib/supabase'
@@ -9,6 +9,8 @@ import { getLang } from '@/lib/locale'
 import { fetchCandles, type Candle } from '@/lib/candles'
 import { demoAccount } from '@/features/landing/demo'
 import { buildDemoRows, type Lists } from './seed'
+import { DEMO_PORTFOLIO, buildDemoPortfolio } from './portfolio'
+import type { Coin } from '@/lib/calc/portfolio'
 
 const H = 3_600_000
 /** Сколько ждём свечи (дальше — демо с примерными ценами, чтобы «за секунду» оставалось правдой) */
@@ -61,6 +63,33 @@ export async function seedDemo(userId: string): Promise<void> {
   await supabase.from('profiles').update({ starting_balance: demo.balance }).eq('id', userId)
 }
 
+let seedingPortfolio: Promise<boolean> | null = null
+
+/**
+ * Демо-портфель гостю: известные монеты по нынешним ценам + цены входа (features/demo/portfolio.ts).
+ * Уже есть монеты (гость вернулся или добавил свои) — не трогаем. true — положили.
+ */
+export function seedDemoPortfolio(): Promise<boolean> {
+  seedingPortfolio ??= (async () => {
+    const { data: has } = await supabase.from('holdings').select('id').limit(1)
+    if (has?.length) return false
+    const { data: coins, error } = await supabase
+      .from('coins')
+      .select('id, symbol, name, rank, price, change_24h, change_7d, spark, icon, color')
+      .in('symbol', DEMO_PORTFOLIO.map((x) => x.symbol))
+    if (error) throw error
+    const { holdings, costs } = buildDemoPortfolio((coins ?? []) as Coin[])
+    if (!holdings.length) return false
+    const { error: e1 } = await supabase.from('holdings').insert(holdings)
+    if (e1) throw e1
+    if (costs.length) await supabase.from('asset_costs').insert(costs)
+    return true
+  })().finally(() => {
+    seedingPortfolio = null
+  })
+  return seedingPortfolio
+}
+
 /** Войти гостем (или продолжить прежнее демо) и положить демо-счёт */
 export async function startDemo(): Promise<void> {
   const { data: cur } = await supabase.auth.getSession()
@@ -74,6 +103,8 @@ export async function startDemo(): Promise<void> {
   }
   if (!user) throw new Error('NO_USER')
   await seedDemo(user.id)
+  // портфель — заодно; не вышло (нет цен) — демо всё равно открывается, «Портфель» попробует ещё раз сам
+  await seedDemoPortfolio().catch(() => false)
   queryClient.clear()
 }
 

@@ -2,7 +2,8 @@ import { useTimeZone } from '@/lib/useTimeZone'
 import { NavLink, Outlet, useMatch } from 'react-router'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { fmt, useT } from '@/i18n'
-import { Logo, LogoMark } from '@/components/Logo'
+import { Logo } from '@/components/Logo'
+import { EyeMark } from '@/components/EyeMark'
 import { PlanMenu } from '@/features/plans/PlanMenu'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { LangSwitch } from '@/components/LangSwitch'
@@ -142,7 +143,7 @@ function TopNav({ items }: { items: NavItem[] }) {
         <div className="flex min-w-0 items-center gap-2">
           <NavLink to="/dashboard" viewTransition aria-label={t.app.name} className="flex shrink-0 items-center rounded-xl p-1">
             <span className="xl:hidden">
-              <LogoMark className="size-8" />
+              <EyeMark className="size-8" />
             </span>
             <span className="hidden xl:inline">
               <Logo />

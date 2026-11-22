@@ -49,6 +49,8 @@ export type FakeDb = {
   /** портфель (0019): монеты с ценами, балансы, цены входа, снимки; вызовы replace_holdings / portfolio_snapshot */
   coins?: Row[]
   holdings?: Row[]
+  /** вставки в holdings (каждая — пачка строк) */
+  holdingInserts?: Row[][]
   costs?: Row[]
   snapshots?: Row[]
   portfolioCalls?: { fn: string; body: Record<string, unknown> }[]
@@ -166,8 +168,10 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
     if (path === '/rest/v1/holdings') {
       const list = (db.holdings ??= [])
       if (method === 'POST') {
-        const b = body() as Row
-        list.push({ id: `m${list.length + 1}`, connection_id: null, value_usd: null, note: null, updated_at: new Date().toISOString(), ...b })
+        // одна монета (форма «Добавить монету») или пачка (демо-портфель гостя)
+        const rows = ([] as Row[]).concat(body() as Row | Row[])
+        for (const b of rows) list.push({ id: `m${list.length + 1}`, connection_id: null, value_usd: null, note: null, updated_at: new Date().toISOString(), ...b })
+        ;(db.holdingInserts ??= []).push(rows)
         return json(null, 201)
       }
       if (method === 'DELETE') {
@@ -182,8 +186,7 @@ export async function fakeSupabase(page: Page, db: FakeDb, { signedIn = true } =
       if (method === 'POST' || method === 'DELETE') {
         ;(db.costWrites ??= []).push({ method, body: body() })
         if (method === 'POST') {
-          const b = body() as Row
-          db.costs = [...list.filter((c) => c.symbol !== b.symbol), { symbol: b.symbol, avg_price: b.avg_price }]
+          for (const b of ([] as Row[]).concat(body() as Row | Row[])) db.costs = [...(db.costs ?? []).filter((c) => c.symbol !== b.symbol), { symbol: b.symbol, avg_price: b.avg_price }]
         } else {
           const sym = (url.searchParams.get('symbol') ?? '').replace(/^eq\./, '')
           db.costs = list.filter((c) => c.symbol !== sym)
