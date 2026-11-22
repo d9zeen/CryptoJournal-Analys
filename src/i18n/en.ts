@@ -1257,8 +1257,10 @@ export const en: Dict = {
     previewLabel: 'Demo account dashboard: 60 trades over two months',
     exchanges: {
       title: 'Works with',
-      api: 'Auto-sync via API',
-      file: 'Upload CSV / Excel',
+      api: 'Trades arrive on their own',
+      apiText: "Paste a read-only exchange key (for Hyperliquid and Polymarket, just a wallet address) and the journal pulls new trades by itself. The key can't trade or withdraw money. On Pro and Pro Plus.",
+      file: 'Or upload a file',
+      fileText: 'Export your trade history from the exchange as CSV or Excel and drop the file into the journal; the trades appear right away. Any plan, any exchange.',
       other: 'any other exchange',
       vortexCount: 'trades in the journal: {n}',
     },
