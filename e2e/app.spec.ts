@@ -1275,3 +1275,37 @@ test('язык писем: вошедший сменил язык на англ�
   await page.getByRole('radio', { name: 'EN' }).first().click()
   await expect.poll(() => db.authCalls?.filter((c) => c.path === '/auth/v1/user').map((c) => (c.body as { data?: { lang?: string } }).data?.lang)).toContain('en')
 })
+
+test('логотип — живой глаз из кода: рисуется, двигается, засыпает без мыши и просыпается от движения', async ({ page, db }) => {
+  await page.clock.install()
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await fakeSupabase(page, db)
+  await page.goto('dashboard')
+  const eye = page.locator('[data-shot="topnav"] canvas:visible')
+  await expect(eye).toHaveCount(1)
+  await expect(eye).toHaveAttribute('aria-hidden', 'true')
+  // светлые точки на значке: белок, радужка, символы
+  const bright = () =>
+    eye.evaluate((c: HTMLCanvasElement) => {
+      const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data
+      let n = 0
+      for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] > 300) n++
+      return n
+    })
+  await page.mouse.move(700, 500)
+  await page.clock.runFor(800)
+  const open = await bright()
+  expect(open).toBeGreaterThan(20)
+  const a = await eye.evaluate((c: HTMLCanvasElement) => c.toDataURL())
+  await page.clock.runFor(300)
+  expect(await eye.evaluate((c: HTMLCanvasElement) => c.toDataURL())).not.toBe(a)
+  // мышь стоит больше 5 с — веко закрыто; на сенсорном экране глаз не засыпает
+  const touch = await page.evaluate(() => window.matchMedia('(hover: none)').matches)
+  await page.clock.runFor(7000)
+  if (touch) expect(await bright()).toBeGreaterThan(open * 0.6)
+  else expect(await bright()).toBeLessThan(open / 2)
+  // шевельнули — открылся
+  await page.mouse.move(300, 600)
+  await page.clock.runFor(800)
+  expect(await bright()).toBeGreaterThan(open * 0.6)
+})

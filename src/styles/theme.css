@@ -17,7 +17,7 @@
 @import '@fontsource-variable/jetbrains-mono';
 
 @theme static {
-  /* Шрифты: font-sans — текст и цифры (класс num), font-display — только логотип, font-mono — запас (в интерфейсе не используется) */
+  /* Шрифты: font-sans — текст и цифры (класс num), font-display — только логотип, font-mono — символы живого глаза в логотипе (components/EyeMark) */
   --font-sans: 'Manrope Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
   /* Unbounded — только логотип; заголовки страниц — обычный Manrope (широкий «крипто»-шрифт везде выглядел шаблонно) */
   --font-display: 'Unbounded Variable', 'Manrope Variable', ui-sans-serif, system-ui, sans-serif;
@@ -44,6 +44,18 @@
   --color-logo-tile: #141418;
   --color-logo-tile-border: transparent;
   --color-logo: var(--color-primary);
+
+  /* Живой глаз из кода в логотипе (22.11.2026, владелец — вариант A): плитка тёмная в обеих темах (на светлой глаз не виден),
+     белок, радужка (центр → цвет → край), веко, зрачок, свечение. Простые #hex — их читает canvas (components/EyeMark) */
+  --color-eye-tile: #141418;
+  --color-eye-sclera: #ecebf6;
+  --color-eye-iris-core: #ece6ff;
+  --color-eye-iris: #9880ff;
+  --color-eye-iris-edge: #3a2696;
+  --color-eye-lid: #c4c0d6;
+  --color-eye-pupil: #060608;
+  --color-eye-glow: #8d78ff;
+  --color-eye-glint: #ffffff;
 
   /* Торговые цвета: прибыль — фирменная неоновая мята, убыток — красный как в стаканах бирж */
   --color-profit: #4dffb0;      /* прибыль, long */
@@ -204,6 +216,16 @@
   --color-logo-tile: var(--color-surface);
   --color-logo-tile-border: var(--color-border);
   --color-logo: var(--color-primary);
+  /* глаз — на тёмной плитке и в светлой теме: те же цвета */
+  --color-eye-tile: #141418;
+  --color-eye-sclera: #ecebf6;
+  --color-eye-iris-core: #ece6ff;
+  --color-eye-iris: #9880ff;
+  --color-eye-iris-edge: #3a2696;
+  --color-eye-lid: #c4c0d6;
+  --color-eye-pupil: #060608;
+  --color-eye-glow: #8d78ff;
+  --color-eye-glint: #ffffff;
   --color-profit: #0a9b6a;
   --color-loss: #dc2f4a;
   --color-warning: #b0700a;
