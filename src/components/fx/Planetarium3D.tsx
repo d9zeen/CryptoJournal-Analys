@@ -2,8 +2,11 @@
  * «3D-планетарий» на странице «Биржи» (владелец 22.11.2026: «более крутую анимацию… с которой можно контактировать… 3D»;
  * выбор — планетарий на Three.js; образцы 21st.dev: cosmos-3d-orbit-gallery, radial-orbital-timeline, wireframe-dotted-globe).
  *
- * Вторая версия (владелец 22.11.2026: «в центре значок эфира — должен быть наш логотип», «лагает», «почему красный, что подсвечивается синим», «много прибамбасов»):
- *  - в центре — НАШ значок объёмом: четырёхлучевая звезда (LOGO_STAR) в разорванном шестиугольнике (LOGO_HEX), те же контуры, что у LogoMark;
+ * Вторая версия (владелец 22.11.2026: «лагает», «почему красный, что подсвечивается синим», «много прибамбасов»).
+ * Третья версия (владелец 22.11.2026, вариант 1 «Глаз в центре» из трёх прототипов): в центре — большой глаз из строк кода (lib/codeEye.ts) на плоскости:
+ *  - глаз целиком поворачивается к бирже под мышью (и к той, откуда только что пришла сделка), зрачок смотрит на неё;
+ *  - огоньки-сделки влетают в зрачок и добавляют свечу (плюс — вверх, минус — вниз), свечи двигаются плавно, как на бирже;
+ *  - мышь не двигается над сценой 6 с — глаз засыпает; пришла сделка — открывается; нажал на глаз — «Обновить все» (моргнул + волна);
  *  - биржи — объёмные плитки (толщина, скругление, свет), всегда смотрят на зрителя; дальние темнее и меньше — глубина без «свечения»;
  *  - никаких светящихся пятен: подключена — рамка цвета кнопок и зелёная точка в углу, ключ не работает — красная точка (это и есть «красный»), не подключена — плитка бледнее;
  *  - огоньки-сделки — маленькие и редкие.
@@ -15,9 +18,9 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js'
 import { exchangeLogoUrl } from '@/components/ExchangeLogo'
-import { LOGO_HEX, LOGO_STAR } from '@/components/Logo'
+import { CODE_EYE_H, CODE_EYE_W, CodeEye, type CodeEyeColors } from '@/lib/codeEye'
+import type { Rgb } from '@/lib/asciiEye'
 
 export type PlanetSat = {
   id: string
@@ -45,8 +48,8 @@ type Props = {
   onFail?: () => void
 }
 
-/** Цвет токена theme.css → THREE.Color (через пиксель canvas: понимает hex, rgb, oklch, var()) */
-function tokenColor(name: string): THREE.Color {
+/** Цвет токена theme.css → [r, g, b] (через пиксель canvas: понимает hex, rgb, oklch, var()) */
+function tokenRgb(name: string): Rgb {
   const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#888'
   const cv = document.createElement('canvas')
   cv.width = cv.height = 1
@@ -55,14 +58,33 @@ function tokenColor(name: string): THREE.Color {
   ctx.fillStyle = raw
   ctx.fillRect(0, 0, 1, 1)
   const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data
+  return [r, g, b]
+}
+function tokenColor(name: string): THREE.Color {
+  const [r, g, b] = tokenRgb(name)
   return new THREE.Color().setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace)
 }
 
-type Palette = { primary: THREE.Color; logo: THREE.Color; tile: THREE.Color; border: THREE.Color; muted: THREE.Color; up: THREE.Color; down: THREE.Color; dark: boolean }
+/** Цвета глаза в центре — токены --color-eye-* (веко и облако кода — свои в светлой и тёмной теме) */
+function readEyeColors(): CodeEyeColors {
+  return {
+    sclera: tokenRgb('--color-eye-sclera'),
+    irisCore: tokenRgb('--color-eye-iris-core'),
+    iris: tokenRgb('--color-eye-iris'),
+    irisEdge: tokenRgb('--color-eye-iris-edge'),
+    pupil: tokenRgb('--color-eye-pupil'),
+    glint: tokenRgb('--color-eye-glint'),
+    line: tokenRgb('--color-eye-line'),
+    code: tokenRgb('--color-eye-code'),
+    ink: tokenRgb('--color-eye-ink'),
+  }
+}
+const monoFont = () => getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim() || 'monospace'
+
+type Palette = { primary: THREE.Color; tile: THREE.Color; border: THREE.Color; muted: THREE.Color; up: THREE.Color; down: THREE.Color; dark: boolean }
 function readPalette(): Palette {
   return {
     primary: tokenColor('--color-primary'),
-    logo: tokenColor('--color-logo'),
     tile: tokenColor('--color-surface-2'),
     border: tokenColor('--color-border'),
     muted: tokenColor('--color-muted'),
@@ -154,35 +176,6 @@ function roundedSquare(w: number, r: number): THREE.Shape {
   return s
 }
 
-/** Наш значок объёмом: звезда (выдавленная, с фаской) + разорванный шестиугольник (трубки). Контуры — те же, что у LogoMark (viewBox 64) */
-function buildLogo(starMat: THREE.Material, hexMat: THREE.Material, track: <T extends { dispose: () => void }>(x: T) => T): THREE.Group {
-  const g = new THREE.Group()
-  const k = 2.7 / 64 // 64 единицы значка → 2,7 единицы сцены
-  const loader = new SVGLoader()
-  const star = loader.parse(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path d="${LOGO_STAR}"/></svg>`)
-  const shapes = star.paths.flatMap((p) => SVGLoader.createShapes(p))
-  const starGeo = track(new THREE.ExtrudeGeometry(shapes, { depth: 5, bevelEnabled: true, bevelThickness: 1.4, bevelSize: 0.9, bevelSegments: 3, curveSegments: 10 }))
-  starGeo.translate(-32, -32, -2.5)
-  starGeo.scale(k, -k, k) // в SVG ось Y смотрит вниз
-  starGeo.computeVertexNormals()
-  g.add(new THREE.Mesh(starGeo, starMat))
-  // шестиугольник: две ломаные (в пути есть V — разбираем тем же SVGLoader) → трубки по отрезкам
-  const hex = loader.parse(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path d="${LOGO_HEX}"/></svg>`)
-  for (const sub of hex.paths.flatMap((p) => p.subPaths)) {
-    const pts = sub.getPoints().map((v) => new THREE.Vector3((v.x - 32) * k, -(v.y - 32) * k, 0))
-    const path = new THREE.CurvePath<THREE.Vector3>()
-    for (let i = 1; i < pts.length; i++) if (pts[i].distanceTo(pts[i - 1]) > 1e-6) path.add(new THREE.LineCurve3(pts[i - 1], pts[i]))
-    g.add(new THREE.Mesh(track(new THREE.TubeGeometry(path, 32, 0.06, 8, false)), hexMat))
-    // скругления на концах и в изломах
-    for (const p of pts) {
-      const ball = new THREE.Mesh(track(new THREE.SphereGeometry(0.06, 10, 8)), hexMat)
-      ball.position.copy(p)
-      g.add(ball)
-    }
-  }
-  return g
-}
-
 const reduced = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches
 
 const OUTER_R = 3.7
@@ -192,6 +185,9 @@ const SPIN = 0.14 // самовращение, рад/с
 const TRADE_EVERY = 2.6 // огонёк от каждой подключённой биржи — раз в столько секунд (с разбросом)
 const TRADE_TIME = 1.4 // полёт огонька до центра, с
 const TILE = 0.95 // сторона плитки
+const EYE_W = 8 // ширина плоскости с глазом (облако кода тает к краям)
+const EYE_H = (EYE_W * CODE_EYE_H) / CODE_EYE_W
+const SLEEP_S = 6 // мышь не двигается над сценой — глаз засыпает
 
 export function Planetarium3D({ sats, size, onOpen, onCenter, busy, labels, onFail }: Props) {
   const wrap = useRef<HTMLDivElement>(null)
@@ -250,14 +246,32 @@ export function Planetarium3D({ sats, size, onOpen, onCenter, busy, labels, onFa
     rings.rotation.x = TILT
     world.add(rings)
 
-    // наш значок: металлическая звезда цвета кнопок + шестиугольник того же цвета
-    const starMat = track(new THREE.MeshStandardMaterial({ color: pal.logo, metalness: 0.55, roughness: 0.3, emissive: pal.logo, emissiveIntensity: 0.12 }))
-    const hexMat = track(new THREE.MeshStandardMaterial({ color: pal.logo, metalness: 0.4, roughness: 0.45, transparent: true, opacity: 0.75 }))
-    const logo = buildLogo(starMat, hexMat, track)
-    const coreHit = new THREE.Mesh(track(new THREE.SphereGeometry(1.35, 12, 12)), track(new THREE.MeshBasicMaterial({ visible: false })))
+    // глаз из кода: холст-текстура на плоскости в центре; плоскость — прямо в сцене (поворот к бирже считаем без наклона мира)
+    const eyeCv = document.createElement('canvas')
+    eyeCv.width = CODE_EYE_W
+    eyeCv.height = CODE_EYE_H
+    const eyeCtx = eyeCv.getContext('2d')!
+    let eye = new CodeEye(eyeCtx, readEyeColors(), monoFont())
+    let alive = true
+    // шрифт символов догрузился — пересоздать с его настоящей шириной
+    document.fonts?.load(`600 14px ${monoFont()}`).then(
+      () => alive && (eye = new CodeEye(eyeCtx, eye.colors, monoFont())),
+      () => {},
+    )
+    const eyeTex = track(new THREE.CanvasTexture(eyeCv))
+    eyeTex.colorSpace = THREE.SRGBColorSpace
+    eyeTex.anisotropy = 4
+    const eyeMesh = new THREE.Mesh(
+      track(new THREE.PlaneGeometry(EYE_W, EYE_H)),
+      track(new THREE.MeshBasicMaterial({ map: eyeTex, transparent: true, depthWrite: false })),
+    )
+    scene.add(eyeMesh)
+    const aimer = new THREE.Object3D()
+    // нажатие на глаз — «Обновить все»: невидимый шар по радужке
+    const coreHit = new THREE.Mesh(track(new THREE.SphereGeometry(1.05, 12, 12)), track(new THREE.MeshBasicMaterial({ visible: false })))
     coreHit.userData.core = true
     const centre = new THREE.Group()
-    centre.add(logo, coreHit)
+    centre.add(coreHit)
     world.add(centre)
 
     // кольца орбит — тонкие линии
@@ -278,10 +292,27 @@ export function Planetarium3D({ sats, size, onOpen, onCenter, busy, labels, onFa
 
     // биржи: объёмная плитка (общая геометрия) + лицо с логотипом; плитка всегда повёрнута к камере
     const SLAB_D = 0.14
-    const slabGeo = track(new THREE.ExtrudeGeometry(roundedSquare(TILE, 0.2), { depth: SLAB_D, bevelEnabled: true, bevelThickness: 0.04, bevelSize: 0.035, bevelSegments: 2, curveSegments: 6 }))
+    const slabGeo = track(
+      new THREE.ExtrudeGeometry(roundedSquare(TILE, 0.2), {
+        depth: SLAB_D,
+        bevelEnabled: true,
+        bevelThickness: 0.04,
+        bevelSize: 0.035,
+        bevelSegments: 2,
+        curveSegments: 6,
+      }),
+    )
     slabGeo.translate(0, 0, -SLAB_D)
     const faceGeo = track(new THREE.PlaneGeometry(TILE, TILE))
-    type Sat = { data: PlanetSat; holder: THREE.Object3D; tile: THREE.Group; face: THREE.MeshBasicMaterial; slab: THREE.MeshStandardMaterial; hover: number; next: number }
+    type Sat = {
+      data: PlanetSat
+      holder: THREE.Object3D
+      tile: THREE.Group
+      face: THREE.MeshBasicMaterial
+      slab: THREE.MeshStandardMaterial
+      hover: number
+      next: number
+    }
     const satObjs: Sat[] = []
     const paintFace = (s: Sat) => {
       const url = exchangeLogoUrl(s.data.id)
@@ -322,16 +353,20 @@ export function Planetarium3D({ sats, size, onOpen, onCenter, busy, labels, onFa
       })
     })
 
-    // огоньки-сделки: пул маленьких точек, летят от подключённой биржи к значку по дуге
-    type Trade = { sprite: THREE.Sprite; from: THREE.Vector3; t: number; on: boolean }
+    // огоньки-сделки: пул маленьких точек, летят от подключённой биржи в зрачок по дуге; плюс — цвет прибыли, минус — убытка
+    type Trade = { sprite: THREE.Sprite; from: THREE.Vector3; t: number; on: boolean; up: boolean; src: string }
     const tradeMat = track(new THREE.SpriteMaterial({ map: dot, color: pal.up, transparent: true, depthWrite: false }))
+    const lossMat = track(new THREE.SpriteMaterial({ map: dot, color: pal.down, transparent: true, depthWrite: false }))
     const trades: Trade[] = Array.from({ length: 12 }, () => {
       const sprite = new THREE.Sprite(tradeMat)
       sprite.scale.setScalar(0.2)
       sprite.visible = false
       scene.add(sprite)
-      return { sprite, from: new THREE.Vector3(), t: 0, on: false }
+      return { sprite, from: new THREE.Vector3(), t: 0, on: false, up: true, src: '' }
     })
+    // глаз смотрит на биржу, откуда пришла сделка (недолго)
+    let focusSat: string | null = null
+    let focusUntil = 0
     const ctrl = new THREE.Vector3()
     const centreW = new THREE.Vector3()
     const tmp = new THREE.Vector3()
@@ -347,6 +382,7 @@ export function Planetarium3D({ sats, size, onOpen, onCenter, busy, labels, onFa
     rings.add(pulse)
 
     // ---------- ввод ----------
+    const clock = new THREE.Clock()
     const ray = new THREE.Raycaster()
     const ndc = new THREE.Vector2(9, 9)
     let inside = false
@@ -363,9 +399,11 @@ export function Planetarium3D({ sats, size, onOpen, onCenter, busy, labels, onFa
       const r = canvas.getBoundingClientRect()
       ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
     }
+    let lastMove = 0 // открыли страницу — глаз открыт, без мыши заснёт через SLEEP_S
     const onMove = (e: PointerEvent) => {
       inside = true
       pointerMoved = true
+      lastMove = clock.elapsedTime
       toNdc(e)
       tilt.tx = ndc.y * 0.2
       tilt.ty = ndc.x * 0.3
@@ -419,12 +457,12 @@ export function Planetarium3D({ sats, size, onOpen, onCenter, busy, labels, onFa
     const recolor = () => {
       pal = readPalette()
       amb.intensity = pal.dark ? 0.9 : 1.4
-      starMat.color.copy(pal.logo)
-      starMat.emissive.copy(pal.logo)
-      hexMat.color.copy(pal.logo)
+      eye.colors = readEyeColors()
+      eyeDirty = true
       ringMat.color.copy(pal.muted)
       ringMat.opacity = pal.dark ? 0.3 : 0.42
       tradeMat.color.copy(pal.up)
+      lossMat.color.copy(pal.down)
       pulseMat.color.copy(pal.primary)
       for (const s of satObjs) {
         s.slab.color.copy(s.data.lit ? pal.primary : pal.tile)
@@ -440,11 +478,15 @@ export function Planetarium3D({ sats, size, onOpen, onCenter, busy, labels, onFa
     io.observe(host)
 
     const still = reduced()
-    const clock = new THREE.Clock()
+    let eyeDirty = true // «уменьшить движение»: глаз рисуется только при смене цветов
+    if (still) eye.wakeNow()
     let raf = 0
     let frame = 0
     let lastTip: string | null = null
-    let logoTurn = 0 // оборот значка по «Обновить все»
+    let lastFlash = 0
+    const camDir = new THREE.Vector3()
+    const satDir = new THREE.Vector3()
+    const want = new THREE.Vector3()
     const tick = () => {
       raf = requestAnimationFrame(tick)
       if (!visible || document.hidden) {
@@ -482,16 +524,10 @@ export function Planetarium3D({ sats, size, onOpen, onCenter, busy, labels, onFa
       world.rotation.x = tilt.x
       world.rotation.y = tilt.y
 
-      // значок: спокойно покачивается (видно объём), по «Обновить все» и пока идёт обновление — оборачивается
+      // «Обновить все»: глаз моргает, по кольцам — волна
       const f = (live.current.flash = Math.max(0, live.current.flash - dt * 0.9))
-      if (f > 0 || live.current.busy) logoTurn += dt * (live.current.busy ? 3.2 : 6 * f)
-      else logoTurn += (Math.round(logoTurn / (Math.PI * 2)) * Math.PI * 2 - logoTurn) * Math.min(1, dt * 3) // докрутить до лица
-      logo.rotation.y = (still ? 0 : Math.sin(tNow * 0.55) * 0.32) + logoTurn
-      logo.rotation.x = still ? 0 : Math.sin(tNow * 0.4) * 0.08
-      const coreHover = hovered === 'core' ? 1 : 0
-      const cs = 1 + coreHover * 0.1
-      centre.scale.lerp(tmp.set(cs, cs, cs), Math.min(1, dt * 8))
-      starMat.emissiveIntensity = 0.12 + coreHover * 0.15 + f * 0.5
+      if (f > lastFlash + 0.01) eye.poke()
+      lastFlash = f
       pulseMat.opacity = f * 0.55
       pulse.scale.setScalar(1 + (1 - f) * OUTER_R)
 
@@ -510,8 +546,10 @@ export function Planetarium3D({ sats, size, onOpen, onCenter, busy, labels, onFa
         s.face.color.setScalar(light)
       }
 
-      // огоньки-сделки от подключённых бирж (без ошибки)
-      centre.getWorldPosition(centreW)
+      // огоньки-сделки от подключённых бирж (без ошибки) — в зрачок
+      const pu = eye.pupilUv()
+      centreW.set((pu.u - 0.5) * EYE_W, (0.5 - pu.v) * EYE_H, 0.02)
+      eyeMesh.localToWorld(centreW)
       if (!still)
         for (const s of satObjs) {
           if (!s.data.lit || s.data.error) continue
@@ -523,6 +561,9 @@ export function Planetarium3D({ sats, size, onOpen, onCenter, busy, labels, onFa
           s.holder.getWorldPosition(free.from)
           free.t = 0
           free.on = true
+          free.up = Math.random() < 0.62
+          free.src = s.data.id
+          free.sprite.material = free.up ? tradeMat : lossMat
           free.sprite.visible = true
         }
       for (const tr of trades) {
@@ -531,14 +572,67 @@ export function Planetarium3D({ sats, size, onOpen, onCenter, busy, labels, onFa
         if (tr.t >= 1) {
           tr.on = false
           tr.sprite.visible = false
+          eye.addCandle(tr.up)
+          focusSat = tr.src
+          focusUntil = tNow + 2.2
           continue
         }
         // дуга: середина приподнята над плоскостью колец
         ctrl.copy(tr.from).add(centreW).multiplyScalar(0.5)
-        ctrl.y += 1.1
+        ctrl.y += 0.9
+        ctrl.z += 0.8
         const e = tr.t * tr.t * (3 - 2 * tr.t)
         quad(tr.from, ctrl, centreW, e, tr.sprite.position)
-        tr.sprite.material.opacity = Math.sin(tr.t * Math.PI)
+        tr.sprite.scale.setScalar(0.2 * (1 - e * 0.6))
+      }
+
+      // глаз: на биржу под мышью → на биржу, откуда пришла сделка → на курсор → сам по сторонам
+      const look = hovered && hovered !== 'core' ? hovered : tNow < focusUntil ? focusSat : null
+      const lookObj = look ? satObjs.find((s) => s.data.id === look)?.tile : undefined
+      camDir.copy(camera.position).normalize()
+      let turn = 0
+      if (lookObj) {
+        lookObj.getWorldPosition(satDir).normalize()
+        turn = 0.32
+      } else if (inside) {
+        satDir.set(ndc.x, ndc.y, 0.5).unproject(camera).sub(camera.position).normalize()
+        satDir.multiplyScalar(9).add(camera.position).normalize()
+        turn = 0.2
+      }
+      want
+        .copy(camDir)
+        .multiplyScalar(1 - turn)
+        .addScaledVector(satDir, turn)
+        .normalize()
+      aimer.lookAt(want)
+      if (still) eyeMesh.quaternion.copy(aimer.quaternion)
+      else eyeMesh.quaternion.slerp(aimer.quaternion, Math.min(1, dt * 5))
+      let gaze: { x: number; y: number } | null = null
+      if (lookObj) {
+        const l = eyeMesh.worldToLocal(lookObj.getWorldPosition(tmp))
+        gaze = { x: (l.x / (EYE_W / 2)) * 3, y: (l.y / (EYE_H / 2)) * 3 }
+      } else if (inside) {
+        const l = eyeMesh.worldToLocal(tmp.set(ndc.x, ndc.y, 0.5).unproject(camera).sub(camera.position).normalize().multiplyScalar(13.6).add(camera.position))
+        gaze = { x: (l.x / (EYE_W / 2)) * 2.4, y: (l.y / (EYE_H / 2)) * 2.4 }
+      }
+      if (still) {
+        if (eyeDirty) {
+          eye.step(0, null, true, false)
+          eye.draw()
+          eyeTex.needsUpdate = true
+          eyeDirty = false
+          host.dataset.eye = 'open'
+        }
+      } else {
+        const awake = tNow - lastMove < SLEEP_S || tNow < focusUntil || !!look || live.current.busy === true
+        eye.step(dt, gaze, awake, hovered === 'core')
+        const eyeState = awake ? 'open' : 'asleep'
+        if (host.dataset.eye !== eyeState) host.dataset.eye = eyeState
+        // холст глаза перерисовываем через кадр — символы и так бегут по клеткам
+        if (frame % 2 === 0) {
+          eye.draw()
+          eyeTex.needsUpdate = true
+        }
       }
 
       renderer.render(scene, camera)
@@ -560,6 +654,7 @@ export function Planetarium3D({ sats, size, onOpen, onCenter, busy, labels, onFa
     tick()
 
     return () => {
+      alive = false
       cancelAnimationFrame(raf)
       mo.disconnect()
       io.disconnect()
@@ -590,10 +685,13 @@ export function Planetarium3D({ sats, size, onOpen, onCenter, busy, labels, onFa
         {tip?.id === 'core' ? (
           <span className="text-sm font-medium">{labels.center}</span>
         ) : tipSat ? (
-          <>
-            <span className="block text-sm font-semibold">{tipSat.name}</span>
-            <span className={`block text-xs ${tipSat.error ? 'text-loss' : 'text-muted'}`}>{tipSat.status}</span>
-          </>
+          <span className="flex items-center gap-2.5">
+            {exchangeLogoUrl(tipSat.id) && <img src={exchangeLogoUrl(tipSat.id)} alt="" className="size-8 shrink-0 rounded-lg" />}
+            <span>
+              <span className="block text-sm font-semibold">{tipSat.name}</span>
+              <span className={`block text-xs ${tipSat.error ? 'text-loss' : 'text-muted'}`}>{tipSat.status}</span>
+            </span>
+          </span>
         ) : null}
       </div>
       {/* клавиатура и экранные дикторы: невидимые кнопки, фокус подсвечивает биржу в сцене */}

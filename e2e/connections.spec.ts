@@ -474,6 +474,8 @@ test('3D-планетарий: наведение — подпись, клик �
   await page.goto('import')
   const planet = page.locator('[data-planet]')
   await expect(planet.locator('canvas[data-planet-canvas]')).toHaveCount(1)
+  // в центре — глаз из кода: только открыли страницу — он открыт (без мыши заснёт через 6 с)
+  await expect(planet).toHaveAttribute('data-eye', 'open')
   // все биржи на орбитах; подключённые подсвечены; у сломанного ключа — «Ключ не работает»
   await expect(planet.locator('[data-planet-sat]')).toHaveCount(8)
   await expect(planet.locator('[data-planet-sat="bybit"]')).toHaveAttribute('data-lit', 'on')
@@ -483,7 +485,7 @@ test('3D-планетарий: наведение — подпись, клик �
   await expect(planet.locator('[data-planet-sat="binance"]')).toContainText('Не подключена')
 
   if ((page.viewportSize()?.width ?? 0) >= 768) {
-    // мышь на кристалл в центре — подпись «Обновить все биржи»; клик — синхронизация всех работающих
+    // мышь на глаз в центре — подпись «Обновить все биржи»; клик — синхронизация всех работающих
     const box = (await planet.locator('canvas').boundingBox())!
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
     await expect(planet.getByRole('status')).toContainText('Обновить все биржи')

@@ -56,6 +56,10 @@
   --color-eye-pupil: #060608;
   --color-eye-glow: #8d78ff;
   --color-eye-glint: #ffffff;
+  /* глаз в центре 3D-планетария («Биржи»): веко, облако кода, символы на белке — свои в каждой теме (сцена на фоне страницы) */
+  --color-eye-line: #c4c0d6;
+  --color-eye-code: #5a586e;
+  --color-eye-ink: #2c2a3a;
 
   /* Торговые цвета: прибыль — фирменная неоновая мята, убыток — красный как в стаканах бирж */
   --color-profit: #4dffb0;      /* прибыль, long */
@@ -226,6 +230,9 @@
   --color-eye-pupil: #060608;
   --color-eye-glow: #8d78ff;
   --color-eye-glint: #ffffff;
+  --color-eye-line: #3b3650;
+  --color-eye-code: #8f899d;
+  --color-eye-ink: #2c2a3a;
   --color-profit: #0a9b6a;
   --color-loss: #dc2f4a;
   --color-warning: #b0700a;
