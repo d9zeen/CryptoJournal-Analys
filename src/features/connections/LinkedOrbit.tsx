@@ -32,6 +32,7 @@ type Props = {
 export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }: Props) {
   const t = useT()
   const c = t.connections
+  const huge = useMediaQuery('(min-width: 1536px)')
   const wide = useMediaQuery('(min-width: 1280px)')
   const mid = useMediaQuery('(min-width: 768px)')
   const [noGl, setNoGl] = useState(false)
@@ -61,7 +62,7 @@ export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }
 
   // высота сцены (ширина — ×1,3); на телефоне — по ширине экрана
   const phoneW = typeof window === 'undefined' ? 390 : window.innerWidth
-  const size = wide ? 400 : mid ? 340 : Math.min(300, Math.floor((phoneW - 80) / 1.3))
+  const size = huge ? 460 : wide ? 400 : mid ? 340 : Math.min(300, Math.floor((phoneW - 80) / 1.3))
   const flat = <Orbit size={wide ? 380 : mid ? 320 : 250} lit={lit} />
 
   return (
@@ -89,6 +90,21 @@ export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }
       <div className="flex max-w-xl flex-col items-center gap-3 text-center md:items-start md:text-left">
         <p className="font-display text-xl font-semibold xl:text-2xl">{fmt(c.linked.title, { names })}</p>
         <p className="text-sm text-muted xl:text-base">{pro ? c.linked.textPro : c.linked.textFree}</p>
+        {/* что значат точки на плитках (владелец 22.11.2026: «почему красный, что подсвечивается?») */}
+        <ul data-planet-legend className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-muted md:justify-start">
+          <li className="flex items-center gap-1.5">
+            <span className="size-2 rounded-full bg-up" aria-hidden />
+            {c.planet.legendOk}
+          </li>
+          <li className="flex items-center gap-1.5">
+            <span className="size-2 rounded-full bg-down" aria-hidden />
+            {c.planet.legendError}
+          </li>
+          <li className="flex items-center gap-1.5">
+            <span className="size-2 rounded-full border border-muted" aria-hidden />
+            {c.planet.legendOff}
+          </li>
+        </ul>
         <p data-planet-hint className="text-xs text-muted">{mid ? c.planet.hint : c.planet.hintTouch}</p>
         <Button variant="secondary" className="mt-1" onClick={onAdd}>
           {c.linked.cta}
