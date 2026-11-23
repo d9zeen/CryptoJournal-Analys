@@ -43,8 +43,8 @@ function listen() {
   window.addEventListener('keydown', onKey, { passive: true })
 }
 
-/** Цвета глаза из токенов theme.css */
-function readColors(): EyeColors {
+/** Цвета глаза из токенов theme.css (общие с «Воронкой» на главной — fx/ExchangeVortex) */
+export function readColors(): EyeColors {
   const css = getComputedStyle(document.documentElement)
   const get = (name: string): Rgb => parseHex(css.getPropertyValue(`--color-eye-${name}`)) ?? [0, 0, 0]
   return {
@@ -60,7 +60,7 @@ function readColors(): EyeColors {
   }
 }
 
-function monoFont() {
+export function monoFont() {
   return getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim() || 'monospace'
 }
 
