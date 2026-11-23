@@ -9,10 +9,10 @@ Supabase → проект **cryptojournal** → **Authentication → Emails (Ema
 
 | Письмо в Supabase | Тема (Subject) | Текст (Body) — содержимое файла |
 |---|---|---|
-| Confirm signup | `Подтвердите почту · Confirm your email — CryptoJournal` | `confirm-signup.html` |
-| Reset Password | `Сброс пароля · Reset your password — CryptoJournal` | `reset-password.html` |
-| Change Email Address | `Новая почта · Confirm new email — CryptoJournal` | `change-email.html` |
-| Magic Link | `Вход · Sign in — CryptoJournal` | `magic-link.html` |
+| Confirm signup | `Подтвердите почту · Confirm your email — CryptoHex` | `confirm-signup.html` |
+| Reset Password | `Сброс пароля · Reset your password — CryptoHex` | `reset-password.html` |
+| Change Email Address | `Новая почта · Confirm new email — CryptoHex` | `change-email.html` |
+| Magic Link | `Вход · Sign in — CryptoHex` | `magic-link.html` |
 
 Скопировать файл целиком → вставить в поле Body → **Save**. Тема — на двух языках сразу (в теме выбор по языку Supabase не поддерживает).
 

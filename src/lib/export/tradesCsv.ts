@@ -47,8 +47,8 @@ export function tradesToCsv(trades: TradeWithTags[], names: NameLookups): string
   return '﻿' + lines.join('\r\n') + '\r\n'
 }
 
-/** Имя файла: cryptojournal-trades-2026-11-03.csv (дата по часам браузера) */
+/** Имя файла: cryptohex-trades-2026-11-03.csv (дата по часам браузера) */
 export function exportFilename(now = new Date()): string {
   const pad = (n: number) => String(n).padStart(2, '0')
-  return `cryptojournal-trades-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}.csv`
+  return `cryptohex-trades-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}.csv`
 }

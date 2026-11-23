@@ -4,7 +4,7 @@
  */
 export const ru = {
   app: {
-    name: 'CryptoJournal',
+    name: 'CryptoHex',
     tagline: 'Дневник сделок криптотрейдера',
     authFooter: 'Bybit, Binance, OKX, BingX и Bitget по ключу, Hyperliquid и Polymarket по адресу кошелька, файлы MEXC и других бирж. Ключи бирж принимаем только на чтение.',
   },
@@ -371,7 +371,7 @@ export const ru = {
     codeWrong: 'Код не подошёл. Проверь время на телефоне и попробуй новый код.',
     mfaEnabled: '2FA включена. Теперь при входе понадобится код из приложения.',
     challengeTitle: 'Подтверждение входа',
-    challengeHint: 'Открой приложение-аутентификатор и введи 6-значный код для CryptoJournal.',
+    challengeHint: 'Открой приложение-аутентификатор и введи 6-значный код для CryptoHex.',
     passwordTitle: 'Сменить пароль',
     passwordNew: 'Новый пароль',
     passwordRepeat: 'Повтори новый пароль',
@@ -1067,7 +1067,7 @@ export const ru = {
       notFound: 'Ссылка не работает: владелец выключил её или выдал новую.',
       cta: 'Веди свой портфель и дневник сделок',
       ctaButton: 'Начать бесплатно',
-      madeWith: 'Сделано в CryptoJournal',
+      madeWith: 'Сделано в CryptoHex',
     },
     accounts: { spot: 'спот', fund: 'фандинг', futures: 'фьючерсы', earn: 'Earn', perp: 'перпы', prediction: 'позиции', manual: 'вручную', wallet: 'кошелёк', unified: 'единый счёт — только монеты, USDT под фьючерсы не считаем' },
     empty: {
@@ -1365,7 +1365,7 @@ export const ru = {
         analysis: 'Какие пары и сетапы зарабатывают, а какие ошибки обходятся дороже всего.',
         chart: 'Вход и выход на настоящей цене, лучшая и худшая точка сделки и сколько движения ты забрал.',
       },
-      alt: 'Экран «{name}» в CryptoJournal на демо-счёте',
+      alt: 'Экран «{name}» в CryptoHex на демо-счёте',
     },
     pricingTitle: 'Тарифы',
     pricingHint: 'Новичкам — 7 дней Pro Plus бесплатно.',
@@ -1382,7 +1382,7 @@ export const ru = {
         h: { q: 'Какие файлы подходят для импорта?', a: 'CSV или Excel с закрытыми позициями или историей сделок с любой биржи. Колонки распознаются сами.' },
       },
     },
-    footer: '© 2026 CryptoJournal',
+    footer: '© 2026 CryptoHex',
   },
   /** Страница «Данные и безопасность» (/privacy) — открывается без входа; факты сверены с docs/SECURITY.md */
   privacy: {

@@ -6,7 +6,7 @@ import type { Dict } from './ru'
 
 export const en: Dict = {
   app: {
-    name: 'CryptoJournal',
+    name: 'CryptoHex',
     tagline: 'Trading journal for crypto traders',
     authFooter: 'Bybit, Binance, OKX, BingX and Bitget via API key, Hyperliquid and Polymarket via wallet address, files from MEXC and other exchanges. We only accept read-only exchange keys.',
   },
@@ -362,7 +362,7 @@ export const en: Dict = {
     codeWrong: 'Wrong code. Check the time on your phone and try a new code.',
     mfaEnabled: '2FA is on. From now on you will need a code from the app to log in.',
     challengeTitle: 'Confirm log in',
-    challengeHint: 'Open your authenticator app and enter the 6-digit code for CryptoJournal.',
+    challengeHint: 'Open your authenticator app and enter the 6-digit code for CryptoHex.',
     passwordTitle: 'Change password',
     passwordNew: 'New password',
     passwordRepeat: 'Repeat new password',
@@ -1023,7 +1023,7 @@ export const en: Dict = {
       notFound: 'This link does not work: the owner turned it off or issued a new one.',
       cta: 'Track your own portfolio and trading journal',
       ctaButton: 'Start free',
-      madeWith: 'Made with CryptoJournal',
+      madeWith: 'Made with CryptoHex',
     },
     accounts: { spot: 'spot', fund: 'funding', futures: 'futures', earn: 'Earn', perp: 'perps', prediction: 'positions', manual: 'manual', wallet: 'wallet', unified: 'unified account — coins only, futures USDT margin is not counted' },
     empty: {
@@ -1306,7 +1306,7 @@ export const en: Dict = {
         analysis: 'Which pairs and setups make money and which mistakes cost you the most.',
         chart: 'Entry and exit on the real price, the best and worst point of the trade, and how much of the move you kept.',
       },
-      alt: 'The “{name}” screen in CryptoJournal on the demo account',
+      alt: 'The “{name}” screen in CryptoHex on the demo account',
     },
     pricingTitle: 'Pricing',
     pricingHint: 'New users get Pro Plus free for 7 days.',
@@ -1323,7 +1323,7 @@ export const en: Dict = {
         h: { q: 'Which files can I import?', a: 'A CSV or Excel file with closed positions or trade history from any exchange. Columns are recognized automatically.' },
       },
     },
-    footer: '© 2026 CryptoJournal',
+    footer: '© 2026 CryptoHex',
   },
   privacy: {
     link: 'Data and security',

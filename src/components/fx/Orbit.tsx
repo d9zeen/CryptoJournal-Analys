@@ -47,7 +47,7 @@ export function Orbit({ size = 260, lit }: { size?: number; lit?: ReadonlySet<st
       <div className="absolute top-1/2 left-1/2 -translate-1/2 rounded-full border-[1.5px] border-dashed border-muted/80" style={{ width: inner * 2, height: inner * 2 }} />
       <Ring items={OUTER} radius={outer} lit={lit} />
       <Ring items={innerItems} radius={inner} reverse lit={lit} />
-      {/* в центре — значок дневника, тот же, что у названия CryptoJournal (владелец 20.11.2026) */}
+      {/* в центре — значок дневника, тот же, что у названия CryptoHex (владелец 20.11.2026) */}
       <LogoMark className="absolute top-1/2 left-1/2 size-14 -translate-1/2" />
     </div>
   )

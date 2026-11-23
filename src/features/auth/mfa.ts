@@ -8,6 +8,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Factor } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from './AuthProvider'
+import { getT } from '@/i18n'
 
 /** Уровень подтверждения текущей сессии: нужен ли ещё код */
 export function useAal() {
@@ -53,7 +54,7 @@ export async function startEnroll(): Promise<Enrollment> {
   for (const f of (list?.all ?? []) as Factor[]) {
     if (f.status === 'unverified') await supabase.auth.mfa.unenroll({ factorId: f.id })
   }
-  const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp', friendlyName: `CryptoJournal ${new Date().toISOString().slice(0, 10)}` })
+  const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp', friendlyName: `${getT().app.name} ${new Date().toISOString().slice(0, 10)}` })
   if (error) throw error
   return { factorId: data.id, qr: normalizeSvgDataUrl(data.totp.qr_code), secret: data.totp.secret }
 }
