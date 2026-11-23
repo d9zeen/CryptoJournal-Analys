@@ -3,7 +3,8 @@
  * биржи кружат вокруг значка дневника по наклонной орбите — ближние крупнее и ярче, дальние меньше и уходят за значок;
  * сделка срывается с биржи там, где та сейчас, и по сужающейся спирали затягивается в дневник (зелёная — плюс, красная — минус).
  * Спираль проступает бледной линией только у последней сделки (владелец: «чтобы линии не двоились»).
- * Звезда значка вращается всё время (владелец: «чтобы звёздочка вращалась полностью»), на каждую сделку — короткий доворот.
+ * В центре — глаз «как на фото» (владелец 23.11.2026, оранжевый; lib/photoEye.ts): символы по яркости, меняются медленно;
+ * глаз провожает огонёк сделки до зрачка, сделка влетела — зрачок расширяется; сделок нет — смотрит на курсор или на ближнюю биржу.
  * Под сценой — последняя сделка и счёт сделок: меняются не чаще раза в 3,2 с, мягкой сменой строки (владелец: «мигает — глаз режет»). Наведение мышью замедляет орбиту.
  * Движение — только transform, opacity и stroke-dashoffset (правила CLAUDE.md, «Анимации»); вне экрана и во фоне вкладки стоит;
  * «уменьшить движение» — готовая картинка без огоньков. Сцена декоративная (aria-hidden): биржи списком — рядом, в полосе бирж.
@@ -11,7 +12,8 @@
 import { useEffect, useRef } from 'react'
 import { fmt, useT } from '@/i18n'
 import { exchangeLogoUrl } from '@/components/ExchangeLogo'
-import { LOGO_HEX, LOGO_STAR } from '@/components/Logo'
+import { parseHex, type Rgb } from '@/lib/asciiEye'
+import { PhotoEye, type PhotoEyeColors } from '@/lib/photoEye'
 import { formatNumber, formatPnlShort } from '@/lib/format'
 import { hasFinePointer, prefersReducedMotion } from '@/lib/motion'
 import { useMediaQuery } from '@/lib/useMediaQuery'
@@ -36,6 +38,23 @@ const el = <K extends keyof SVGElementTagNameMap>(tag: K, attrs: Attrs = {}, par
   parent?.appendChild(e)
   return e
 }
+/** Цвета глаза — токены --color-eye-photo-* (theme.css) */
+function readEyeColors(): PhotoEyeColors {
+  const css = getComputedStyle(document.documentElement)
+  const get = (name: string): Rgb => parseHex(css.getPropertyValue(`--color-eye-${name}`)) ?? [0, 0, 0]
+  return {
+    bg: get('photo-bg'),
+    core: get('photo-core'),
+    iris: get('photo-iris'),
+    edge: get('photo-edge'),
+    skin: get('photo-skin'),
+    sclera: get('photo-sclera'),
+    dim: get('photo-dim'),
+    glow: get('photo-glow'),
+    pupil: get('pupil'),
+  }
+}
+const monoFont = () => getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim() || 'monospace'
 const clamp01 = (t: number) => Math.max(0, Math.min(1, t))
 const easeOut = (t: number) => 1 - Math.pow(1 - t, 3)
 
@@ -54,7 +73,7 @@ export function ExchangeVortex({ className = '' }: { className?: string }) {
     if (!g0 || !svg) return
     const C = !wide
     const uid = `vx${Math.random().toString(36).slice(2, 8)}`
-    const CX = W / 2, CY = C ? 138 : 150, RX = C ? 172 : 318, RY = C ? 78 : 112, TS = C ? 38 : 46, LS = C ? 54 : 72
+    const CX = W / 2, CY = C ? 138 : 150, RX = C ? 172 : 318, RY = C ? 78 : 112, TS = C ? 38 : 46, EW = C ? 112 : 156, EH = C ? 78 : 108
     const TILT = -0.07
     const P = (a: number, r = 1): [number, number] => {
       const x = Math.cos(a) * RX * r, y = Math.sin(a) * RY * r
@@ -78,13 +97,35 @@ export function ExchangeVortex({ className = '' }: { className?: string }) {
     )
     const backTiles = el('g', {}, g0)
     const comets = el('g', {}, g0)
-    // значок дневника: плитка и шестиугольник стоят, звезда вращается
-    const logo = el('g', { transform: `translate(${CX - LS / 2},${CY - LS / 2}) scale(${LS / 64})` }, g0)
-    el('rect', { x: 1, y: 1, width: 62, height: 62, rx: 14, class: 'fill-logo-tile stroke-logo-tile-border', 'stroke-width': 1.5 }, logo)
-    el('path', { d: LOGO_HEX, fill: 'none', class: 'stroke-logo', 'stroke-opacity': 0.55, 'stroke-width': 1.6, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, logo)
-    const star = el('path', { d: LOGO_STAR, class: 'fill-logo' }, logo)
-    star.style.transformOrigin = '32px 32px'
-    star.style.transformBox = 'view-box'
+    // глаз «как на фото»: холст в центре сцены (foreignObject), рисуется в настоящих пикселях экрана
+    const logo = el('foreignObject', { x: CX - EW / 2, y: CY - EH / 2, width: EW, height: EH }, g0)
+    const cv = document.createElement('canvas')
+    cv.dataset.vortexEye = ''
+    cv.style.cssText = 'display:block;width:100%;height:100%;border-radius:22%'
+    logo.appendChild(cv)
+    const ctx = cv.getContext('2d')
+    const eye = ctx ? new PhotoEye(ctx, readEyeColors(), monoFont()) : null
+    const fit = () => {
+      if (!ctx || !eye) return
+      const k = svg.getBoundingClientRect().width / W || 1
+      const dpr = Math.min(window.devicePixelRatio || 1, 2)
+      cv.width = Math.round(EW * k * dpr)
+      cv.height = Math.round(EH * k * dpr)
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      eye.resize(EW * k, EH * k)
+      eye.draw()
+    }
+    fit()
+    document.fonts?.load(`700 10px ${monoFont()}`).then(fit, () => {})
+    const ro = new ResizeObserver(fit)
+    ro.observe(svg)
+    // курсор над сценой — глаз смотрит на него (координаты сцены)
+    let mouse: { x: number; y: number; at: number } | null = null
+    const onMove = (e: PointerEvent) => {
+      const r = svg.getBoundingClientRect()
+      mouse = { x: ((e.clientX - r.left) / r.width) * W, y: ((e.clientY - r.top) / r.height) * H, at: performance.now() }
+    }
+    svg.addEventListener('pointermove', onMove)
     // ближняя половина орбиты и ближние биржи — перед значком
     const front = el('g', {}, g0)
     el('path', { d: ell(1, 0, Math.PI), fill: 'none', stroke: 'var(--color-muted)', 'stroke-opacity': 0.45, 'stroke-width': 1.3 }, front)
@@ -192,6 +233,8 @@ export function ExchangeVortex({ className = '' }: { className?: string }) {
       sortLayer(frontTiles)
       sortLayer(backTiles)
       return () => {
+        ro.disconnect()
+        svg.removeEventListener('pointermove', onMove)
         g0.replaceChildren()
       }
     }
@@ -208,7 +251,7 @@ export function ExchangeVortex({ className = '' }: { className?: string }) {
 
     const intro = [back, front, logo, caption, count]
     intro.forEach((e) => (e.style.opacity = '0'))
-    let start = -1, prev = 0, clock = 0, next = 0, raf = 0, kickAt = -1e9, spin = 0, shownAt = 0
+    let start = -1, prev = 0, clock = 0, next = 0, raf = 0, shownAt = 0, eyeFrame = 0
     let pending: Comet | null = null
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame)
@@ -233,10 +276,23 @@ export function ExchangeVortex({ className = '' }: { className?: string }) {
       sortLayer(frontTiles)
       sortLayer(backTiles)
       rings.forEach((r, k) => r.setAttribute('stroke-dashoffset', String((-(clock * (0.012 + k * 0.01))) % 1000)))
-      // звезда вращается всё время; на сделку — доворот на 45°
-      const kk = clamp01((now - kickAt) / 650)
-      spin += dt * 0.024 * speed
-      star.style.transform = `rotate(${spin + (kk < 1 ? 45 * easeOut(kk) : 45) - 45}deg)`
+      // глаз: провожает огонёк последней сделки → курсор (2 с после движения) → ближняя биржа
+      if (eye) {
+        let look: { x: number; y: number } | null = null
+        const head = live[live.length - 1]
+        if (head) {
+          const k = clamp01((now - head.t0) / head.dur)
+          const pt = head.track.getPointAtLength(Math.pow(k, 1.6) * head.L)
+          look = { x: pt.x, y: pt.y }
+        } else if (mouse && now - mouse.at < 2000) look = mouse
+        else {
+          const near = tiles.reduce((a, b) => (Math.sin(b.cur) > Math.sin(a.cur) ? b : a))
+          const [nx, ny] = P(near.cur)
+          look = { x: nx, y: ny }
+        }
+        eye.step(dt / 1000, { x: ((look.x - CX) / (EW / 2)) * 1.6, y: (-(look.y - CY) / (EH / 2)) * 1.6 })
+        if (eyeFrame++ % 2 === 0) eye.draw()
+      }
       if (clock > 1700 && clock > next) {
         spawn(now)
         next = clock + 650 + Math.random() * 550
@@ -263,8 +319,7 @@ export function ExchangeVortex({ className = '' }: { className?: string }) {
             pending = null
             shownAt = clock
           }
-          spin += 45 // доворот уже показан — переносим его в постоянный угол
-          kickAt = now
+          eye?.dilate() // сделка влетела — зрачок расширяется
           return false
         }
         const s = Math.pow(k, 1.6) * (c.L + 4) // разгоняется к центру, как в воронке
@@ -283,6 +338,8 @@ export function ExchangeVortex({ className = '' }: { className?: string }) {
     return () => {
       cancelAnimationFrame(raf)
       io.disconnect()
+      ro.disconnect()
+      svg.removeEventListener('pointermove', onMove)
       svg.removeEventListener('pointerenter', slow)
       svg.removeEventListener('pointerleave', fast)
       g0.replaceChildren()
