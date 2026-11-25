@@ -353,11 +353,11 @@ test('«Биржи»: без подключений — «Орбита» с ша
   const block = page.locator('[data-linked-orbit]')
   await expect(block).toContainText('Подключено: Bybit')
   await expect(block.locator('[data-linked]')).toHaveCount(0)
-  await expect(block.locator('[data-planet-sat="bybit"]')).toHaveAttribute('data-lit', 'on')
-  await expect(block.locator('[data-planet-sat="binance"]')).toHaveAttribute('data-lit', 'off')
-  // старого блока с частицами больше нет; вместо плоской «Орбиты» — 3D-планетарий (canvas WebGL)
+  await expect(block.locator('[data-spiral-ex="bybit"]')).toHaveCount(1)
+  await expect(block.locator('[data-spiral-ex="binance"]')).toHaveCount(0)
+  // старого блока с частицами больше нет; вместо плоской «Орбиты» — «Спираль времени» (canvas WebGL)
   await expect(page.locator('[data-arrivals-curve]')).toHaveCount(0)
-  await expect(block.locator('canvas[data-planet-canvas]')).toHaveCount(1)
+  await expect(block.locator('canvas[data-spiral-canvas]')).toHaveCount(1, { timeout: 15_000 })
   // «Подключить ещё» — общая панель выбора биржи
   await block.getByRole('button', { name: 'Подключить ещё' }).click()
   await expect(page.getByRole('dialog')).toBeVisible()
@@ -383,7 +383,7 @@ test('«Подключено»: на телефоне без прокрутки 
   const block = page.locator('[data-linked-orbit]')
   await expect(block).toContainText('Подключено: Bybit')
   await expect(block.locator('[data-linked]')).toHaveCount(0)
-  await expect(block.locator('[data-planet-sat="bybit"]')).toHaveAttribute('data-lit', 'on')
+  await expect(block.locator('[data-spiral-ex="bybit"]')).toHaveCount(1)
   await page.setViewportSize({ width: 390, height: 844 })
   await expect(block).toBeVisible()
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
@@ -399,7 +399,7 @@ test('«Подключено»: пять бирж — все подсвечен�
   await page.goto('import')
   const block = page.locator('[data-linked-orbit]')
   await expect(block).toContainText('Подключено: Bybit, Binance, OKX и ещё 2')
-  for (const ex of all) await expect(block.locator(`[data-planet-sat="${ex}"]`)).toHaveAttribute('data-lit', 'on')
+  for (const ex of all) await expect(block.locator(`[data-spiral-ex="${ex}"]`)).toHaveCount(1)
 })
 
 test('«Подключено»: кошелёк — на орбите и в заголовке; добавили биржу — подсвечены оба', async ({ page, db }) => {
@@ -409,14 +409,14 @@ test('«Подключено»: кошелёк — на орбите и в за�
   await page.route('https://solana-rpc.publicnode.com/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }))
   await page.goto('import')
   const block = page.locator('[data-linked-orbit]')
-  await expect(block.locator('[data-planet-sat="solana"]')).toHaveAttribute('data-lit', 'on')
-  await expect(block.locator('[data-planet-sat][data-lit="on"]')).toHaveCount(1)
+  await expect(block.locator('[data-spiral-ex="solana"]')).toHaveCount(1)
+  await expect(block.locator('[data-spiral-ex]')).toHaveCount(1)
 
   db.connections.push({ id: 'c1', exchange: 'bybit', label: null, api_key: 'AbCdEf123456', last_sync_at: new Date().toISOString(), cursor_at: new Date().toISOString(), last_error: null, created_at: '' })
   await page.route('**/functions/v1/exchange-proxy', (route) => route.fulfill({ status: 500, body: '' }))
   await page.reload()
   await expect(block).toContainText('Bybit')
-  await expect(block.locator('[data-planet-sat][data-lit="on"]')).toHaveCount(2)
+  await expect(block.locator('[data-spiral-ex]')).toHaveCount(2)
 })
 
 /**
@@ -442,8 +442,8 @@ for (const ex of TRADE_EXCHANGES)
     await page.route('https://api.hyperliquid.xyz/**', (route) => route.fulfill({ status: 500, body: '' }))
     await page.goto('import')
     const block = page.locator('[data-linked-orbit]')
-    await expect(block.locator(`[data-planet-sat="${ex}"]`)).toHaveAttribute('data-lit', 'on')
-    await expect(block.locator('[data-planet-sat][data-lit="on"]')).toHaveCount(1)
+    await expect(block.locator(`[data-spiral-ex="${ex}"]`)).toHaveCount(1)
+    await expect(block.locator('[data-spiral-ex]')).toHaveCount(1)
   })
 
 test('«Подключено»: две биржи и кошелёк — ровно три подсвечены на орбите; Lighter нигде не подключён', async ({ page, db }) => {
@@ -454,17 +454,25 @@ test('«Подключено»: две биржи и кошелёк — ровн
   await page.route('https://api.hyperliquid.xyz/**', (route) => route.fulfill({ status: 500, body: '' }))
   await page.route('https://*.publicnode.com/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }))
   await page.goto('import')
-  const lit = page.locator('[data-linked-orbit] [data-planet-sat][data-lit="on"]')
+  const lit = page.locator('[data-linked-orbit] [data-spiral-ex]')
   await expect(lit).toHaveCount(3)
-  expect((await lit.evaluateAll((els) => els.map((e) => e.getAttribute('data-planet-sat')))).sort()).toEqual(['evm', 'hyperliquid', 'okx'])
-  await expect(page.locator('[data-linked-orbit] [data-planet-sat="lighter"]')).toHaveCount(0)
+  expect((await lit.evaluateAll((els) => els.map((e) => e.getAttribute('data-spiral-ex')))).sort()).toEqual(['evm', 'hyperliquid', 'okx'])
+  await expect(page.locator('[data-linked-orbit] [data-spiral-ex="lighter"]')).toHaveCount(0)
 })
 
-test('3D-планетарий: наведение — подпись, клик по кристаллу — «Обновить все», по бирже — её панель (и с клавиатуры)', async ({ page, db }) => {
+test('«Спираль времени»: сделки за 30 дней, список бирж со статусом, «Обновить» в сцене, сделка с клавиатуры', async ({ page, db }) => {
   db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
   db.connections = [
     { id: 'c1', exchange: 'bybit', label: null, api_key: 'AbCdEf123456', last_sync_at: new Date(Date.now() - 12 * 60_000).toISOString(), cursor_at: new Date().toISOString(), last_error: null, created_at: '' },
     { id: 'c2', exchange: 'okx', label: null, api_key: 'okx-key-123456', last_sync_at: new Date().toISOString(), cursor_at: null, last_error: 'KEY_INVALID | 50113', created_at: '' },
+  ]
+  // три сделки за последние дни (в спираль и итог) и одна старая — за пределами 30 дней
+  const ago = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString()
+  db.trades = [
+    makeTrade(1, { exchange: 'bybit', symbol: 'BTCUSDT', side: 'long', pnl: 120, entry_at: ago(50), exit_at: ago(48), source: 'api', external_id: 'a:1' }),
+    makeTrade(2, { exchange: 'okx', symbol: 'ETH-USDT-SWAP', side: 'short', pnl: -40, entry_at: ago(30), exit_at: ago(28), source: 'api', external_id: 'a:2' }),
+    makeTrade(3, { exchange: 'bybit', symbol: 'SOLUSDT', side: 'long', pnl: 60, entry_at: ago(3), exit_at: ago(2), source: 'api', external_id: 'a:3' }),
+    makeTrade(4, { exchange: 'bybit', symbol: 'XRPUSDT', pnl: 999, entry_at: ago(24 * 40), exit_at: ago(24 * 40 - 1), source: 'api', external_id: 'a:4' }),
   ]
   await fakeSupabase(page, db)
   await page.route('**/functions/v1/exchange-proxy', async (route) => {
@@ -472,30 +480,34 @@ test('3D-планетарий: наведение — подпись, клик �
     await route.fulfill({ status: 500, body: '' })
   })
   await page.goto('import')
-  const planet = page.locator('[data-planet]')
-  await expect(planet.locator('canvas[data-planet-canvas]')).toHaveCount(1)
-  // в центре — глаз из кода: только открыли страницу — он открыт (без мыши заснёт через 6 с)
-  await expect(planet).toHaveAttribute('data-eye', 'open')
-  // все биржи на орбитах; подключённые подсвечены; у сломанного ключа — «Ключ не работает»
-  await expect(planet.locator('[data-planet-sat]')).toHaveCount(8)
-  await expect(planet.locator('[data-planet-sat="bybit"]')).toHaveAttribute('data-lit', 'on')
-  await expect(planet.locator('[data-planet-sat="binance"]')).toHaveAttribute('data-lit', 'off')
-  await expect(planet.locator('[data-planet-sat="bybit"]')).toContainText('Работает · обновлено 12 мин назад')
-  await expect(planet.locator('[data-planet-sat="okx"]')).toContainText('Ключ не работает')
-  await expect(planet.locator('[data-planet-sat="binance"]')).toContainText('Не подключена')
-
-  if ((page.viewportSize()?.width ?? 0) >= 768) {
-    // мышь на глаз в центре — подпись «Обновить все биржи»; клик — синхронизация всех работающих
-    const box = (await planet.locator('canvas').boundingBox())!
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-    await expect(planet.getByRole('status')).toContainText('Обновить все биржи')
-    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
-    // пошла синхронизация обеих бирж — окошко фоновых загрузок
-    await expect(page.getByText('Загружаем 2 источника')).toBeVisible()
-  }
-  // с клавиатуры: фокус на бирже — подпись с её статусом, Enter — панель этой биржи
-  await planet.locator('[data-planet-sat="binance"]').focus()
-  await expect(planet.getByRole('status')).toContainText('Binance')
+  const block = page.locator('[data-linked-orbit]')
+  const spiral = block.locator('[data-spiral]')
+  // сцена строится, когда страница свободна (до 1,5 с), на слабой машине CI — дольше
+  await expect(spiral.locator('canvas[data-spiral-canvas]')).toHaveCount(1, { timeout: 15_000 })
+  await expect(spiral).toHaveAttribute('data-spiral-count', '3')
+  // итог за 30 дней: 3 сделки, +140 $
+  await expect(block.locator('[data-spiral-stats]')).toContainText('3', { timeout: 5000 })
+  await expect(block.locator('[data-spiral-stats]')).toContainText('+140,00 $', { timeout: 5000 })
+  // список подключённых бирж: число сделок; наведение / фокус — статус; у сломанного ключа — красная точка
+  await expect(block.locator('[data-spiral-ex]')).toHaveCount(2)
+  await expect(block.locator('[data-spiral-ex="okx"]')).toHaveAttribute('data-status', 'error')
+  await expect(block.locator('[data-spiral-ex="bybit"]')).toContainText('2')
+  await block.locator('[data-spiral-ex="bybit"]').focus()
+  await expect(block.locator('[data-spiral-ex="bybit"]')).toContainText('Работает · обновлено 12 мин назад')
+  // клавиатура: последняя сделка — первая кнопка; фокус — карточка над камнем, Enter — страница сделки
+  const last = spiral.locator('[data-spiral-trade]').first()
+  await last.focus()
+  await expect(spiral.locator('[data-spiral-tip]')).toContainText('SOLUSDT · Long')
+  await expect(spiral.locator('[data-spiral-tip]')).toContainText('+60,00 $')
+  // «Обновить» в сцене — синхронизация обеих бирж
+  await spiral.locator('[data-spiral-refresh]').click()
+  await expect(page.getByText('Загружаем 2 источника')).toBeVisible()
+  // нажатие на биржу в списке — её панель
+  await block.locator('[data-spiral-ex="okx"]').click()
+  await expect(page.getByRole('dialog', { name: 'OKX' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  const id = await last.getAttribute('data-spiral-trade')
+  await last.focus()
   await page.keyboard.press('Enter')
-  await expect(page.getByRole('dialog', { name: 'Binance' })).toBeVisible()
+  await expect(page).toHaveURL(new RegExp(`/trades/${id}$`))
 })
