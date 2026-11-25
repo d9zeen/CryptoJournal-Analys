@@ -76,8 +76,6 @@ test.describe('главная на английском (как у нового 
     for (const name of ['Bybit', 'Hyperliquid', 'Polymarket', 'Binance', 'OKX', 'BingX', 'Bitget', 'MEXC', 'any other exchange']) await expect(ex.locator('dl').getByText(name, { exact: true })).toBeVisible()
     // «Воронка»: семь бирж по API кружат вокруг дневника, под значком — счёт сделок
     await expect(ex.locator('[data-vortex] [data-vortex-node]')).toHaveCount(7)
-    // в центре — глаз «как на фото» (холст)
-    await expect(ex.locator('[data-vortex] canvas[data-vortex-eye]')).toHaveCount(1)
     await expect(ex.locator('[data-vortex]')).toContainText('trades in the journal: 1,24')
     await expect(page.getByText(/Coming via API/)).toHaveCount(0)
     // шаг 3 — неделя: 7 дней, день сделки выделен, итог недели и подпись из данных демо

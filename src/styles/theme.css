@@ -60,15 +60,6 @@
   --color-eye-line: #c4c0d6;
   --color-eye-code: #5a586e;
   --color-eye-ink: #2c2a3a;
-  /* глаз «как на фото» в центре «Воронки» на главной (владелец 23.11.2026, оранжевый вариант): плитка тёмная в обеих темах */
-  --color-eye-photo-bg: #0c0d10;
-  --color-eye-photo-core: #ffde8c;
-  --color-eye-photo-iris: #f48024;
-  --color-eye-photo-edge: #78220e;
-  --color-eye-photo-skin: #dccebe;
-  --color-eye-photo-sclera: #f6f0e6;
-  --color-eye-photo-dim: #463c34;
-  --color-eye-photo-glow: #ff8c28;
 
   /* Торговые цвета: прибыль — фирменная неоновая мята, убыток — красный как в стаканах бирж */
   --color-profit: #4dffb0;      /* прибыль, long */
@@ -242,15 +233,6 @@
   --color-eye-line: #3b3650;
   --color-eye-code: #8f899d;
   --color-eye-ink: #2c2a3a;
-  /* глаз «как на фото» в центре «Воронки» на главной (владелец 23.11.2026, оранжевый вариант): плитка тёмная в обеих темах */
-  --color-eye-photo-bg: #0c0d10;
-  --color-eye-photo-core: #ffde8c;
-  --color-eye-photo-iris: #f48024;
-  --color-eye-photo-edge: #78220e;
-  --color-eye-photo-skin: #dccebe;
-  --color-eye-photo-sclera: #f6f0e6;
-  --color-eye-photo-dim: #463c34;
-  --color-eye-photo-glow: #ff8c28;
   --color-profit: #0a9b6a;
   --color-loss: #dc2f4a;
   --color-warning: #b0700a;
