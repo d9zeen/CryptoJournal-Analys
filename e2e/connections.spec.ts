@@ -494,7 +494,16 @@ test('«Спираль времени»: сделки за 30 дней, спис
   await expect(block.locator('[data-spiral-ex="bybit"]')).toContainText('2')
   await block.locator('[data-spiral-ex="bybit"]').focus()
   await expect(block.locator('[data-spiral-ex="bybit"]')).toContainText('Работает · обновлено 12 мин назад')
-  // клавиатура: последняя сделка — первая кнопка; фокус — карточка над камнем, Enter — страница сделки
+  // диапазон: «Неделя» — те же 3 (старая за 40 дней не попадает), «Всё время» — 4
+  await block.locator('[data-spiral-range] [data-range="7"]').click()
+  await expect(block.locator('[data-spiral-range] [data-range="7"]')).toHaveAttribute('aria-checked', 'true')
+  await expect(spiral).toHaveAttribute('data-spiral-count', '3')
+  await block.locator('[data-spiral-range] [data-range="0"]').click()
+  await expect(spiral).toHaveAttribute('data-spiral-count', '4')
+  await expect(block.locator('[data-spiral-stats]')).toContainText('+1 139,00 $', { timeout: 5000 })
+  await block.locator('[data-spiral-range] [data-range="30"]').click()
+  await expect(spiral).toHaveAttribute('data-spiral-count', '3')
+  // клавиатура: последняя сделка — первая кнопка; фокус — карточка у жетона, Enter — страница сделки
   const last = spiral.locator('[data-spiral-trade]').first()
   await last.focus()
   await expect(spiral.locator('[data-spiral-tip]')).toContainText('SOLUSDT · Long')

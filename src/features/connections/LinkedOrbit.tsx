@@ -1,6 +1,6 @@
 /**
  * «Подключённые биржи» на странице «Биржи».
- *  - слева — «Спираль времени» (владелец 25.11.2026 вместо планетария с глазом, components/fx/TimeSpiral3D): сделки последних 30 дней —
+ *  - слева — «Спираль времени» (владелец 25.11.2026 вместо планетария с глазом, components/fx/TimeSpiral3D): сделки за выбранный диапазон (неделя … всё время) —
  *    камни на нити времени; навёл — сделка, нажал — её страница; «Обновить» в углу сцены — все работающие подключения разом.
  *    Пока сцена грузится (отдельный файл сборки) и если WebGL нет — плоская «Орбита»;
  *  - справа — «Подключено: Bybit, OKX…», как приходят сделки, итог за 30 дней, список подключённых бирж (точка статуса; наведение — горят
@@ -13,6 +13,7 @@ import { fmt, useT } from '@/i18n'
 import { exchangeName } from '@/lib/exchanges'
 import { formatDayShort, formatDuration, formatPnl, formatTimeIn } from '@/lib/format'
 import { useMediaQuery } from '@/lib/useMediaQuery'
+import { radioKeys } from '@/lib/radioKeys'
 import { browserTimeZone, zonedParts } from '@/lib/tz'
 import { Button } from '@/components/ui/Button'
 import { ExchangeLogo } from '@/components/ExchangeLogo'
@@ -21,12 +22,17 @@ import { Orbit } from '@/components/fx/Orbit'
 import type { SpiralTrade } from '@/components/fx/TimeSpiral3D'
 import { useTrades } from '@/features/trades/api'
 import { useProfile } from '@/features/settings/api'
+import { coinIconUrl, useCoins } from '@/features/portfolio/api'
 import { errorCodeOf, type Connection } from './api'
 
 const TimeSpiral3D = lazy(() => import('@/components/fx/TimeSpiral3D').then((m) => ({ default: m.TimeSpiral3D })))
 
-/** сколько последних сделок на спирали (больше — мелко и тяжело) */
-const MAX_ON_SPIRAL = 44
+/** сколько последних сделок на спирали (больше — мелко и тяжело); остальные — в итоге справа */
+const MAX_ON_SPIRAL = 60
+
+/** диапазон спирали (владелец 25.11.2026: «выбирать диапазон — неделя, месяц и т. д.»): дней назад от сейчас, 0 — всё время */
+const RANGES = [7, 30, 90, 365, 0] as const
+type RangeDays = (typeof RANGES)[number]
 
 type Props = {
   conns: Connection[]
@@ -46,6 +52,9 @@ function shortLabel(symbol: string, title?: string | null): string {
   return s.replace(/[-_/:]$/, '') || symbol
 }
 
+/** 1000PEPE → PEPE, kPEPE → PEPE: множитель в тикере бирж — не часть монеты */
+const baseCoin = (label: string) => label.replace(/^(1000000|100000|10000|1000|100|K)(?=[A-Z])/, '')
+
 export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }: Props) {
   const t = useT()
   const c = t.connections
@@ -60,10 +69,12 @@ export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }
   const lit = useMemo(() => new Set(ids), [ids])
   const names = ids.slice(0, 3).map((ex) => exchangeName(ex, ex)).join(', ') + (ids.length > 3 ? ` ${fmt(c.linked.more, { n: ids.length - 3 })}` : '')
 
-  // сделки за 30 дней (по закрытию), в поясе пользователя
+  // сделки за выбранный диапазон (по закрытию), в поясе пользователя
   const { data: profile } = useProfile()
   const tz = profile?.timezone || browserTimeZone()
-  const [range] = useState(() => ({ from: new Date(Date.now() - 30 * 86_400_000).toISOString(), to: null }))
+  const [days, setDays] = useState<RangeDays>(30)
+  const range = useMemo(() => ({ from: days ? new Date(Date.now() - days * 86_400_000).toISOString() : null, to: null }), [days])
+  const rangeName = (d: RangeDays) => (d === 7 ? c.planet.ranges.week : d === 30 ? c.planet.ranges.month : d === 90 ? c.planet.ranges.quarter : d === 365 ? c.planet.ranges.year : c.planet.ranges.all)
   const { data: trades } = useTrades(range)
   const today = zonedParts(new Date().toISOString(), tz).date
   const yesterday = zonedParts(new Date(Date.now() - 86_400_000).toISOString(), tz).date
@@ -75,15 +86,24 @@ export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }
   )
   const total = useMemo(() => closed.reduce((s, tr) => s + Number(tr.pnl), 0), [closed])
   const counts = useMemo(() => closed.reduce<Record<string, number>>((m, tr) => ((m[tr.exchange] = (m[tr.exchange] ?? 0) + 1), m), {}), [closed])
+  // иконки монет — те же, что в «Портфеле» (coins, у тикера — монета с большей капитализацией: список уже по рангу)
+  const { data: coins } = useCoins()
+  const icons = useMemo(() => {
+    const m = new Map<string, string | null>()
+    for (const cn of coins ?? []) if (!m.has(cn.symbol.toUpperCase())) m.set(cn.symbol.toUpperCase(), cn.icon ?? null)
+    return m
+  }, [coins])
   const spiral = useMemo<SpiralTrade[]>(
     () =>
       closed.slice(-MAX_ON_SPIRAL).map((tr) => {
         const day = zonedParts(tr.exit_at!, tz).date
+        const label = shortLabel(tr.symbol, tr.title)
         return {
           id: tr.id,
           exchange: tr.exchange,
           exName: exchangeName(tr.exchange, t.exchange.other),
-          label: shortLabel(tr.symbol, tr.title),
+          label,
+          icon: tr.market_type === 'prediction' ? null : coinIconUrl(icons.get(baseCoin(label)) ?? null),
           symbol: tr.title || tr.symbol,
           side: tr.side === 'short' ? t.side.short : t.side.long,
           pnl: Number(tr.pnl),
@@ -91,7 +111,7 @@ export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }
           when: `${dayLabel(day)}, ${formatTimeIn(tr.exit_at!, tz)}`,
         }
       }),
-    [closed, tz, t, dayLabel],
+    [closed, tz, t, dayLabel, icons],
   )
 
   // список подключённых бирж: точка статуса и строка «обновлено 12 мин назад» / «ключ не работает»
@@ -132,7 +152,7 @@ export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }
               busy={refreshing}
               onOpenTrade={openTrade}
               onRefresh={onRefresh}
-              labels={{ scene: c.planet.scene, refresh: c.planet.refresh, back: c.planet.back, empty: c.planet.empty }}
+              labels={{ scene: fmt(c.planet.scene, { range: rangeName(days).toLowerCase() }), refresh: c.planet.refresh, back: c.planet.back, empty: c.planet.empty }}
               onFail={() => setNoGl(true)}
             />
           </Suspense>
@@ -144,9 +164,26 @@ export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }
           <p className="text-sm text-muted">{pro ? c.linked.textPro : c.linked.textFree}</p>
         </div>
         {/* итог за 30 дней — числа догоняют, когда приходят новые сделки */}
+        {/* диапазон спирали и итога */}
+        <div role="radiogroup" aria-label={c.planet.range} onKeyDown={radioKeys} data-spiral-range className="flex flex-wrap justify-center gap-1.5 md:justify-start">
+          {RANGES.map((d) => (
+            <button
+              key={d}
+              type="button"
+              role="radio"
+              aria-checked={days === d}
+              tabIndex={days === d ? 0 : -1}
+              data-range={d}
+              onClick={() => setDays(d)}
+              className={`h-8 rounded-full border px-3 text-xs font-semibold transition-colors ${days === d ? 'border-primary bg-primary/12 text-text' : 'border-border text-muted hover:border-primary/60 hover:text-text'}`}
+            >
+              {rangeName(d)}
+            </button>
+          ))}
+        </div>
         <div data-spiral-stats className="flex justify-center gap-8 md:justify-start">
           <div>
-            <p className="text-xs text-muted">{c.planet.trades30}</p>
+            <p className="text-xs text-muted">{c.planet.trades}</p>
             <AnimatedNumber value={closed.length} format={(n) => String(Math.round(n))} className="num font-display text-2xl font-semibold xl:text-3xl" />
           </div>
           <div>
@@ -158,6 +195,9 @@ export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }
             />
           </div>
         </div>
+        {closed.length > MAX_ON_SPIRAL && (
+          <p data-spiral-trimmed className="-mt-2 text-center text-xs text-muted md:text-left">{fmt(c.planet.trimmed, { n: MAX_ON_SPIRAL, total: closed.length })}</p>
+        )}
         <div className="border-t border-border pt-3">
           <p className="mb-1 text-xs text-muted">{c.planet.list}</p>
           <ul onPointerLeave={() => setFocus(null)}>
