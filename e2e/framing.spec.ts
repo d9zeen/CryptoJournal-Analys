@@ -14,7 +14,7 @@ test('сайт не работает внутри чужой страницы (i
   const framed = page.frames()[1]
   // наш сайт в рамке загрузился (адрес и заголовок вкладки наши)…
   expect(framed.url()).toContain('127.0.0.1')
-  expect(await framed.title()).toContain('CryptoJournal')
+  expect(await framed.title()).toContain('CryptoHex')
   // …но ничего не показал
   await expect(page.frameLocator('iframe').getByRole('heading', { name: 'Вход' })).toHaveCount(0)
 })

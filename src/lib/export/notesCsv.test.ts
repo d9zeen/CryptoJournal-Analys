@@ -14,6 +14,6 @@ describe('notesToCsv', () => {
   })
   it('пусто — только заголовок; имя файла с датой', () => {
     expect(notesToCsv([])).toBe('﻿day;text;updated_at\r\n')
-    expect(notesFilename(new Date(2026, 10, 4))).toBe('cryptojournal-day-notes-2026-11-04.csv')
+    expect(notesFilename(new Date(2026, 10, 4))).toBe('cryptohex-day-notes-2026-11-04.csv')
   })
 })

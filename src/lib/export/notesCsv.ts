@@ -13,8 +13,8 @@ export function notesToCsv(notes: Pick<DayNote, 'day' | 'text' | 'updated_at'>[]
   return '﻿' + lines.join('\r\n') + '\r\n'
 }
 
-/** Имя файла: cryptojournal-day-notes-2026-11-14.csv */
+/** Имя файла: cryptohex-day-notes-2026-11-14.csv */
 export function notesFilename(now = new Date()): string {
   const pad = (n: number) => String(n).padStart(2, '0')
-  return `cryptojournal-day-notes-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}.csv`
+  return `cryptohex-day-notes-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}.csv`
 }

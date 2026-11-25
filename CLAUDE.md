@@ -1,4 +1,6 @@
-# CryptoJournal — контекст для Claude
+# CryptoHex (бывший CryptoJournal) — контекст для Claude
+
+**Название сайта — CryptoHex** (владелец 23.11.2026): t.app.name в словарях, <title> и og:title в index.html, public/og.png (пересобрать — `OG_OUT=public/og.png npx playwright test e2e/zz-og.spec.ts`), письма docs/email-templates, имена файлов выгрузки (cryptohex-trades-…csv). Репозиторий, адрес GitHub Pages (/CryptoJournal-Analys/), имя пакета и проект Supabase `cryptojournal` — прежние, их не трогать.
 
 Онлайн-дневник сделок для русскоязычных криптотрейдеров (фьючерсы Bybit / BingX / OKX + спот):
 запись сделок, статистика, импорт CSV. Тарифы Basic (free) / Pro / Pro Plus — `src/lib/plans.ts` + база (0016); новичкам 7 дней Pro Plus; оплаты на сайте пока нет (будет отдельным PR), тариф выдаёт админ.

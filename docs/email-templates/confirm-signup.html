@@ -1,19 +1,19 @@
-<!-- CryptoJournal: письмо на двух языках. Язык — из аккаунта (user_metadata.lang, сайт ставит его сам); нет языка — по-русски -->
+<!-- CryptoHex: письмо на двух языках. Язык — из аккаунта (user_metadata.lang, сайт ставит его сам); нет языка — по-русски -->
 <div style="margin:0;padding:32px 16px;background:#f4f1ea;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1c1b22">
   <div style="max-width:480px;margin:0 auto;background:#fbf9f4;border:1px solid #e4dfd3;border-radius:14px;padding:28px">
-    <div style="font-size:18px;font-weight:700;letter-spacing:-0.01em;margin-bottom:20px">CryptoJournal</div>
+    <div style="font-size:18px;font-weight:700;letter-spacing:-0.01em;margin-bottom:20px">CryptoHex</div>
 {{ if and .Data.lang (eq .Data.lang "en") }}
     <p style="margin:0 0 12px;font-size:15px;line-height:1.55">Hi! Just confirm your email and your trading journal is ready.</p>
     <p style="margin:24px 0">
       <a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#5b45e0;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 20px;border-radius:10px">Confirm email</a>
     </p>
-    <p style="margin:0;font-size:13px;line-height:1.5;color:#6b6877">If you did not sign up for CryptoJournal, just delete this email.</p>
+    <p style="margin:0;font-size:13px;line-height:1.5;color:#6b6877">If you did not sign up for CryptoHex, just delete this email.</p>
 {{ else }}
     <p style="margin:0 0 12px;font-size:15px;line-height:1.55">Привет! Осталось подтвердить почту — и дневник сделок готов.</p>
     <p style="margin:24px 0">
       <a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#5b45e0;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 20px;border-radius:10px">Подтвердить почту</a>
     </p>
-    <p style="margin:0;font-size:13px;line-height:1.5;color:#6b6877">Если вы не регистрировались в CryptoJournal — просто удалите это письмо.</p>
+    <p style="margin:0;font-size:13px;line-height:1.5;color:#6b6877">Если вы не регистрировались в CryptoHex — просто удалите это письмо.</p>
 {{ end }}
   </div>
 </div>

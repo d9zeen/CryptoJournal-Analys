@@ -685,7 +685,7 @@ function Bridge({
           className={`relative grid min-w-0 flex-1 place-items-center rounded-xl border border-primary/50 bg-primary/8 px-2 py-3 text-center ${flowing ? 'beam-run' : ''}`}
           style={{ '--beam-fill': 'color-mix(in srgb, var(--color-primary) 8%, var(--color-surface))' } as React.CSSProperties}
         >
-          <span className="truncate text-sm font-semibold">CryptoJournal</span>
+          <span className="truncate text-sm font-semibold">{t.app.name}</span>
           <span className="text-xs text-muted">{b.journal}</span>
         </span>
       </div>

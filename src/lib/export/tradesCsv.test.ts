@@ -54,5 +54,5 @@ describe('csvCell', () => {
 })
 
 it('exportFilename', () => {
-  expect(exportFilename(new Date(2026, 10, 3))).toBe('cryptojournal-trades-2026-11-03.csv')
+  expect(exportFilename(new Date(2026, 10, 3))).toBe('cryptohex-trades-2026-11-03.csv')
 })
