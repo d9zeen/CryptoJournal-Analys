@@ -357,7 +357,7 @@ test('«Биржи»: без подключений — «Орбита» с ша
   await expect(block.locator('[data-spiral-ex="binance"]')).toHaveCount(0)
   // старого блока с частицами больше нет; вместо плоской «Орбиты» — «Спираль времени» (canvas WebGL)
   await expect(page.locator('[data-arrivals-curve]')).toHaveCount(0)
-  await expect(block.locator('canvas[data-spiral-canvas]')).toHaveCount(1)
+  await expect(block.locator('canvas[data-spiral-canvas]')).toHaveCount(1, { timeout: 15_000 })
   // «Подключить ещё» — общая панель выбора биржи
   await block.getByRole('button', { name: 'Подключить ещё' }).click()
   await expect(page.getByRole('dialog')).toBeVisible()
@@ -482,7 +482,8 @@ test('«Спираль времени»: сделки за 30 дней, спис
   await page.goto('import')
   const block = page.locator('[data-linked-orbit]')
   const spiral = block.locator('[data-spiral]')
-  await expect(spiral.locator('canvas[data-spiral-canvas]')).toHaveCount(1)
+  // сцена строится, когда страница свободна (до 1,5 с), на слабой машине CI — дольше
+  await expect(spiral.locator('canvas[data-spiral-canvas]')).toHaveCount(1, { timeout: 15_000 })
   await expect(spiral).toHaveAttribute('data-spiral-count', '3')
   // итог за 30 дней: 3 сделки, +140 $
   await expect(block.locator('[data-spiral-stats]')).toContainText('3', { timeout: 5000 })

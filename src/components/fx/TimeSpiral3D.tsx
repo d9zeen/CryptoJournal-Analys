@@ -97,7 +97,7 @@ const easeOut = (k: number) => 1 - Math.pow(1 - k, 3)
 const easeInOut = (k: number) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2)
 const spring = (k: number) => 1 - Math.cos(k * Math.PI * 3.2) * Math.exp(-k * 6)
 
-type Gem = THREE.Mesh<THREE.OctahedronGeometry, THREE.MeshPhysicalMaterial> & {
+type Gem = THREE.Mesh<THREE.OctahedronGeometry, THREE.MeshStandardMaterial> & {
   userData: { tr: SpiralTrade; s: number; size: number; mode: 'grow' | 'arrive' | 'still'; t0: number; f: number; hs: number; phase: number; landed: boolean }
 }
 
@@ -118,6 +118,24 @@ export function TimeSpiral3D({ trades, dayLabel, size, focus, busy, onOpenTrade,
   useEffect(() => {
     const host = wrap.current
     if (!host) return
+    // сцену строим, когда страница свободна (не мешаем подключению биржи, загрузке списков): на слабом процессоре сборка шейдеров — до секунды
+    let cancelled = false
+    let stop: (() => void) | undefined
+    const idle = window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 300))
+    const unidle = window.cancelIdleCallback ?? window.clearTimeout
+    const idleId = idle(() => {
+      if (!cancelled) stop = start(host)
+    }, { timeout: 1500 })
+    return () => {
+      cancelled = true
+      unidle(idleId)
+      stop?.()
+    }
+    // сцена строится один раз на размер; сделки, фокус и «идёт обновление» читаются из live в цикле кадров
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [W, size, small])
+
+  function start(host: HTMLDivElement): (() => void) | undefined {
     let renderer: THREE.WebGLRenderer
     try {
       renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'low-power' })
@@ -125,7 +143,11 @@ export function TimeSpiral3D({ trades, dayLabel, size, focus, busy, onOpenTrade,
       onFail?.()
       return
     }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5))
+    // без видеокарты (рисует процессор: SwiftShader / llvmpipe) — меньше точек и кадр через раз, иначе страница «тормозит»
+    const gl = renderer.getContext()
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info')
+    const soft = /swiftshader|llvmpipe|software/i.test(String(dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)))
+    renderer.setPixelRatio(soft ? 1 : Math.min(window.devicePixelRatio || 1, 1.5))
     renderer.setSize(W, size)
     renderer.outputColorSpace = THREE.SRGBColorSpace
     renderer.toneMapping = THREE.ACESFilmicToneMapping
@@ -143,9 +165,11 @@ export function TimeSpiral3D({ trades, dayLabel, size, focus, busy, onOpenTrade,
     const scene = new THREE.Scene()
     const fog = new THREE.Fog(C.surface, 8.8, 15.5)
     scene.fog = fog
-    const pm = track(new THREE.PMREMGenerator(renderer))
-    const envTex = track(pm.fromScene(new RoomEnvironment(), 0.04).texture)
-    scene.environment = envTex
+    // маленькая карта окружения (64) — блики на гранях те же, а считается в разы быстрее; без видеокарты — только свет
+    if (!soft) {
+      const pm = track(new THREE.PMREMGenerator(renderer))
+      scene.environment = track(pm.fromScene(new RoomEnvironment(), 0.04, 0.1, 100, { size: 64 }).texture)
+    }
     const key = new THREE.DirectionalLight(0xffffff, 1.5)
     key.position.set(-5, 8, 9)
     const rim = new THREE.DirectionalLight(0xffffff, 0.6)
@@ -157,7 +181,7 @@ export function TimeSpiral3D({ trades, dayLabel, size, focus, busy, onOpenTrade,
       key.intensity = C.light ? 1.6 : 1.4
       rim.intensity = C.light ? 0.5 : 0.8
       hemi.groundColor.copy(C.base)
-      hemi.intensity = C.light ? 0.7 : 0.5
+      hemi.intensity = (C.light ? 0.7 : 0.5) + (soft ? 0.7 : 0) // без карты окружения — светлее общим светом
       fog.color.copy(C.surface)
     }
     lightUp()
@@ -259,7 +283,7 @@ export function TimeSpiral3D({ trades, dayLabel, size, focus, busy, onOpenTrade,
         let g = byId.get(tr.id)
         if (g) byId.delete(tr.id)
         else {
-          const mat = new THREE.MeshPhysicalMaterial({ roughness: 0.22, metalness: 0.05, clearcoat: 1, clearcoatRoughness: 0.1, flatShading: true })
+          const mat = new THREE.MeshStandardMaterial({ roughness: 0.2, metalness: 0.08, flatShading: true })
           g = new THREE.Mesh(gemGeo, mat) as unknown as Gem
           g.userData = { tr, s, size: 0, mode: 'still', t0: now, f: 1, hs: 1, phase: s * 1.7, landed: false }
           g.scale.setScalar(0.0001)
@@ -440,10 +464,13 @@ export function TimeSpiral3D({ trades, dayLabel, size, focus, busy, onOpenTrade,
     let frame = 0
     let lastBack = false
     let lastTipId = ''
+    let calm = false
     const tick = (now: number) => {
       raf = requestAnimationFrame(tick)
       if (!visible || document.hidden) return
       frame++
+      // спокойная сцена — 30 кадров/с (без видеокарты — 20), пока что-то движется — сколько может (без видеокарты — 30)
+      if (frame % (calm ? (soft ? 3 : 2) : soft ? 2 : 1)) return
       sync(now)
       const t = now - started
       // нить растёт к последней «выросшей» сделке, камни загораются, когда нить их достигает
@@ -574,6 +601,19 @@ export function TimeSpiral3D({ trades, dayLabel, size, focus, busy, onOpenTrade,
       }
 
       renderer.render(scene, camera)
+      calm =
+        now > growUntil + 800 &&
+        !queue.length &&
+        !flashes.length &&
+        !trails.length &&
+        scanT < 0 &&
+        !drag &&
+        !inside &&
+        !target &&
+        !focusEx &&
+        Math.abs(headT - head) < 0.01 &&
+        Math.abs(viewT - view) < 0.01 &&
+        Math.abs(yawV) < 0.0005
 
       // подписи четырёх последних (видимых) сделок
       const order = gems
@@ -652,9 +692,7 @@ export function TimeSpiral3D({ trades, dayLabel, size, focus, busy, onOpenTrade,
       canvas.remove()
       delete host.dataset.spiralReady
     }
-    // сцена строится один раз на размер; сделки, фокус и «идёт обновление» читаются из live в цикле кадров
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [W, size, small])
+  }
 
   // для клавиатуры и дикторов — последние сделки кнопками; фокус = наведение
   const recent = trades.slice(-12).reverse()
