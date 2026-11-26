@@ -374,6 +374,29 @@ test('«Биржи»: без подключений — «Орбита» с ша
   await expect(tile).not.toHaveClass(/beam-run/, { timeout: 20_000 })
 })
 
+test('«Подключено»: пока грузятся сделки — заготовка, а не плоская «Орбита» и не «0 / 0,00 $» (владелец 26.11.2026)', async ({ page, db }) => {
+  db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
+  db.connections = [{ id: 'c1', exchange: 'bybit', label: null, api_key: 'AbCdEf123456', last_sync_at: new Date().toISOString(), cursor_at: new Date().toISOString(), last_error: null, created_at: '' }]
+  db.trades = [makeTrade(1), makeTrade(2)]
+  await fakeSupabase(page, db)
+  await page.route('**/functions/v1/exchange-proxy', (route) => route.fulfill({ status: 500, body: '' }))
+  let release!: () => void
+  const gate = new Promise<void>((r) => (release = r))
+  await page.route('**/rest/v1/trades**', async (route) => {
+    await gate
+    await route.fallback()
+  })
+  await page.goto('import')
+  const block = page.locator('[data-linked-orbit]')
+  await expect(block.locator('[data-brain-placeholder]')).toHaveCount(1)
+  await expect(block.locator('[data-orbit-sat]')).toHaveCount(0)
+  await expect(block.locator('[data-brain-stats]')).not.toContainText('0,00')
+  release()
+  await expect(block.locator('[data-brain-stats]')).toContainText('2')
+  await expect(block.locator('canvas[data-brain-canvas]')).toHaveCount(1, { timeout: 15_000 })
+  await expect(block.locator('[data-brain-ready]')).toHaveCount(1, { timeout: 15_000 })
+})
+
 test('«Подключено»: на телефоне без прокрутки вбок; списка подключений справа нет (владелец 20.11.2026)', async ({ page, db }) => {
   db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
   db.connections = [{ id: 'c1', exchange: 'bybit', label: null, api_key: 'AbCdEf123456', last_sync_at: new Date().toISOString(), cursor_at: new Date().toISOString(), last_error: null, created_at: '' }]
@@ -515,6 +538,24 @@ test('«Мозг из сделок»: сделки за 30 дней, списо�
   await expect(spiral).toHaveAttribute('data-brain-zoom', 'in', { timeout: 10_000 })
   await spiral.locator('[data-brain-enter]').click()
   await expect(spiral).toHaveAttribute('data-brain-zoom', 'out', { timeout: 10_000 })
+  // колесо мыши: до клика по сцене — прокрутка страницы и подсказка, после клика — приближение (владелец 26.11.2026)
+  if ((page.viewportSize()?.width ?? 0) >= 768) {
+    const box = (await spiral.locator('canvas[data-brain-canvas]').boundingBox())!
+    await page.mouse.move(box.x + 24, box.y + 24)
+    await page.mouse.wheel(0, -700)
+    await expect(spiral.locator('[data-brain-wheel-hint]')).toHaveCSS('opacity', '1')
+    await page.waitForTimeout(600)
+    await expect(spiral).toHaveAttribute('data-brain-zoom', 'out')
+    await page.mouse.click(box.x + 24, box.y + 24)
+    await expect(spiral).toHaveAttribute('data-brain-wheel', 'on')
+    await page.mouse.wheel(0, -700)
+    await expect(spiral).toHaveAttribute('data-brain-zoom', 'in', { timeout: 10_000 })
+    // увёл мышь — колесо снова крутит страницу
+    await page.mouse.move(box.x - 40, box.y + box.height / 2)
+    await expect(spiral).not.toHaveAttribute('data-brain-wheel', 'on')
+    await spiral.locator('[data-brain-enter]').click()
+    await expect(spiral).toHaveAttribute('data-brain-zoom', 'out', { timeout: 10_000 })
+  }
   // «Обновить» в сцене — синхронизация обеих бирж
   await spiral.locator('[data-brain-refresh]').click()
   await expect(page.getByText('Загружаем 2 источника')).toBeVisible()

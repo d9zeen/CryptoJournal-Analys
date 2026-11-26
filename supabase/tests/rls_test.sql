@@ -860,8 +860,16 @@ select pg_temp.expect_error($$select add_exchange_connection('bybit', 'KEY123456
 select pg_temp.expect_error($$select share_portfolio(true)$$, 'GUEST_FORBIDDEN');
 select pg_temp.expect_error($$insert into trade_screenshots (trade_id, path) values ('77777777-1111-0000-0000-000000000000', '77777777-0000-0000-0000-000000000007/77777777-1111-0000-0000-000000000000/a.webp')$$, 'GUEST_FORBIDDEN');
 select pg_temp.expect_error($$insert into storage.objects (bucket_id, name) values ('screenshots', '77777777-0000-0000-0000-000000000007/77777777-1111-0000-0000-000000000000/a.webp')$$, 'row-level security');
+-- лимит гостя (0026): не больше 500 сделок — 500-я проходит, 501-я нет
+insert into trades (exchange, symbol, side, entry_at, entry_price, size_usd)
+select 'bybit', 'BTCUSDT', 'long', now(), 90000, 100 from generate_series(1, 499);
+select pg_temp.check((select count(*) from trades) = 500, 'гость записал 500 сделок');
+select pg_temp.expect_error($$insert into trades (exchange, symbol, side, entry_at, entry_price, size_usd) values ('bybit', 'BTCUSDT', 'long', now(), 90000, 100)$$, 'GUEST_TRADE_LIMIT');
+select pg_temp.expect_error($$insert into trades (exchange, symbol, side, entry_at, entry_price, size_usd) select 'bybit', 'BTCUSDT', 'long', now(), 90000, 100 from generate_series(1, 5)$$, 'GUEST_TRADE_LIMIT');
 -- тот же человек сохранил аккаунт (почта) — токен уже без is_anonymous: всё можно
 set request.jwt.claims = '{"is_anonymous":false}';
+insert into trades (exchange, symbol, side, entry_at, entry_price, size_usd) values ('bybit', 'BTCUSDT', 'long', now(), 90000, 100);
+select pg_temp.check((select count(*) from trades) = 501, 'сохранил аккаунт — лимит гостя снят');
 select pg_temp.check(not is_guest(), 'после сохранения аккаунта — не гость');
 reset request.jwt.claims;
 reset role;
