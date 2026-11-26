@@ -99,9 +99,31 @@ const easeOut = (k: number) => 1 - Math.pow(1 - k, 3)
 const easeInOut = (k: number) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2)
 const spring = (k: number) => 1 - Math.cos(k * Math.PI * 3.2) * Math.exp(-k * 6)
 
-type Gem = THREE.Sprite & {
-  userData: { tr: SpiralTrade; s: number; size: number; mode: 'grow' | 'arrive' | 'still'; t0: number; f: number; hs: number; phase: number; landed: boolean }
+/** жетон: две стороны с иконкой + ребро цвета результата; крутится вокруг своей оси, как монетка */
+type Gem = THREE.Group & {
+  userData: {
+    tr: SpiralTrade
+    s: number
+    size: number
+    mode: 'grow' | 'arrive' | 'still'
+    t0: number
+    f: number
+    hs: number
+    phase: number
+    landed: boolean
+    /** скорость вращения, рад/с: знак — в какую сторону (соседние — в разные) */
+    spin: number
+    /** текущий угол поворота вокруг оси */
+    ang: number
+    face: THREE.MeshBasicMaterial
+    edge: THREE.MeshBasicMaterial
+  }
 }
+/** скорость самовращения спирали, рад/с (владелец 25.11.2026: «спираль сама по себе крутилась») — оборот примерно за 45 с */
+const AUTO_SPIN = 0.14
+/** толщина жетона (доля диаметра) */
+const COIN_T = 0.07
+const Y_AXIS = new THREE.Vector3(0, 1, 0)
 
 export function TimeSpiral3D({ trades, dayLabel, size, focus, busy, onOpenTrade, onRefresh, labels, onFail }: Props) {
   const wrap = useRef<HTMLDivElement>(null)
@@ -256,6 +278,11 @@ export function TimeSpiral3D({ trades, dayLabel, size, focus, busy, onOpenTrade,
     // круг с логотипом монеты, обводка — плюс --color-up / минус --color-down; всегда лицом к зрителю (Sprite), крупнее — больше сумма
     let gems: Gem[] = []
     let maxAbs = 1 // наибольшая сумма среди сделок — масштаб жетонов
+    const faceGeo = track(new THREE.CircleGeometry(0.5, 48))
+    const edgeGeo = track(new THREE.CylinderGeometry(0.5, 0.5, COIN_T, 48, 1, true))
+    edgeGeo.rotateX(Math.PI / 2)
+    const faceCam = new THREE.Quaternion()
+    const spinQ = new THREE.Quaternion()
     const sizeOf = (pnl: number) => 0.32 + 0.18 * Math.sqrt(Math.min(1, Math.abs(pnl) / maxAbs))
     const TEX = 128
     type Tok = { cv: HTMLCanvasElement; tex: THREE.CanvasTexture; img: HTMLImageElement | null; up: boolean; label: string }
@@ -289,6 +316,37 @@ export function TimeSpiral3D({ trades, dayLabel, size, focus, busy, onOpenTrade,
       }
       t.tex.needsUpdate = true
     }
+    // иконку берём через fetch → blob: картинка своя (холст не «пачкается», WebGL её примет), а SVG без размеров получает 128×128 —
+    // иначе часть браузеров не рисует его на холсте
+    let dead = false
+    const blobs: string[] = []
+    const icons = new Map<string, Promise<HTMLImageElement>>()
+    const loadIcon = (url: string) => {
+      let p = icons.get(url)
+      if (!p) {
+        p = fetch(url)
+          .then((r) => {
+            if (!r.ok) throw new Error(String(r.status))
+            const svg = (r.headers.get('content-type') ?? '').includes('svg') || url.endsWith('.svg')
+            return svg
+              ? r.text().then((txt) => new Blob([/<svg[^>]*\swidth=/.test(txt) ? txt : txt.replace('<svg', '<svg width="128" height="128"')], { type: 'image/svg+xml' }))
+              : r.blob()
+          })
+          .then(
+            (b) =>
+              new Promise<HTMLImageElement>((ok, fail) => {
+                const src = URL.createObjectURL(b)
+                blobs.push(src)
+                const img = new Image()
+                img.onload = () => ok(img)
+                img.onerror = fail
+                img.src = src
+              }),
+          )
+        icons.set(url, p)
+      }
+      return p
+    }
     const tokenFor = (tr: SpiralTrade): Tok => {
       const up = tr.pnl >= 0
       const key = `${tr.icon ?? tr.label}|${up ? 1 : 0}`
@@ -302,22 +360,14 @@ export function TimeSpiral3D({ trades, dayLabel, size, focus, busy, onOpenTrade,
       toks.set(key, t)
       drawTok(t)
       if (tr.icon) {
-        const img = new Image()
-        img.crossOrigin = 'anonymous'
-        img.decoding = 'async'
-        img.onload = () => {
-          const tk = t!
-          tk.img = img
-          drawTok(tk)
-          // картинка без CORS «пачкает» холст — WebGL её не возьмёт: тогда буквы
-          try {
-            tk.cv.getContext('2d')!.getImageData(0, 0, 1, 1)
-          } catch {
-            tk.img = null
+        const tk = t
+        loadIcon(tr.icon)
+          .then((img) => {
+            if (dead) return
+            tk.img = img
             drawTok(tk)
-          }
-        }
-        img.src = tr.icon
+          })
+          .catch(() => {}) // нет иконки / сеть — остаются буквы тикера
       }
       return t
     }
@@ -346,8 +396,18 @@ export function TimeSpiral3D({ trades, dayLabel, size, focus, busy, onOpenTrade,
         let g = byId.get(tr.id)
         if (g) byId.delete(tr.id)
         else {
-          g = new THREE.Sprite(new THREE.SpriteMaterial({ map: tokenFor(tr).tex, transparent: true })) as unknown as Gem
-          g.userData = { tr, s, size: 0, mode: 'still', t0: now, f: 1, hs: 1, phase: s * 1.7, landed: false }
+          const face = new THREE.MeshBasicMaterial({ map: tokenFor(tr).tex, transparent: true })
+          const edge = new THREE.MeshBasicMaterial({ color: tr.pnl >= 0 ? C.up : C.down, transparent: true })
+          g = new THREE.Group() as Gem
+          const front = new THREE.Mesh(faceGeo, face)
+          front.position.z = COIN_T / 2
+          const back = new THREE.Mesh(faceGeo, face)
+          back.position.z = -COIN_T / 2
+          back.rotation.y = Math.PI
+          g.add(front, back, new THREE.Mesh(edgeGeo, edge))
+          // соседние жетоны крутятся в разные стороны и с чуть разной скоростью
+          const spin = (s % 2 ? 1 : -1) * (0.55 + ((s * 37) % 10) * 0.05)
+          g.userData = { tr, s, size: 0, mode: 'still', t0: now, f: 1, hs: 1, phase: s * 1.7, landed: false, spin, ang: s * 0.9, face, edge }
           g.scale.setScalar(0.0001)
           helix.add(g)
           fresh.push(g)
@@ -355,12 +415,14 @@ export function TimeSpiral3D({ trades, dayLabel, size, focus, busy, onOpenTrade,
         g.userData.tr = tr
         g.userData.s = s
         g.userData.size = sizeOf(tr.pnl)
-        g.material.map = tokenFor(tr).tex
+        g.userData.face.map = tokenFor(tr).tex
+        g.userData.edge.color.copy(tr.pnl >= 0 ? C.up : C.down)
         next.push(g)
       })
       for (const g of byId.values()) {
         helix.remove(g)
-        g.material.dispose()
+        g.userData.face.dispose()
+        g.userData.edge.dispose()
       }
       gems = next
       buildSpine(gems.length)
@@ -384,7 +446,7 @@ export function TimeSpiral3D({ trades, dayLabel, size, focus, busy, onOpenTrade,
           if (g.userData.s < growN) g.userData.mode = still ? 'still' : 'grow'
           else queue.push({ at: growUntil + 450 + (g.userData.s - growN) * 700, id: g.userData.tr.id })
         })
-        if (still) fresh.forEach((g) => g.scale.set(1, 1, 1))
+        if (still) fresh.forEach((g) => g.scale.setScalar(1))
       } else {
         // потом: новые сделки — по одной на кончик нити (если их немного), остальное — сразу
         const latest = fresh.filter((g) => g.userData.s >= n - 10).sort((a, b) => a.userData.s - b.userData.s)
@@ -507,7 +569,7 @@ export function TimeSpiral3D({ trades, dayLabel, size, focus, busy, onOpenTrade,
 
     const pick = (): Gem | null => {
       ray.setFromCamera(ndc, camera)
-      return (ray.intersectObjects(gems, false)[0]?.object as Gem | undefined) ?? null
+      return (ray.intersectObjects(gems, true)[0]?.object.parent as Gem | undefined) ?? null
     }
 
     let visible = true
@@ -523,6 +585,7 @@ export function TimeSpiral3D({ trades, dayLabel, size, focus, busy, onOpenTrade,
     let tiltY = 0
     let raf = 0
     let frame = 0
+    let lastNow = performance.now()
     let lastBack = false
     let lastTipId = ''
     let calm = false
@@ -568,9 +631,13 @@ export function TimeSpiral3D({ trades, dayLabel, size, focus, busy, onOpenTrade,
         lastBack = back
         setCanBack(back)
       }
+      const dt = Math.min(0.05, (now - lastNow) / 1000)
+      lastNow = now
       if (!drag) {
         yawV *= 0.94
         yaw += yawV
+        // спираль сама медленно вращается; навёл на жетон или выбрал биржу — замирает, чтобы было удобно смотреть
+        if (!still && !hit && !live.current.sel && !live.current.focus) yaw += AUTO_SPIN * dt
       }
       const tx = inside ? ndc.y * 0.06 : 0
       const ty = inside ? ndc.x * 0.1 : 0
@@ -583,6 +650,8 @@ export function TimeSpiral3D({ trades, dayLabel, size, focus, busy, onOpenTrade,
       camera.position.set(Math.sin(tiltY) * CAM_D * Math.cos(el), LOOK.y + Math.sin(el) * CAM_D, Math.cos(tiltY) * CAM_D * Math.cos(el))
       camera.lookAt(LOOK)
       scene.updateMatrixWorld()
+      // поворот «лицом к камере» в системе спирали (она сама повёрнута)
+      faceCam.copy(helix.quaternion).invert().multiply(camera.quaternion)
 
       // наведение: мышь (раз в 2 кадра и при движении — спираль двигается под мышью), иначе — выбранная пальцем / с клавиатуры
       if (drag && drag.moved > 6) hit = null
@@ -620,14 +689,20 @@ export function TimeSpiral3D({ trades, dayLabel, size, focus, busy, onOpenTrade,
         } else if (queue.some((q) => q.id === u.tr.id)) s = 0.0001
         const isHit = g === target
         u.hs += ((isHit ? 1.35 : 1) - u.hs) * 0.2
-        g.scale.set(s * u.hs, s * u.hs, 1)
+        g.scale.setScalar(s * u.hs)
         local(u.s, g.position)
         g.position.y += lift
+        // лицом к зрителю + вращение вокруг своей оси; под мышью — плавно разворачивается иконкой к тебе
+        if (isHit || still) u.ang += (Math.round(u.ang / (Math.PI * 2)) * Math.PI * 2 - u.ang) * (still ? 1 : 0.15)
+        else u.ang += u.spin * dt
+        g.quaternion.copy(faceCam).multiply(spinQ.setFromAxisAngle(Y_AXIS, u.ang))
         const on = focusEx ? u.tr.exchange === focusEx : !target || isHit || target.userData.tr.exchange === u.tr.exchange ? 1 : 0.35
         u.f += (Number(on) - u.f) * 0.15
         // старые — тише (растворяются в фоне карточки), не в фокусе — ещё тише
         const fade = Math.min(C.light ? 0.5 : 0.6, age / (C.light ? 36 : 32))
-        g.material.opacity = (1 - fade) * (0.22 + 0.78 * u.f)
+        const op = (1 - fade) * (0.22 + 0.78 * u.f)
+        u.face.opacity = op
+        u.edge.opacity = op
       }
       for (let i = flashes.length - 1; i >= 0; i--) {
         const f = flashes[i]
@@ -679,7 +754,8 @@ export function TimeSpiral3D({ trades, dayLabel, size, focus, busy, onOpenTrade,
       // подписи четырёх последних (видимых) сделок
       const order = gems
         .filter((g) => g.userData.mode !== 'arrive' || g.userData.landed)
-        .filter((g) => g.userData.s <= hv + 0.5 && g.scale.x > 0.01)
+        // спираль крутится — подписи только у тех, что спереди (сзади подписи слипаются)
+        .filter((g) => g.userData.s <= hv + 0.5 && g.scale.x > 0.01 && g.getWorldPosition(v3).z > 0.6)
         .sort((a, b) => b.userData.s - a.userData.s)
       gls.forEach((el, i) => {
         const g = order[i]
@@ -749,9 +825,14 @@ export function TimeSpiral3D({ trades, dayLabel, size, focus, busy, onOpenTrade,
       canvas.removeEventListener('pointerleave', onLeave)
       canvas.removeEventListener('wheel', onWheel)
       host.removeEventListener('spiral-back', backTo)
+      dead = true
+      blobs.forEach((u) => URL.revokeObjectURL(u))
       clearDays()
       ;[...gls, tip].forEach((el) => el.remove())
-      for (const g of gems) g.material.dispose()
+      for (const g of gems) {
+        g.userData.face.dispose()
+        g.userData.edge.dispose()
+      }
       for (const f of flashes) f.m.material.dispose()
       for (const tr of trails) tr.m.material.dispose()
       spineGeo?.dispose()
