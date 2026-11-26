@@ -28,7 +28,7 @@ import { errorCodeOf, type Connection } from './api'
 const TradeBrain3D = lazy(() => import('@/components/fx/TradeBrain3D').then((m) => ({ default: m.TradeBrain3D })))
 
 /** сколько последних сделок на спирали (больше — мелко и тяжело); остальные — в итоге справа */
-const MAX_NODES = 60
+const MAX_NODES = 5000
 
 /** диапазон спирали (владелец 25.11.2026: «выбирать диапазон — неделя, месяц и т. д.»): дней назад от сейчас, 0 — всё время */
 const RANGES = [7, 30, 90, 365, 0] as const
@@ -72,7 +72,7 @@ export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }
   // сделки за выбранный диапазон (по закрытию), в поясе пользователя
   const { data: profile } = useProfile()
   const tz = profile?.timezone || browserTimeZone()
-  const [days, setDays] = useState<RangeDays>(30)
+  const [days, setDays] = useState<RangeDays>(0) // владелец 26.11.2026: «все сделки за всё время»
   const range = useMemo(() => ({ from: days ? new Date(Date.now() - days * 86_400_000).toISOString() : null, to: null }), [days])
   const rangeName = (d: RangeDays) => (d === 7 ? c.planet.ranges.week : d === 30 ? c.planet.ranges.month : d === 90 ? c.planet.ranges.quarter : d === 365 ? c.planet.ranges.year : c.planet.ranges.all)
   const { data: trades } = useTrades(range)

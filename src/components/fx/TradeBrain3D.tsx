@@ -1,33 +1,32 @@
 /**
- * «Мозг из сделок» на странице «Биржи» (владелец 26.11.2026: «а можем сделать это как нейронные связки» → вариант «Мозг из сделок»;
- * до этого — «Спираль времени» с жетонами-монетками, а ещё раньше планетарий с глазом и «Башни бирж»).
+ * «Мозг из сделок» на странице «Биржи» (владелец 26.11.2026: «как нейронные связки» → «Мозг из сделок», «хочу зайти в этот мозг и клацать внутри»;
+ * вторая версия — владелец: «слишком большие токены», «не нравятся фишки», «все сделки за всё время» и «анимация, как строятся нейроны при выгрузке сделок с биржи»).
  *
- * Каждая сделка — нейрон: жетон с аватаркой монеты (логотип из «Портфеля», обводка — плюс --color-up / минус --color-down, крупнее — больше сумма),
- * жетоны крутятся вокруг своей оси, как монетки, соседние — в разные стороны (владелец 25.11.2026).
- * Все вместе — облако-шар (чуть вытянутое, как мозг); место нейрона постоянное (из id сделки), ближайшие соединены тонкими нитями.
- *  - по нитям всё время бегут редкие импульсы; новая сделка (при открытии — последние 8 по одной, потом — от синхронизации) «зажигается»:
- *    кольцо, импульсы к соседям и дальше — волна по сети;
- *  - «Обновить» в углу сцены — волна импульсов от центра наружу;
- *  - весь «мозг» медленно вращается сам (владелец: «сама по себе крутилась»); потянуть — повернуть с инерцией; сцена чуть наклоняется за мышью;
- *  - наведение на нейрон — карточка сделки (целиком в сцене), его нити подсвечены, остальное тише, вращение замирает; клик — страница сделки;
- *  - наведение на биржу в списке рядом (focus) — горят только её сделки.
- * Палец: касание — карточка, второе — сделка; тянуть вбок — поворот, вертикальная прокрутка страницы не ломается. Колесо мыши страницу не перехватывает.
- * Клавиатура и дикторы — скрытые кнопки последних сделок (data-brain-trade): фокус = наведение, Enter — сделка.
- * «Уменьшить движение» — без вращения, импульсов и появления. Вне экрана и в фоновой вкладке не рисуем; пиксели ≤ 1,5×;
- * сцена строится, когда страница свободна; без видеокарты (SwiftShader / llvmpipe) — пиксели 1×, реже кадры, меньше импульсов.
- * Цвета — токены theme.css, перекрашивается при смене темы / палитры.
+ * Каждая сделка — маленький светящийся нейрон (плюс --color-up / минус --color-down, чуть крупнее — больше сумма), без жетонов и картинок в сцене.
+ * Нейроны одной монеты собраны в своё «полушарие» (центр — из тикера, место нейрона — из id сделки: при новых сделках остальные не прыгают).
+ * Связи: каждая сделка — с предыдущей сделкой (нить времени) и с предыдущей сделкой той же монеты.
+ *  - при открытии сеть «вырастает» по порядку сделок: нейрон загорается, к нему тянется связь, искра бежит по новой нити;
+ *  - сделки, пришедшие с биржи (синхронизация, «Обновить»), достраивают сеть так же — по одной, с искрой;
+ *  - всё время по связям бегут редкие импульсы; мозг медленно вращается сам; потянуть — повернуть с инерцией;
+ *  - наведение на нейрон — карточка сделки (монета, сумма, биржа, время), его связи подсвечены, остальное тише, вращение замирает; клик — страница сделки;
+ *  - подписи монет у самых больших «полушарий»; наведение на биржу в списке рядом (focus) — горят только её сделки;
+ *  - «Войти внутрь» / колесо мыши вверх / два пальца — камера в центр, шире угол обзора, тянуть — осматриваться и нажимать на сделки вокруг.
+ * Тысячи сделок: нейроны — один InstancedMesh, свечение — Points, связи — одни LineSegments; матрицы и цвета обновляются только когда что-то меняется.
+ * Палец: касание — карточка, второе — сделка. Клавиатура и дикторы — скрытые кнопки последних сделок (data-brain-trade): фокус = наведение, Enter — сделка.
+ * «Уменьшить движение» — сеть сразу целиком, без вращения и импульсов. Вне экрана и в фоновой вкладке не рисуем; пиксели ≤ 1,5×;
+ * сцена строится, когда страница свободна; без видеокарты (SwiftShader / llvmpipe) — пиксели 1×, реже кадры, меньше импульсов. Цвета — токены theme.css.
  */
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { exchangeLogoUrl } from '@/components/ExchangeLogo'
-import { formatPnl, formatPnlShort } from '@/lib/format'
+import { formatPnl } from '@/lib/format'
 
 export type BrainTrade = {
   id: string
   exchange: string
   /** название биржи для подсказки */
   exName: string
-  /** коротко для подписи у жетона: BTC */
+  /** монета: BTC — по ней «полушария» и подписи */
   label: string
   /** полностью для подсказки: BTCUSDT */
   symbol: string
@@ -36,7 +35,7 @@ export type BrainTrade = {
   pnl: number
   /** «сегодня, 14:05» — для подсказки */
   when: string
-  /** иконка монеты (наш Storage coin-icons); нет — буквы монеты */
+  /** иконка монеты для карточки сделки; нет — без неё */
   icon: string | null
 }
 
@@ -72,29 +71,24 @@ const readPalette = () => ({
   surface: tokenColor('--color-surface'),
   base: tokenColor('--color-surface-2'),
   muted: tokenColor('--color-muted'),
+  text: tokenColor('--color-text'),
   primary: tokenColor('--color-primary'),
   light: document.documentElement.dataset.theme === 'light',
 })
 const reduced = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches
 
 /** радиус облака и его вытянутость (как мозг: шире, чем выше) */
-const R = 2.35
-const SHAPE = new THREE.Vector3(1.3, 0.92, 1.05)
-/** сколько ближайших соседей у нейрона */
-const LINKS = 3
-const REPLAY = 8
-const CAM_D = 11
-/** камера внутри «мозга» (владелец 26.11.2026: «хочу зайти в этот мозг и клацать внутри на разные сделки») */
+const R = 2.4
+const SHAPE = new THREE.Vector3(1.32, 0.9, 1.05)
+const CAM_D = 10.2
+/** камера внутри «мозга» */
 const CAM_IN = 0.9
-/** самовращение, рад/с — оборот примерно за 45 с */
-const AUTO_SPIN = 0.14
-/** толщина жетона (доля диаметра) */
-const COIN_T = 0.07
-const Y_AXIS = new THREE.Vector3(0, 1, 0)
+/** самовращение, рад/с — оборот примерно за 50 с */
+const AUTO_SPIN = 0.12
 const easeOut = (k: number) => 1 - Math.pow(1 - k, 3)
-const spring = (k: number) => 1 - Math.cos(k * Math.PI * 3.2) * Math.exp(-k * 6)
+const easeInOut = (k: number) => (k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2)
 
-/** постоянное место нейрона — из id сделки (при смене диапазона и новых сделках остальные не прыгают) */
+/** хеш строки → [0, 1) */
 function hash(str: string, seed: number): number {
   let h = 2166136261 ^ seed
   for (let i = 0; i < str.length; i++) {
@@ -106,31 +100,25 @@ function hash(str: string, seed: number): number {
   h ^= h >>> 15
   return (h >>> 0) / 4294967296
 }
-function placeOf(id: string, out: THREE.Vector3): THREE.Vector3 {
-  const u = hash(id, 1) * 2 - 1
-  const phi = hash(id, 2) * Math.PI * 2
-  const r = R * (0.42 + 0.58 * Math.cbrt(hash(id, 3)))
+const dirOf = (key: string, s1: number, s2: number, out: THREE.Vector3) => {
+  const u = hash(key, s1) * 2 - 1
+  const phi = hash(key, s2) * Math.PI * 2
   const s = Math.sqrt(1 - u * u)
-  return out.set(s * Math.cos(phi), u, s * Math.sin(phi)).multiplyScalar(r).multiply(SHAPE)
+  return out.set(s * Math.cos(phi), u, s * Math.sin(phi))
 }
-
-/** нейрон: две стороны с иконкой + ребро цвета результата; крутится вокруг своей оси, как монетка */
-type Node = THREE.Group & {
-  userData: {
-    tr: BrainTrade
-    i: number
-    size: number
-    /** grow — появление при открытии (t0 — когда начать), arrive — «зажглась» новая сделка, still — стоит, wait — ждёт своей очереди */
-    mode: 'grow' | 'arrive' | 'still' | 'wait'
-    t0: number
-    f: number
-    hs: number
-    spin: number
-    ang: number
-    lit: boolean
-    face: THREE.MeshBasicMaterial
-    edge: THREE.MeshBasicMaterial
-  }
+/** центр «доли» монеты: доли ровно по сфере (точки Фибоначчи) в порядке появления монет; больше 30 монет — вторым, внутренним слоем */
+function lobeCenter(c: number, total: number, out: THREE.Vector3): THREE.Vector3 {
+  const slots = Math.max(6, Math.min(30, total))
+  const k = c % slots
+  const y = 1 - (2 * (k + 0.5)) / slots
+  const r = Math.sqrt(1 - y * y)
+  const phi = k * 2.399963 // золотой угол
+  return out.set(r * Math.cos(phi), y, r * Math.sin(phi)).multiplyScalar(R * (c < slots ? 0.72 : 0.42)).multiply(SHAPE)
+}
+/** место нейрона: центр доли своей монеты + разброс по id сделки (плотнее к центру доли) */
+function placeOf(tr: BrainTrade, center: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
+  const off = dirOf(tr.id, 1, 2, new THREE.Vector3()).multiplyScalar(R * 0.3 * Math.pow(hash(tr.id, 3), 0.6))
+  return out.copy(center).add(off.multiply(SHAPE))
 }
 
 export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh, labels, onFail }: Props) {
@@ -149,7 +137,7 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
   useEffect(() => {
     const host = wrap.current
     if (!host) return
-    // сцену строим, когда страница свободна (не мешаем подключению биржи, загрузке списков): на слабом процессоре сборка шейдеров — до секунды
+    // сцену строим, когда страница свободна (не мешаем подключению биржи, загрузке списков)
     let cancelled = false
     let stop: (() => void) | undefined
     const idle = window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 300))
@@ -194,12 +182,11 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
     const scene = new THREE.Scene()
     const fog = new THREE.Fog(C.surface, 8.5, 15)
     scene.fog = fog
-    const camera = new THREE.PerspectiveCamera(30, W / size, 0.1, 60)
-    const LOOK = new THREE.Vector3(0, 0, 0)
+    const camera = new THREE.PerspectiveCamera(30, W / size, 0.05, 60)
     const brain = new THREE.Group()
     scene.add(brain)
 
-    // HTML поверх сцены: подписи последних сделок и карточка сделки
+    // HTML поверх сцены: подписи «полушарий» и карточка сделки
     const mk = (cls: string) => {
       const el = document.createElement('div')
       el.className = cls
@@ -207,300 +194,346 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
       host.appendChild(el)
       return el
     }
-    const gls = Array.from({ length: small ? 2 : 4 }, () =>
-      mk('pointer-events-none absolute left-0 top-0 z-[2] flex items-baseline gap-1.5 whitespace-nowrap text-xs font-semibold transition-opacity duration-300'),
+    const clusterEls = Array.from({ length: small ? 3 : 6 }, () =>
+      mk('pointer-events-none absolute left-0 top-0 z-[2] whitespace-nowrap rounded-md bg-surface/70 px-1.5 py-0.5 text-xs font-semibold text-muted transition-opacity duration-300'),
     )
     const tip = mk('pointer-events-none absolute left-0 top-0 z-[5] whitespace-nowrap rounded-xl border border-border bg-surface px-3 py-2.5 text-sm opacity-0 shadow-lg transition-opacity duration-150')
     tip.dataset.brainTip = ''
 
-    // ---------- жетоны с аватаркой монеты ----------
-    let nodes: Node[] = []
-    let maxAbs = 1
-    const faceGeo = track(new THREE.CircleGeometry(0.5, 48))
-    const edgeGeo = track(new THREE.CylinderGeometry(0.5, 0.5, COIN_T, 48, 1, true))
-    edgeGeo.rotateX(Math.PI / 2)
-    const faceCam = new THREE.Quaternion()
-    const spinQ = new THREE.Quaternion()
-    const sizeOf = (pnl: number) => 0.3 + 0.18 * Math.sqrt(Math.min(1, Math.abs(pnl) / maxAbs))
-    const TEX = 128
-    type Tok = { cv: HTMLCanvasElement; tex: THREE.CanvasTexture; img: HTMLImageElement | null; up: boolean; label: string }
-    const toks = new Map<string, Tok>()
-    const css = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#888'
-    const drawTok = (t: Tok) => {
-      const x = t.cv.getContext('2d')!
-      const c = TEX / 2
-      x.clearRect(0, 0, TEX, TEX)
-      x.beginPath()
-      x.arc(c, c, c - 2, 0, Math.PI * 2)
-      x.fillStyle = css(t.up ? '--color-up' : '--color-down')
-      x.fill()
-      x.beginPath()
-      x.arc(c, c, c - 11, 0, Math.PI * 2)
-      x.fillStyle = css('--color-surface-2')
-      x.fill()
-      if (t.img) {
-        x.save()
-        x.beginPath()
-        x.arc(c, c, c - 13, 0, Math.PI * 2)
-        x.clip()
-        x.drawImage(t.img, 13, 13, TEX - 26, TEX - 26)
-        x.restore()
-      } else {
-        x.fillStyle = css('--color-muted')
-        x.font = `700 ${t.label.length > 3 ? 28 : 34}px ${css('--font-mono') || 'monospace'}`
-        x.textAlign = 'center'
-        x.textBaseline = 'middle'
-        x.fillText(t.label.slice(0, 4), c, c + 2)
-      }
-      t.tex.needsUpdate = true
-    }
-    // иконку берём через fetch → blob: картинка своя (холст не «пачкается», WebGL её примет), SVG без размеров получает 128×128
-    let dead = false
-    const blobs: string[] = []
-    const icons = new Map<string, Promise<HTMLImageElement>>()
-    const loadIcon = (url: string) => {
-      let p = icons.get(url)
-      if (!p) {
-        p = fetch(url)
-          .then((r) => {
-            if (!r.ok) throw new Error(String(r.status))
-            const svg = (r.headers.get('content-type') ?? '').includes('svg') || url.endsWith('.svg')
-            return svg
-              ? r.text().then((txt) => new Blob([/<svg[^>]*\swidth=/.test(txt) ? txt : txt.replace('<svg', '<svg width="128" height="128"')], { type: 'image/svg+xml' }))
-              : r.blob()
-          })
-          .then(
-            (b) =>
-              new Promise<HTMLImageElement>((ok, fail) => {
-                const src = URL.createObjectURL(b)
-                blobs.push(src)
-                const img = new Image()
-                img.onload = () => ok(img)
-                img.onerror = fail
-                img.src = src
-              }),
-          )
-        icons.set(url, p)
-      }
-      return p
-    }
-    const tokenFor = (tr: BrainTrade): Tok => {
-      const up = tr.pnl >= 0
-      const key = `${tr.icon ?? tr.label}|${up ? 1 : 0}`
-      let t = toks.get(key)
-      if (t) return t
+    // ---------- нейроны: ядро — InstancedMesh, свечение — Points; связи внутри «полушария» и «аксоны» между ними ----------
+    const nodeGeo = track(new THREE.IcosahedronGeometry(1, 1))
+    const nodeMat = track(new THREE.MeshBasicMaterial())
+    let cap = 0
+    let inst: THREE.InstancedMesh | null = null
+    const glowTex = (() => {
       const cv = document.createElement('canvas')
-      cv.width = cv.height = TEX
-      const tex = track(new THREE.CanvasTexture(cv))
-      tex.colorSpace = THREE.SRGBColorSpace
-      t = { cv, tex, img: null, up, label: tr.label }
-      toks.set(key, t)
-      drawTok(t)
-      if (tr.icon) {
-        const tk = t
-        loadIcon(tr.icon)
-          .then((img) => {
-            if (dead) return
-            tk.img = img
-            drawTok(tk)
-          })
-          .catch(() => {}) // нет иконки / сеть — остаются буквы тикера
-      }
-      return t
-    }
-
-    // ---------- нити между соседями ----------
-    const linkMat = track(new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.42, depthWrite: false }))
+      cv.width = cv.height = 64
+      const x = cv.getContext('2d')!
+      const g = x.createRadialGradient(32, 32, 0, 32, 32, 32)
+      g.addColorStop(0, 'rgba(255,255,255,0.9)')
+      g.addColorStop(0.18, 'rgba(255,255,255,0.35)')
+      g.addColorStop(0.5, 'rgba(255,255,255,0.08)')
+      g.addColorStop(1, 'rgba(255,255,255,0)')
+      x.fillStyle = g
+      x.fillRect(0, 0, 64, 64)
+      return track(new THREE.CanvasTexture(cv))
+    })()
+    // свечение: на тёмной — сложением света (светится), на светлой — обычной прозрачностью (иначе не видно)
+    const glowMat = track(new THREE.PointsMaterial({ size: 0.22, map: glowTex, vertexColors: true, transparent: true, depthWrite: false, sizeAttenuation: true }))
+    const glow = new THREE.Points(new THREE.BufferGeometry(), glowMat)
+    brain.add(glow)
+    // ядра «полушарий» (монет) — крупное мягкое свечение цвета кнопок
+    const somaMat = track(new THREE.PointsMaterial({ size: 0.9, map: glowTex, transparent: true, depthWrite: false, sizeAttenuation: true }))
+    const somas = new THREE.Points(new THREE.BufferGeometry(), somaMat)
+    brain.add(somas)
+    const linkMat = track(new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.5, depthWrite: false }))
     const links = new THREE.LineSegments(new THREE.BufferGeometry(), linkMat)
     brain.add(links)
-    const hlMat = track(new THREE.LineBasicMaterial({ color: C.primary, transparent: true, opacity: 0.9, depthWrite: false }))
+    const axonMat = track(new THREE.LineBasicMaterial({ transparent: true, opacity: 0.28, depthWrite: false }))
+    const axons = new THREE.LineSegments(new THREE.BufferGeometry(), axonMat)
+    brain.add(axons)
+    const hlMat = track(new THREE.LineBasicMaterial({ transparent: true, opacity: 0.95, depthWrite: false }))
     const hl = new THREE.LineSegments(new THREE.BufferGeometry(), hlMat)
     brain.add(hl)
-    /** соседи каждого видимого нейрона (по индексу в nodes) */
-    let nbr: number[][] = []
-    let pairs: [number, number][] = []
-    const shown = (n: Node) => n.userData.mode !== 'wait'
-    const rebuildLinks = () => {
-      const vis = nodes.map((n, i) => (shown(n) ? i : -1)).filter((i) => i >= 0)
-      nbr = nodes.map(() => [])
-      const seenPair = new Set<string>()
-      pairs = []
-      for (const i of vis) {
-        const pi = nodes[i].position
-        const near = vis
-          .filter((j) => j !== i)
-          .map((j) => ({ j, d: pi.distanceToSquared(nodes[j].position) }))
-          .sort((a, b) => a.d - b.d)
-          .slice(0, LINKS)
-        for (const { j } of near) {
-          const k = i < j ? `${i}-${j}` : `${j}-${i}`
-          if (seenPair.has(k)) continue
-          seenPair.add(k)
-          pairs.push([i, j])
-          nbr[i].push(j)
-          nbr[j].push(i)
+    const blendFor = () => (C.light ? THREE.NormalBlending : THREE.AdditiveBlending)
+    const paintMats = () => {
+      glowMat.blending = somaMat.blending = linkMat.blending = axonMat.blending = blendFor()
+      glowMat.opacity = C.light ? 0.35 : 0.85
+      somaMat.opacity = C.light ? 0.3 : 0.45
+      somaMat.color.copy(C.primary)
+      axonMat.color.copy(C.primary)
+      axonMat.opacity = C.light ? 0.4 : 0.42
+      hlMat.color.copy(C.primary)
+      for (const m of [glowMat, somaMat, linkMat, axonMat]) m.needsUpdate = true
+    }
+
+    type N = { tr: BrainTrade; p: THREE.Vector3; r: number; c: number; nb: number[]; next: number[] }
+    type Cl = { label: string; first: number; n: number; p: THREE.Vector3; members: number[] }
+    let nodes: N[] = []
+    let cls: Cl[] = []
+    let maxAbs = 1
+    /** сколько связей у первых i нейронов (для drawRange во время роста) */
+    let edgeAt: number[] = [0]
+    let edgeList: [number, number][] = []
+    /** «аксоны» между ядрами: появляются, когда появились оба «полушария» */
+    let axonList: { a: number; b: number; at: number; pts: THREE.Vector3[] }[] = []
+    let axonShown = -1
+    const radiusOf = (pnl: number) => 0.016 + 0.026 * Math.sqrt(Math.min(1, Math.abs(pnl) / maxAbs))
+
+    // рост сети: grown — сколько нейронов уже «выросло» (дробное), growTo — до скольких растём, speed — нейронов в секунду
+    let grown = 0
+    let growTo = 0
+    let speed = 1
+    let shownCount = -1
+    type Spark = { from: THREE.Vector3; to: THREE.Vector3; t0: number; dur: number; m: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>; path?: THREE.Vector3[] }
+    const sparks: Spark[] = []
+    const sparkGeo = track(new THREE.SphereGeometry(0.028, 10, 8))
+    const MAX_SPARKS = soft ? 24 : 90
+    const addSpark = (from: THREE.Vector3, to: THREE.Vector3, at: number, color: THREE.Color, path?: THREE.Vector3[]) => {
+      if (still || sparks.length >= MAX_SPARKS) return
+      const m = new THREE.Mesh(sparkGeo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0, depthWrite: false, fog: false, blending: blendFor() }))
+      brain.add(m)
+      sparks.push({ from, to, t0: at, dur: (path ? 900 : 380) + from.distanceTo(to) * (path ? 220 : 160), m, path })
+    }
+    const spark = (a: number, b: number, at: number, color?: THREE.Color) => {
+      if (!nodes[a] || !nodes[b]) return
+      addSpark(nodes[a].p, nodes[b].p, at, color ?? C.primary)
+    }
+    const axonSpark = (k: number, at: number, rev = false) => {
+      const ax = axonList[k]
+      if (!ax) return
+      const path = rev ? [...ax.pts].reverse() : ax.pts
+      addSpark(path[0], path[path.length - 1], at, C.primary, path)
+    }
+
+    const mtx = new THREE.Matrix4()
+    const qI = new THREE.Quaternion()
+    const sv = new THREE.Vector3()
+    const col = new THREE.Color()
+    let dimFor: (i: number) => number = () => 1
+    /** ядро нейрона: цвет результата, смягчённый к цвету текста (сигнал виден, но без «ёлочной гирлянды»); не в фокусе — к фону */
+    const colorOf = (i: number, out: THREE.Color) =>
+      out
+        .copy(nodes[i].tr.pnl >= 0 ? C.up : C.down)
+        .lerp(C.text, C.light ? 0.18 : 0.28)
+        .lerp(C.surface, (1 - dimFor(i)) * 0.85)
+    /** свечение — чистый цвет результата, тише */
+    const glowOf = (i: number, out: THREE.Color) => out.copy(nodes[i].tr.pnl >= 0 ? C.up : C.down).lerp(C.surface, (1 - dimFor(i)) * 0.92)
+    let hoverI = -1
+    let nearFade = 0
+    const camLocal = new THREE.Vector3()
+    /** размер нейрона: по сумме, пока растёт — с «вдохом», под мышью — крупнее; внутри мозга ближние к камере тают */
+    const scaleAt = (i: number) => {
+      if (i >= grown) return 0
+      const k = Math.min(1, (grown - i) / 6)
+      const pop = k < 1 ? easeOut(k) * (1 + Math.sin(k * Math.PI) * 0.8) : 1
+      let s = nodes[i].r * pop * (i === hoverI ? 2.4 : 1)
+      if (nearFade > 0) {
+        const d = nodes[i].p.distanceTo(camLocal)
+        s *= 1 - nearFade * (1 - Math.min(1, Math.max(0, (d - 0.35) / 1.1)))
+      }
+      return s
+    }
+    const writeNode = (i: number) => {
+      if (!inst) return
+      const s = scaleAt(i)
+      mtx.compose(nodes[i].p, qI, sv.set(s, s, s))
+      inst.setMatrixAt(i, mtx)
+    }
+    const recolorAll = () => {
+      if (!inst) return
+      const gc = glow.geometry.getAttribute('color') as THREE.BufferAttribute | undefined
+      for (let i = 0; i < nodes.length; i++) {
+        inst.setColorAt(i, colorOf(i, col))
+        if (gc) {
+          glowOf(i, col)
+          gc.setXYZ(i, col.r, col.g, col.b)
         }
       }
-      const pos = new Float32Array(pairs.length * 6)
-      const col = new Float32Array(pairs.length * 6)
-      const tmp = new THREE.Color()
-      pairs.forEach(([a, b], k) => {
-        nodes[a].position.toArray(pos, k * 6)
-        nodes[b].position.toArray(pos, k * 6 + 3)
-        // нить — цветом своих концов, приглушённым к серому: плюс к плюсу — зеленоватая, минус к минусу — красноватая
-        tmp.copy(nodes[a].userData.tr.pnl >= 0 ? C.up : C.down).lerp(C.muted, 0.55)
-        tmp.toArray(col, k * 6)
-        tmp.copy(nodes[b].userData.tr.pnl >= 0 ? C.up : C.down).lerp(C.muted, 0.55)
-        tmp.toArray(col, k * 6 + 3)
+      if (inst.instanceColor) inst.instanceColor.needsUpdate = true
+      if (gc) gc.needsUpdate = true
+      // связи — цветом концов, сильно приглушённым к цвету кнопок
+      const lc = links.geometry.getAttribute('color') as THREE.BufferAttribute | undefined
+      if (lc) {
+        const mix = new THREE.Color()
+        edgeList.forEach(([a, b], k) => {
+          glowOf(a, col).lerp(C.primary, 0.55)
+          mix.copy(col)
+          lc.setXYZ(k * 2, mix.r, mix.g, mix.b)
+          glowOf(b, col).lerp(C.primary, 0.55)
+          lc.setXYZ(k * 2 + 1, col.r, col.g, col.b)
+        })
+        lc.needsUpdate = true
+      }
+    }
+
+    /** собрать всю сеть заново (сделки поменялись) */
+    const build = (list: BrainTrade[]) => {
+      maxAbs = Math.max(1, ...list.map((x) => Math.abs(x.pnl)))
+      const byLabel = new Map<string, number>()
+      cls = []
+      const total = new Set(list.map((x) => x.label)).size
+      nodes = list.map((tr, i) => {
+        let c = byLabel.get(tr.label)
+        if (c === undefined) {
+          c = cls.length
+          byLabel.set(tr.label, c)
+          cls.push({ label: tr.label, first: i, n: 0, p: lobeCenter(c, total, new THREE.Vector3()), members: [] })
+        }
+        const cl = cls[c]
+        // связи — с двумя ближайшими более ранними сделками той же монеты (дендриты), первая — с ядром «полушария»
+        const p = placeOf(tr, cl.p, new THREE.Vector3())
+        const cand = cl.members.slice(-160)
+        const nb = cand
+          .map((j) => ({ j, d: nodes[j].p.distanceToSquared(p) }))
+          .sort((x, y) => x.d - y.d)
+          .slice(0, 2)
+          .map((x) => x.j)
+        const n: N = { tr, p, r: radiusOf(tr.pnl), c, nb, next: [] }
+        cl.members.push(i)
+        cl.n++
+        nodes[i] = n
+        return n
+      })
+      edgeList = []
+      edgeAt = [0]
+      nodes.forEach((n, i) => {
+        for (const j of n.nb) {
+          edgeList.push([j, i])
+          nodes[j].next.push(i)
+        }
+        edgeAt.push(edgeList.length)
+      })
+      // аксоны: каждое ядро — с двумя ближайшими другими, дугой через глубину мозга
+      axonList = []
+      const seenAx = new Set<string>()
+      cls.forEach((a, ia) => {
+        cls
+          .map((b, ib) => ({ ib, d: a.p.distanceToSquared(b.p) }))
+          .filter((x) => x.ib !== ia)
+          .sort((x, y) => x.d - y.d)
+          .slice(0, 2)
+          .forEach(({ ib }) => {
+            const key = ia < ib ? `${ia}-${ib}` : `${ib}-${ia}`
+            if (seenAx.has(key)) return
+            seenAx.add(key)
+            const b = cls[ib]
+            const ctrl = a.p.clone().add(b.p).multiplyScalar(0.5 * 0.35)
+            const curve = new THREE.QuadraticBezierCurve3(a.p.clone(), ctrl, b.p.clone())
+            axonList.push({ a: ia, b: ib, at: Math.max(a.first, b.first), pts: curve.getPoints(18) })
+          })
+      })
+      axonList.sort((x, y) => x.at - y.at)
+      axonShown = -1
+      // InstancedMesh — с запасом, чтобы не пересоздавать на каждую новую сделку
+      if (!inst || nodes.length > cap) {
+        if (inst) {
+          brain.remove(inst)
+          inst.dispose()
+        }
+        cap = Math.max(64, Math.ceil(nodes.length * 1.25))
+        inst = new THREE.InstancedMesh(nodeGeo, nodeMat, cap)
+        inst.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+        inst.frustumCulled = false
+        brain.add(inst)
+      }
+      inst.count = nodes.length
+      const gp = new Float32Array(nodes.length * 3)
+      nodes.forEach((n, i) => n.p.toArray(gp, i * 3))
+      glow.geometry.dispose()
+      const gg = new THREE.BufferGeometry()
+      gg.setAttribute('position', new THREE.BufferAttribute(gp, 3))
+      gg.setAttribute('color', new THREE.BufferAttribute(new Float32Array(nodes.length * 3), 3))
+      glow.geometry = gg
+      const lp = new Float32Array(edgeList.length * 6)
+      edgeList.forEach(([a, b], k) => {
+        nodes[a].p.toArray(lp, k * 6)
+        nodes[b].p.toArray(lp, k * 6 + 3)
       })
       links.geometry.dispose()
-      const g = new THREE.BufferGeometry()
-      g.setAttribute('position', new THREE.BufferAttribute(pos, 3))
-      g.setAttribute('color', new THREE.BufferAttribute(col, 3))
-      links.geometry = g
-      hlFor = -1
+      const lg = new THREE.BufferGeometry()
+      lg.setAttribute('position', new THREE.BufferAttribute(lp, 3))
+      lg.setAttribute('color', new THREE.BufferAttribute(new Float32Array(edgeList.length * 6), 3))
+      links.geometry = lg
+      // ядра — в порядке появления «полушарий» (cls уже по первой сделке): drawRange по числу появившихся
+      const sp = new Float32Array(cls.length * 3)
+      cls.forEach((c, k) => c.p.toArray(sp, k * 3))
+      somas.geometry.dispose()
+      const sg = new THREE.BufferGeometry()
+      sg.setAttribute('position', new THREE.BufferAttribute(sp, 3))
+      somas.geometry = sg
+      hlFor = -2
+      recolorAll()
+      for (let i = 0; i < nodes.length; i++) writeNode(i)
+      inst.instanceMatrix.needsUpdate = true
+      buildClusters()
+      host.dataset.brainCount = String(nodes.length)
     }
-    let hlFor = -1
+    /** аксоны, у которых уже появились оба «полушария» */
+    const showAxons = (g: number, now: number) => {
+      const n = axonList.filter((x) => x.at < g).length
+      if (n === axonShown) return
+      axonShown = n
+      const arr: number[] = []
+      for (let k = 0; k < n; k++) {
+        const p = axonList[k].pts
+        for (let i = 0; i < p.length - 1; i++) arr.push(p[i].x, p[i].y, p[i].z, p[i + 1].x, p[i + 1].y, p[i + 1].z)
+      }
+      axons.geometry.dispose()
+      const g2 = new THREE.BufferGeometry()
+      g2.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3))
+      axons.geometry = g2
+      // только что появившийся аксон — искра по нему
+      if (n > 0 && grown < growTo) axonSpark(n - 1, now)
+    }
+
+    // подписи у самых больших «полушарий»
+    let clusters: { label: string; n: number; c: THREE.Vector3; first: number }[] = []
+    const buildClusters = () => {
+      clusters = [...cls]
+        .sort((a, b) => b.n - a.n)
+        .slice(0, clusterEls.length)
+        .map((c) => ({ label: c.label, n: c.n, c: c.p, first: c.first }))
+      clusterEls.forEach((el, k) => {
+        const c = clusters[k]
+        el.textContent = c ? `${c.label} · ${c.n}` : ''
+      })
+    }
+
+    // подсветка связей нейрона под мышью
+    let hlFor = -2
     const setHighlight = (i: number) => {
       if (i === hlFor) return
       hlFor = i
       const pts: number[] = []
-      if (i >= 0)
-        for (const j of nbr[i] ?? []) {
-          pts.push(...nodes[i].position.toArray(), ...nodes[j].position.toArray())
-        }
+      if (i >= 0) {
+        const n = nodes[i]
+        for (const j of [...n.nb, ...n.next]) if (j >= 0 && j < grown) pts.push(...n.p.toArray(), ...nodes[j].p.toArray())
+        // и путь к ядру своей монеты
+        pts.push(...n.p.toArray(), ...cls[n.c].p.toArray())
+      }
       hl.geometry.dispose()
       const g = new THREE.BufferGeometry()
       g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3))
       hl.geometry = g
     }
 
-    // ---------- импульсы по нитям ----------
-    const pulseGeo = track(new THREE.SphereGeometry(0.045, 10, 8))
-    type Pulse = { m: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>; a: number; b: number; t0: number; dur: number; hop: number }
-    const pulses: Pulse[] = []
-    const MAX_PULSES = soft ? 24 : 70
-    const pulse = (a: number, b: number, at: number, hop = 0, color?: THREE.Color) => {
-      if (still || pulses.length >= MAX_PULSES || !nodes[a] || !nodes[b]) return
-      const m = new THREE.Mesh(pulseGeo, new THREE.MeshBasicMaterial({ color: color ?? C.primary, transparent: true, opacity: 0, depthWrite: false, fog: false }))
-      brain.add(m)
-      pulses.push({ m, a, b, t0: at, dur: 650 + nodes[a].position.distanceTo(nodes[b].position) * 180, hop })
-    }
-    /** волна от нейрона: к соседям, потом дальше (hop — сколько ещё шагов) */
-    const wave = (i: number, at: number, hops: number) => {
-      const color = nodes[i].userData.tr.pnl >= 0 ? C.up : C.down
-      for (const j of nbr[i] ?? []) pulse(i, j, at, hops, color)
-    }
-    // кольцо при вспышке нейрона
-    const flashGeo = track(new THREE.RingGeometry(0.22, 0.232, 48))
-    const flashes: { m: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>; t0: number }[] = []
-    const flash = (n: Node, now: number) => {
-      if (still) return
-      const m = new THREE.Mesh(flashGeo, new THREE.MeshBasicMaterial({ color: C.primary, transparent: true, opacity: 0.6, depthWrite: false, fog: false }))
-      n.getWorldPosition(m.position)
-      scene.add(m)
-      flashes.push({ m, t0: now })
-    }
-
     // ---------- сделки пришли / поменялись ----------
+    let seen: string[] = []
     let first = true
-    let growUntil = 0
-    const queue: { at: number; id: string }[] = []
-    let seen = ''
     const sync = (now: number) => {
       const list = live.current.trades
-      const sig = list.map((x) => x.id + ':' + x.pnl).join('|')
-      if (sig === seen) return
-      seen = sig
-      maxAbs = Math.max(1, ...list.map((x) => Math.abs(x.pnl)))
-      const byId = new Map(nodes.map((n) => [n.userData.tr.id, n]))
-      const next: Node[] = []
-      const fresh: Node[] = []
-      list.forEach((tr, i) => {
-        let n = byId.get(tr.id)
-        if (n) byId.delete(tr.id)
-        else {
-          const face = new THREE.MeshBasicMaterial({ map: tokenFor(tr).tex, transparent: true })
-          const edge = new THREE.MeshBasicMaterial({ color: tr.pnl >= 0 ? C.up : C.down, transparent: true })
-          n = new THREE.Group() as Node
-          const front = new THREE.Mesh(faceGeo, face)
-          front.position.z = COIN_T / 2
-          const back = new THREE.Mesh(faceGeo, face)
-          back.position.z = -COIN_T / 2
-          back.rotation.y = Math.PI
-          n.add(front, back, new THREE.Mesh(edgeGeo, edge))
-          // соседние жетоны крутятся в разные стороны и с чуть разной скоростью
-          const h = hash(tr.id, 7)
-          const spin = (h < 0.5 ? 1 : -1) * (0.5 + hash(tr.id, 8) * 0.5)
-          n.userData = { tr, i, size: 0, mode: 'still', t0: now, f: 1, hs: 1, spin, ang: h * 6.28, lit: false, face, edge }
-          placeOf(tr.id, n.position)
-          n.scale.setScalar(0.0001)
-          brain.add(n)
-          fresh.push(n)
-        }
-        n.userData.tr = tr
-        n.userData.i = i
-        n.userData.size = sizeOf(tr.pnl)
-        n.userData.face.map = tokenFor(tr).tex
-        n.userData.edge.color.copy(tr.pnl >= 0 ? C.up : C.down)
-        next.push(n)
-      })
-      for (const n of byId.values()) {
-        brain.remove(n)
-        n.userData.face.dispose()
-        n.userData.edge.dispose()
-      }
-      // импульсы старых индексов больше не верны
-      for (const p of pulses) {
-        brain.remove(p.m)
-        p.m.material.dispose()
-      }
-      pulses.length = 0
-      nodes = next
-      const n = nodes.length
-      if (first) {
-        // первый показ: нейроны появляются от центра наружу; последние REPLAY — потом по одной, «зажигаясь»
-        first = false
-        const rep = still ? 0 : Math.min(REPLAY, Math.max(0, n - 4))
-        growUntil = still ? now : now + 1500
-        fresh.forEach((nd) => {
-          const u = nd.userData
-          if (u.i < n - rep) {
-            u.mode = still ? 'still' : 'grow'
-            u.t0 = now + (nd.position.length() / (R * 1.3)) * 1100
-          } else {
-            u.mode = 'wait'
-            queue.push({ at: growUntil + 400 + (u.i - (n - rep)) * 650, id: u.tr.id })
-          }
-        })
-        if (still) fresh.forEach((nd) => nd.scale.setScalar(1))
+      if (list.length === seen.length && list.every((x, i) => x.id === seen[i])) return
+      const old = seen
+      seen = list.map((x) => x.id)
+      // те же сделки + новые в конце (пришли с биржи) — достраиваем; иначе (другой диапазон) — растим заново, быстро
+      const appended = !first && old.length > 0 && old.length < list.length && old.every((id, i) => id === seen[i])
+      const before = Math.min(grown, list.length)
+      build(list)
+      if (still) {
+        grown = growTo = nodes.length
+      } else if (first || !appended) {
+        grown = 0
+        growTo = nodes.length
+        // вся сеть вырастает за 2,5–6 с, сколько бы ни было сделок
+        speed = Math.max(nodes.length / 6, Math.min(nodes.length / 2.5, 40)) || 1
       } else {
-        // новые сделки: последние (до 10) — по одной, «зажигаясь»; остальные (смена диапазона) — появляются сразу
-        const latest = fresh.filter((nd) => nd.userData.i >= n - 10)
-        let at = Math.max(now, queue.length ? queue[queue.length - 1].at + 650 : now) + (live.current.busy ? 900 : 0)
-        fresh.forEach((nd) => {
-          if (!still && latest.includes(nd) && n > 1) {
-            nd.userData.mode = 'wait'
-            queue.push({ at, id: nd.userData.tr.id })
-            at += 650
-          } else {
-            nd.userData.mode = still ? 'still' : 'grow'
-            nd.userData.t0 = now
-          }
-        })
+        grown = before
+        growTo = nodes.length
+        // пришедшие с биржи — по одной (видно, как каждая встаёт на место), много — быстрее
+        speed = Math.max(2.5, (growTo - grown) / 4)
       }
-      rebuildLinks()
-      host.dataset.brainCount = String(n)
+      first = false
+      void now
     }
 
     const recolor = () => {
       C = readPalette()
       fog.color.copy(C.surface)
-      hlMat.color.copy(C.primary)
-      for (const t of toks.values()) drawTok(t)
-      for (const nd of nodes) nd.userData.edge.color.copy(nd.userData.tr.pnl >= 0 ? C.up : C.down)
-      rebuildLinks()
+      paintMats()
+      recolorAll()
     }
+    paintMats()
     const mo = new MutationObserver(recolor)
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-palette'] })
 
@@ -514,13 +547,12 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
     let yawV = 0
     let pitch = 0
     let pitchV = 0
-    // приближение: 0 — снаружи, 1 — внутри; колесо мыши / два пальца / кнопка «Войти внутрь»
     let zoom = 0
     let zoomT = 0
     let lastInner = false
     const pts = new Map<number, { x: number; y: number }>()
     let pinch = 0
-    let hit: Node | null = null
+    let hit = -1
     const setNdc = (e: PointerEvent) => {
       const r = canvas.getBoundingClientRect()
       ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
@@ -531,7 +563,6 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
       inside = e.pointerType === 'mouse'
       if (pts.has(e.pointerId)) pts.set(e.pointerId, { x: e.clientX, y: e.clientY })
       if (pts.size === 2) {
-        // два пальца: развёл — ближе (внутрь), свёл — дальше
         const [a, b] = [...pts.values()]
         const d = Math.hypot(a.x - b.x, a.y - b.y)
         if (pinch) zoomT = Math.max(0, Math.min(1, zoomT + (d - pinch) / 260))
@@ -547,7 +578,6 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
         drag.y = e.clientY
         yawV = dx * 0.006
         yaw += yawV
-        // внутри можно осматриваться и вверх-вниз
         if (zoom > 0.3) {
           pitchV = dy * 0.004
           pitch = Math.max(-1.1, Math.min(1.1, pitch + pitchV))
@@ -567,9 +597,9 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
       drag = null
       if (!d || d.moved > 6) return
       setNdc(e)
-      const n = pick()
-      if (!n) return setSel(null)
-      const id = n.userData.tr.id
+      const i = pick()
+      if (i < 0) return setSel(null)
+      const id = nodes[i].tr.id
       // палец: первое касание — карточка, второе — сделка; мышь — сразу сделка
       if (d.type === 'mouse' || live.current.sel === id) live.current.onOpenTrade(id)
       else setSel(id)
@@ -594,10 +624,33 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
     canvas.addEventListener('wheel', onWheel, { passive: false })
     const toggle = () => (zoomT = zoomT > 0.5 ? 0 : 1)
     host.addEventListener('brain-toggle', toggle)
-    const pick = (): Node | null => {
-      ray.setFromCamera(ndc, camera)
-      const vis = nodes.filter((n) => n.scale.x > 0.05)
-      return (ray.intersectObjects(vis, true)[0]?.object.parent as Node | undefined) ?? null
+    /** нейрон под мышью: точки маленькие — ловим по экранному расстоянию до ближайшего (в пределах 14px) */
+    const pv = new THREE.Vector3()
+    const pick = (): number => {
+      if (!nodes.length) return -1
+      const mx = ((ndc.x + 1) / 2) * W
+      const my = ((1 - ndc.y) / 2) * size
+      let best = -1
+      let bestD = 14 * 14
+      let bestZ = Infinity
+      const lim = Math.min(nodes.length, Math.floor(grown))
+      for (let i = 0; i < lim; i++) {
+        pv.copy(nodes[i].p).applyMatrix4(brain.matrixWorld)
+        const z = pv.clone().applyMatrix4(camera.matrixWorldInverse).z
+        if (z > -0.05) continue // за камерой
+        pv.project(camera)
+        const dx = ((pv.x + 1) / 2) * W - mx
+        const dy = ((1 - pv.y) / 2) * size - my
+        const d = dx * dx + dy * dy
+        // ближе к камере — главнее, если почти рядом на экране
+        if (d < bestD || (d < bestD * 1.4 && -z < bestZ)) {
+          best = i
+          bestD = Math.min(bestD, d)
+          bestZ = -z
+        }
+      }
+      void ray
+      return best
     }
 
     let visible = true
@@ -605,24 +658,24 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
     io.observe(host)
 
     const v3 = new THREE.Vector3()
-    const toScreen = (o: THREE.Object3D) => {
-      o.getWorldPosition(v3).project(camera)
+    const toScreen = (p: THREE.Vector3) => {
+      v3.copy(p).applyMatrix4(brain.matrixWorld).project(camera)
       return { x: ((v3.x + 1) / 2) * W, y: ((1 - v3.y) / 2) * size }
     }
-    // перед камерой и не слишком далеко (снаружи — передняя половина облака, внутри — те, что впереди)
-    const inFront = (o: THREE.Object3D) => {
-      o.getWorldPosition(v3).applyMatrix4(camera.matrixWorldInverse)
-      return v3.z < -0.6 && v3.z > -camera.position.length() - 0.2
+    const inFront = (p: THREE.Vector3) => {
+      v3.copy(p).applyMatrix4(brain.matrixWorld).applyMatrix4(camera.matrixWorldInverse)
+      return v3.z < -0.6 && v3.z > -camera.position.length() - 0.3
     }
     let tiltX = 0
     let tiltY = 0
     let raf = 0
     let frame = 0
-    let lastNow = performance.now()
+    let lastNow = -1
     let lastTipId = ''
     let calm = false
     let wasBusy = false
     let nextAmbient = 0
+    let dimKey = ''
     const tick = (now: number) => {
       raf = requestAnimationFrame(tick)
       if (!visible || document.hidden) return
@@ -630,45 +683,59 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
       // спокойная сцена — 30 кадров/с (без видеокарты — 20), пока что-то происходит — сколько может (без видеокарты — 30)
       if (frame % (calm ? (soft ? 3 : 2) : soft ? 2 : 1)) return
       sync(now)
-      const dt = Math.min(0.05, (now - lastNow) / 1000)
+      const dt = lastNow < 0 ? 0 : Math.max(0, Math.min(0.05, (now - lastNow) / 1000))
       lastNow = now
 
-      // очередь: сделка «зажигается» — появляется, кольцо, волна импульсов по сети
-      let relink = false
-      while (queue.length && queue[0].at <= now) {
-        const q = queue.shift()!
-        const n = nodes.find((x) => x.userData.tr.id === q.id)
-        if (!n) continue
-        n.userData.mode = 'arrive'
-        n.userData.t0 = now
-        n.userData.lit = false
-        relink = true
+      // ---------- рост сети ----------
+      if (grown < growTo) {
+        const before = Math.floor(grown)
+        grown = Math.min(growTo, grown + speed * dt)
+        const after = Math.floor(grown)
+        // каждому новому нейрону — искра по его свежей связи (при быстром росте — не каждому)
+        for (let i = before; i < after; i++) {
+          const n = nodes[i]
+          if (speed < 30 || i % Math.ceil(speed / 30) === 0) {
+            const color = n.tr.pnl >= 0 ? C.up : C.down
+            // первая сделка монеты — искра от её ядра; дальше — от соседей, к которым тянется новая связь
+            if (!n.nb.length) addSpark(cls[n.c].p, n.p, now, color)
+            for (const j of n.nb) spark(j, i, now, color)
+          }
+        }
       }
-      if (relink) rebuildLinks()
-      // «Обновить» — волна от центра наружу
+      // обновляем матрицы только у тех, что ещё «дышат» после появления (и у бывшего / нового под мышью)
+      if (inst) {
+        const g = Math.floor(grown)
+        const from = Math.max(0, g - 8)
+        for (let i = from; i < Math.min(nodes.length, g + 1); i++) writeNode(i)
+        if (shownCount !== g || from < g) inst.instanceMatrix.needsUpdate = true
+        shownCount = g
+        links.geometry.setDrawRange(0, (edgeAt[Math.min(g, edgeAt.length - 1)] ?? 0) * 2)
+        glow.geometry.setDrawRange(0, g)
+        somas.geometry.setDrawRange(0, cls.filter((c) => c.first < g).length)
+        showAxons(g, now)
+      }
+
+      // «Обновить» — волна искр от первых сделок к последним
       const b = live.current.busy
-      if (b && !wasBusy && !still) {
-        const order = nodes.map((n, i) => ({ i, d: n.position.length() })).sort((x, y) => x.d - y.d)
-        for (const { i, d } of order) for (const j of nbr[i] ?? []) if (nodes[j].position.length() > d) pulse(i, j, now + d * 260, 0)
-      }
+      // «Обновить» — искры по всем аксонам от ядра к ядру, волной
+      if (b && !wasBusy && !still) axonList.forEach((_, k) => axonSpark(k, now + k * 90, k % 2 === 1))
       wasBusy = b
       // редкие импульсы всё время — сеть «живая»
-      if (!still && now > growUntil && now >= nextAmbient && pairs.length) {
-        const [a, c] = pairs[Math.floor(Math.random() * pairs.length)]
-        if (Math.random() < 0.5) pulse(a, c, now)
-        else pulse(c, a, now)
-        nextAmbient = now + (soft ? 900 : 420) + Math.random() * 500
+      if (!still && grown >= growTo && now >= nextAmbient && edgeList.length) {
+        const [a, c] = edgeList[Math.floor(Math.random() * edgeList.length)]
+        if (Math.random() < 0.5) spark(a, c, now)
+        else spark(c, a, now)
+        nextAmbient = now + (soft ? 800 : 300) + Math.random() * 400
       }
 
       if (!drag) {
         yawV *= 0.94
         yaw += yawV
         pitchV *= 0.9
-        // вращается само (внутри — медленнее); навёл на нейрон или выбрал биржу — замирает, чтобы было удобно смотреть
-        if (!still && !hit && !live.current.sel && !live.current.focus) yaw += AUTO_SPIN * dt * (1 - zoom * 0.6)
+        if (!still && hit < 0 && !live.current.sel && !live.current.focus) yaw += AUTO_SPIN * dt * (1 - zoom * 0.6)
       }
       zoom += (zoomT - zoom) * (still ? 1 : 0.07)
-      if (zoom < 0.3) pitch *= 0.92 // снаружи — обратно ровно
+      if (zoom < 0.3) pitch *= 0.92
       const inn = zoomT > 0.5
       if (inn !== lastInner) {
         lastInner = inn
@@ -681,137 +748,118 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
       tiltY += (ty - tiltY) * 0.05
       brain.rotation.y = yaw
       brain.rotation.x = pitch
-      const dist = CAM_D + (CAM_IN - CAM_D) * easeOut(zoom)
-      const el = 0.22 * (1 - zoom) + tiltX
-      camera.position.set(Math.sin(tiltY) * dist * Math.cos(el), Math.sin(el) * dist, Math.cos(tiltY) * dist * Math.cos(el))
-      camera.lookAt(LOOK)
-      // внутри — шире угол обзора (видно сделки вокруг), туман — от камеры: снаружи дальние тише, внутри — видно весь «мозг» вокруг
+      // во время первого роста камера чуть подлетает
+      const approach = growTo > 0 && !still ? 1.6 * (1 - easeInOut(Math.min(1, grown / Math.max(1, growTo)))) : 0
+      const dist = CAM_D + approach + (CAM_IN - CAM_D) * easeOut(zoom)
       const zk = easeOut(zoom)
       const fov = 30 + 42 * zk
       if (Math.abs(camera.fov - fov) > 0.01) {
         camera.fov = fov
         camera.updateProjectionMatrix()
       }
-      fog.near = dist - 2.5 + (1.5 - (dist - 2.5)) * zk
-      fog.far = dist + 4 + (9.5 - (dist + 4)) * zk
+      const el = 0.22 * (1 - zoom) + tiltX
+      camera.position.set(Math.sin(tiltY) * dist * Math.cos(el), Math.sin(el) * dist, Math.cos(tiltY) * dist * Math.cos(el))
+      camera.lookAt(0, 0, 0)
+      fog.near = dist - 2.6 + (1.5 - (dist - 2.6)) * zk
+      fog.far = dist + 4.2 + (9.5 - (dist + 4.2)) * zk
       scene.updateMatrixWorld()
-      faceCam.copy(brain.quaternion).invert().multiply(camera.quaternion)
+      // внутри: ближние к камере нейроны тают (не закрывают обзор), свечение мельче
+      glowMat.size = 0.22 * (1 - 0.45 * zk)
+      somaMat.size = 0.9 * (1 - 0.5 * zk)
+      const nf = zk > 0.02 ? zk : 0
+      if (nf || nearFade) {
+        nearFade = nf
+        camLocal.copy(camera.position)
+        brain.worldToLocal(camLocal)
+        if (inst) {
+          const lim = Math.min(nodes.length, Math.ceil(grown))
+          for (let i = 0; i < lim; i++) writeNode(i)
+          inst.instanceMatrix.needsUpdate = true
+        }
+      }
 
-      // наведение: мышь (раз в 2 кадра и при движении — сеть двигается под мышью), иначе — выбранная пальцем / с клавиатуры
-      if (drag && drag.moved > 6) hit = null
-      else if (moved || frame % 2 === 0) {
-        hit = inside ? pick() : null
+      // наведение
+      if (drag && drag.moved > 6) hit = -1
+      else if (moved || frame % 3 === 0) {
+        hit = inside ? pick() : -1
         moved = false
       }
       const selId = live.current.sel
-      const target = hit ?? (selId ? nodes.find((n) => n.userData.tr.id === selId) ?? null : null)
-      const focusEx = target ? null : live.current.focus
-      canvas.style.cursor = hit ? 'pointer' : drag ? 'grabbing' : 'grab'
-      setHighlight(target ? nodes.indexOf(target) : -1)
-      linkMat.opacity += ((target || focusEx ? 0.14 : C.light ? 0.5 : 0.42) - linkMat.opacity) * 0.15
-
-      for (const n of nodes) {
-        const u = n.userData
-        let s = u.size
-        if (u.mode === 'wait') s = 0.0001
-        else if (u.mode === 'grow') {
-          const k = (now - u.t0) / 520
-          s *= k <= 0 ? 0.0001 : Math.max(0.0001, Math.min(1.06, spring(Math.min(1, k))))
-          if (k >= 1) u.mode = 'still'
-        } else if (u.mode === 'arrive') {
-          const k = Math.min(1, (now - u.t0) / 700)
-          s *= Math.max(0.0001, spring(k)) * (1 + Math.sin(k * Math.PI) * 0.25)
-          if (!u.lit && k > 0.25) {
-            u.lit = true
-            flash(n, now)
-            wave(nodes.indexOf(n), now, 1)
-          }
-          if (k >= 1) u.mode = 'still'
-        }
-        const isHit = n === target
-        u.hs += ((isHit ? 1.35 : 1) - u.hs) * 0.2
-        n.scale.setScalar(s * u.hs)
-        // лицом к зрителю + вращение вокруг своей оси; под мышью — плавно разворачивается иконкой к тебе
-        if (isHit || still) u.ang += (Math.round(u.ang / (Math.PI * 2)) * Math.PI * 2 - u.ang) * (still ? 1 : 0.15)
-        else u.ang += u.spin * dt
-        n.quaternion.copy(faceCam).multiply(spinQ.setFromAxisAngle(Y_AXIS, u.ang))
-        const nb = target ? nbr[nodes.indexOf(target)] ?? [] : []
-        const on = focusEx ? u.tr.exchange === focusEx : !target || isHit || nb.includes(u.i) ? 1 : 0.3
-        u.f += (Number(on) - u.f) * 0.15
-        // дальние от камеры — тише, не в фокусе — ещё тише
-        const dc = n.getWorldPosition(v3).distanceTo(camera.position)
-        const depth = Math.min(1, Math.max(0, 1 - (dc - (dist - R)) / (2 * R)))
-        const op = (0.4 + 0.6 * depth) * (0.2 + 0.8 * u.f)
-        u.face.opacity = op
-        u.edge.opacity = op
+      const selI = selId ? nodes.findIndex((n) => n.tr.id === selId) : -1
+      const target = hit >= 0 ? hit : selI
+      const focusEx = target >= 0 ? null : live.current.focus
+      canvas.style.cursor = hit >= 0 ? 'pointer' : drag ? 'grabbing' : 'grab'
+      setHighlight(target)
+      if (target !== hoverI) {
+        const was = hoverI
+        hoverI = target
+        if (was >= 0 && was < nodes.length) writeNode(was)
+        if (target >= 0) writeNode(target)
+        if (inst) inst.instanceMatrix.needsUpdate = true
       }
-      // импульсы: бегут по нити, дошли — на следующем шаге волны расходятся дальше
-      for (let k = pulses.length - 1; k >= 0; k--) {
-        const p = pulses[k]
-        const kk = (now - p.t0) / p.dur
+      // фокус (нейрон под мышью и его соседи / биржа из списка) — перекрашиваем, только когда он сменился
+      const key = `${target}|${focusEx ?? ''}`
+      if (key !== dimKey) {
+        dimKey = key
+        if (target >= 0) {
+          const n = nodes[target]
+          const near = new Set([target, ...n.nb, ...n.next])
+          dimFor = (i) => (near.has(i) ? 1 : 0.35)
+        } else if (focusEx) dimFor = (i) => (nodes[i].tr.exchange === focusEx ? 1 : 0.15)
+        else dimFor = () => 1
+        recolorAll()
+      }
+      linkMat.opacity += ((target >= 0 || focusEx ? 0.12 : C.light ? 0.55 : 0.5) - linkMat.opacity) * 0.15
+
+      // искры
+      for (let k = sparks.length - 1; k >= 0; k--) {
+        const s = sparks[k]
+        const kk = (now - s.t0) / s.dur
         if (kk < 0) continue
-        if (kk >= 1 || !nodes[p.a] || !nodes[p.b]) {
-          brain.remove(p.m)
-          p.m.material.dispose()
-          pulses.splice(k, 1)
-          if (kk >= 1 && p.hop > 0 && nodes[p.b])
-            for (const j of nbr[p.b] ?? []) if (j !== p.a) pulse(p.b, j, now, p.hop - 1, p.m.material.color)
+        if (kk >= 1) {
+          brain.remove(s.m)
+          s.m.material.dispose()
+          sparks.splice(k, 1)
           continue
         }
-        p.m.position.lerpVectors(nodes[p.a].position, nodes[p.b].position, easeOut(kk))
-        p.m.material.opacity = Math.sin(Math.PI * kk) * 0.95
-      }
-      for (let k = flashes.length - 1; k >= 0; k--) {
-        const f = flashes[k]
-        const kk = (now - f.t0) / 850
-        f.m.lookAt(camera.position)
-        f.m.scale.setScalar(1 + easeOut(Math.min(1, kk)) * 1.3)
-        f.m.material.opacity = 0.6 * (1 - Math.min(1, kk))
-        if (kk > 1) {
-          scene.remove(f.m)
-          f.m.material.dispose()
-          flashes.splice(k, 1)
-        }
+        const e = easeInOut(kk)
+        if (s.path) {
+          const f = e * (s.path.length - 1)
+          const i0 = Math.min(s.path.length - 2, Math.floor(f))
+          s.m.position.lerpVectors(s.path[i0], s.path[i0 + 1], f - i0)
+        } else s.m.position.lerpVectors(s.from, s.to, e)
+        s.m.material.opacity = Math.sin(Math.PI * kk)
       }
 
       renderer.render(scene, camera)
-      calm =
-        now > growUntil + 800 && !queue.length && !flashes.length && !drag && !inside && !target && !focusEx && Math.abs(yawV) < 0.0005 && Math.abs(zoomT - zoom) < 0.01
+      calm = grown >= growTo && !sparks.length && !drag && !inside && target < 0 && !focusEx && Math.abs(yawV) < 0.0005 && Math.abs(zoomT - zoom) < 0.01
 
-      // подписи четырёх последних сделок — только у тех, что спереди (сзади слипаются)
-      const order = nodes
-        .filter((n) => n.userData.mode === 'still' && n.scale.x > 0.05 && inFront(n))
-        .sort((a, b) => b.userData.i - a.userData.i)
-      gls.forEach((el, k) => {
-        const n = order[k]
-        if (!n || target || focusEx) {
+      // подписи монет у самых больших «полушарий»
+      clusterEls.forEach((el, k) => {
+        const c = clusters[k]
+        if (!c || target >= 0 || focusEx || c.first >= grown || zoom > 0.3 || !inFront(c.c)) {
           el.style.opacity = '0'
           return
         }
-        const u = n.userData
-        const p = toScreen(n)
-        if (el.dataset.k !== u.tr.id) {
-          el.innerHTML = `<span class="${u.tr.pnl >= 0 ? 'text-up' : 'text-down'} num">${formatPnlShort(u.tr.pnl)}</span><span class="font-medium text-muted">${esc(u.tr.label)}</span>`
-          el.dataset.k = u.tr.id
-        }
-        el.style.transform = `translate(${p.x}px, ${p.y - u.size * 46 * u.hs}px) translate(-50%, -100%)`
-        el.style.opacity = String([1, 0.8, 0.62, 0.45][k] * Math.min(1, u.f))
+        const p = toScreen(c.c)
+        el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -50%)`
+        el.style.opacity = '1'
       })
-      // карточка сделки — целиком в сцене: сверху от жетона, если помещается, иначе снизу; по бокам не вылезает
-      if (target) {
-        const tr = target.userData.tr
+      // карточка сделки — целиком в сцене: сверху от нейрона, если помещается, иначе снизу; по бокам не вылезает
+      if (target >= 0) {
+        const tr = nodes[target].tr
         if (lastTipId !== tr.id) {
           lastTipId = tr.id
           const logo = exchangeLogoUrl(tr.exchange)
           tip.innerHTML =
-            `<div class="flex items-center gap-2 font-semibold">${logo ? `<img src="${logo}" alt="" class="size-[18px] rounded-[5px]">` : ''}${esc(tr.symbol)} · ${esc(tr.side)}</div>` +
+            `<div class="flex items-center gap-2 font-semibold">${tr.icon ? `<img src="${esc(tr.icon)}" alt="" class="size-[18px] rounded-full bg-surface-2">` : ''}${esc(tr.symbol)} · ${esc(tr.side)}</div>` +
             `<div class="num mt-0.5 font-bold ${tr.pnl >= 0 ? 'text-up' : 'text-down'}">${formatPnl(tr.pnl)}</div>` +
-            `<div class="mt-0.5 text-muted">${esc(tr.exName)} · ${esc(tr.when)}</div>`
+            `<div class="mt-0.5 flex items-center gap-1.5 text-muted">${logo ? `<img src="${logo}" alt="" class="size-4 rounded">` : ''}${esc(tr.exName)} · ${esc(tr.when)}</div>`
         }
-        const p = toScreen(target)
+        const p = toScreen(nodes[target].p)
         const tw = tip.offsetWidth
         const th = tip.offsetHeight
-        const gap = target.userData.size * 46 * target.userData.hs + 10
+        const gap = 16
         const x = Math.max(tw / 2 + 8, Math.min(W - tw / 2 - 8, p.x))
         const above = p.y - gap - th >= 8
         const y = above ? p.y - gap - th : Math.min(size - th - 8, p.y + gap)
@@ -823,6 +871,7 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
         lastTipId = ''
         delete host.dataset.brainHover
       }
+      host.dataset.brainGrown = grown >= growTo ? 'done' : 'growing'
     }
     raf = requestAnimationFrame(tick)
     host.dataset.brainReady = ''
@@ -837,15 +886,10 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
       canvas.removeEventListener('pointerleave', onLeave)
       canvas.removeEventListener('wheel', onWheel)
       host.removeEventListener('brain-toggle', toggle)
-      dead = true
-      blobs.forEach((u) => URL.revokeObjectURL(u))
-      ;[...gls, tip].forEach((el) => el.remove())
-      for (const n of nodes) {
-        n.userData.face.dispose()
-        n.userData.edge.dispose()
-      }
-      for (const p of pulses) p.m.material.dispose()
-      for (const f of flashes) f.m.material.dispose()
+      ;[...clusterEls, tip].forEach((el) => el.remove())
+      for (const s of sparks) s.m.material.dispose()
+      inst?.dispose()
+      glow.geometry.dispose()
       links.geometry.dispose()
       hl.geometry.dispose()
       disposables.forEach((d) => d.dispose())

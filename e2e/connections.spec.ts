@@ -484,14 +484,14 @@ test('«Мозг из сделок»: сделки за 30 дней, списо�
   const spiral = block.locator('[data-brain]')
   // сцена строится, когда страница свободна (до 1,5 с), на слабой машине CI — дольше
   await expect(spiral.locator('canvas[data-brain-canvas]')).toHaveCount(1, { timeout: 15_000 })
-  await expect(spiral).toHaveAttribute('data-brain-count', '3')
-  // итог за 30 дней: 3 сделки, +140 $
-  await expect(block.locator('[data-brain-stats]')).toContainText('3', { timeout: 5000 })
-  await expect(block.locator('[data-brain-stats]')).toContainText('+140,00 $', { timeout: 5000 })
+  // по умолчанию — все сделки за всё время: 4, +1 139 $
+  await expect(spiral).toHaveAttribute('data-brain-count', '4')
+  await expect(block.locator('[data-brain-stats]')).toContainText('4', { timeout: 5000 })
+  await expect(block.locator('[data-brain-stats]')).toContainText('+1 139,00 $', { timeout: 5000 })
   // список подключённых бирж: число сделок; наведение / фокус — статус; у сломанного ключа — красная точка
   await expect(block.locator('[data-brain-ex]')).toHaveCount(2)
   await expect(block.locator('[data-brain-ex="okx"]')).toHaveAttribute('data-status', 'error')
-  await expect(block.locator('[data-brain-ex="bybit"]')).toContainText('2')
+  await expect(block.locator('[data-brain-ex="bybit"]')).toContainText('3')
   await block.locator('[data-brain-ex="bybit"]').focus()
   await expect(block.locator('[data-brain-ex="bybit"]')).toContainText('Работает · обновлено 12 мин назад')
   // диапазон: «Неделя» — те же 3 (старая за 40 дней не попадает), «Всё время» — 4
@@ -503,6 +503,7 @@ test('«Мозг из сделок»: сделки за 30 дней, списо�
   await expect(block.locator('[data-brain-stats]')).toContainText('+1 139,00 $', { timeout: 5000 })
   await block.locator('[data-brain-range] [data-range="30"]').click()
   await expect(spiral).toHaveAttribute('data-brain-count', '3')
+  await expect(block.locator('[data-brain-stats]')).toContainText('+140,00 $', { timeout: 5000 })
   // клавиатура: последняя сделка — первая кнопка; фокус — карточка у жетона, Enter — страница сделки
   const last = spiral.locator('[data-brain-trade]').first()
   await last.focus()
