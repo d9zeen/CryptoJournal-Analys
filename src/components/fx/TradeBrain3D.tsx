@@ -19,6 +19,7 @@
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { exchangeLogoUrl } from '@/components/ExchangeLogo'
+import { BrainPlaceholder } from '@/components/fx/BrainPlaceholder'
 import { formatPnl } from '@/lib/format'
 
 export type BrainTrade = {
@@ -138,6 +139,8 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
   const [sel, setSel] = useState<string | null>(null)
   live.current.sel = sel
   const [inner, setInner] = useState(false)
+  // пока сцена не построена — заготовка; готова — сцена проявляется, заготовка тает (без резкой смены)
+  const [ready, setReady] = useState(false)
   const W = Math.round(size * 1.3)
   const small = size < 330
   const wheelLabel = labels.wheel
@@ -180,6 +183,8 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
     canvas.setAttribute('aria-hidden', 'true')
     canvas.dataset.brainCanvas = ''
     canvas.style.touchAction = 'pan-y'
+    canvas.className = 'transition-opacity duration-500 motion-reduce:transition-none'
+    canvas.style.opacity = '0'
     host.prepend(canvas)
 
     const still = reduced()
@@ -920,6 +925,9 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
     }
     raf = requestAnimationFrame(tick)
     host.dataset.brainReady = ''
+    // проявить после первого кадра
+    requestAnimationFrame(() => requestAnimationFrame(() => (canvas.style.opacity = '1')))
+    setReady(true)
 
     return () => {
       cancelAnimationFrame(raf)
@@ -942,6 +950,7 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
       renderer.dispose()
       canvas.remove()
       delete host.dataset.brainReady
+      setReady(false)
     }
   }
 
@@ -949,6 +958,7 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
   const recent = trades.slice(-12).reverse()
   return (
     <div ref={wrap} data-brain role="group" aria-label={labels.scene} className="relative overflow-hidden" style={{ width: W, height: size, maxWidth: '100%' }}>
+      <BrainPlaceholder size={size} className={`absolute inset-0 transition-opacity duration-500 motion-reduce:transition-none ${ready ? 'opacity-0' : ''}`} />
       <button
         type="button"
         data-brain-refresh

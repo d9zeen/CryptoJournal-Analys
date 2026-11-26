@@ -374,6 +374,29 @@ test('«Биржи»: без подключений — «Орбита» с ша
   await expect(tile).not.toHaveClass(/beam-run/, { timeout: 20_000 })
 })
 
+test('«Подключено»: пока грузятся сделки — заготовка, а не плоская «Орбита» и не «0 / 0,00 $» (владелец 26.11.2026)', async ({ page, db }) => {
+  db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
+  db.connections = [{ id: 'c1', exchange: 'bybit', label: null, api_key: 'AbCdEf123456', last_sync_at: new Date().toISOString(), cursor_at: new Date().toISOString(), last_error: null, created_at: '' }]
+  db.trades = [makeTrade(1), makeTrade(2)]
+  await fakeSupabase(page, db)
+  await page.route('**/functions/v1/exchange-proxy', (route) => route.fulfill({ status: 500, body: '' }))
+  let release!: () => void
+  const gate = new Promise<void>((r) => (release = r))
+  await page.route('**/rest/v1/trades**', async (route) => {
+    await gate
+    await route.fallback()
+  })
+  await page.goto('import')
+  const block = page.locator('[data-linked-orbit]')
+  await expect(block.locator('[data-brain-placeholder]')).toHaveCount(1)
+  await expect(block.locator('[data-orbit-sat]')).toHaveCount(0)
+  await expect(block.locator('[data-brain-stats]')).not.toContainText('0,00')
+  release()
+  await expect(block.locator('[data-brain-stats]')).toContainText('2')
+  await expect(block.locator('canvas[data-brain-canvas]')).toHaveCount(1, { timeout: 15_000 })
+  await expect(block.locator('[data-brain-ready]')).toHaveCount(1, { timeout: 15_000 })
+})
+
 test('«Подключено»: на телефоне без прокрутки вбок; списка подключений справа нет (владелец 20.11.2026)', async ({ page, db }) => {
   db.usage = { plan: 'pro_plus', trades_created: 3, trade_limit: null }
   db.connections = [{ id: 'c1', exchange: 'bybit', label: null, api_key: 'AbCdEf123456', last_sync_at: new Date().toISOString(), cursor_at: new Date().toISOString(), last_error: null, created_at: '' }]

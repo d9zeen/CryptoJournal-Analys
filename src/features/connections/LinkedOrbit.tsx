@@ -2,7 +2,7 @@
  * «Подключённые биржи» на странице «Биржи».
  *  - слева — «Мозг из сделок» (владелец 26.11.2026, components/fx/TradeBrain3D; до этого — «Спираль времени»): сделки за выбранный диапазон (неделя … всё время) —
  *    камни на нити времени; навёл — сделка, нажал — её страница; «Обновить» в углу сцены — все работающие подключения разом.
- *    Пока сцена грузится (отдельный файл сборки) и если WebGL нет — плоская «Орбита»;
+ *    Пока грузятся сделки и сцена — тихая заготовка (BrainPlaceholder); плоская «Орбита» — только если WebGL нет;
  *  - справа — «Подключено: Bybit, OKX…», как приходят сделки, итог за 30 дней, список подключённых бирж (точка статуса; наведение — горят
  *    только сделки этой биржи и виден статус, нажатие — панель биржи) и «Подключить ещё».
  * Проблемы с ключом — строками под блоком (ConnectionsCard).
@@ -19,6 +19,8 @@ import { Button } from '@/components/ui/Button'
 import { ExchangeLogo } from '@/components/ExchangeLogo'
 import { AnimatedNumber } from '@/components/AnimatedNumber'
 import { Orbit } from '@/components/fx/Orbit'
+import { BrainPlaceholder } from '@/components/fx/BrainPlaceholder'
+import { Skeleton } from '@/components/Skeleton'
 import type { BrainTrade } from '@/components/fx/TradeBrain3D'
 import { useTrades } from '@/features/trades/api'
 import { useProfile } from '@/features/settings/api'
@@ -76,6 +78,7 @@ export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }
   const range = useMemo(() => ({ from: days ? new Date(Date.now() - days * 86_400_000).toISOString() : null, to: null }), [days])
   const rangeName = (d: RangeDays) => (d === 7 ? c.planet.ranges.week : d === 30 ? c.planet.ranges.month : d === 90 ? c.planet.ranges.quarter : d === 365 ? c.planet.ranges.year : c.planet.ranges.all)
   const { data: trades } = useTrades(range)
+  const loading = trades === undefined
   const today = zonedParts(new Date().toISOString(), tz).date
   const yesterday = zonedParts(new Date(Date.now() - 86_400_000).toISOString(), tz).date
   const dayLabel = useCallback((day: string) => (day === today ? c.planet.today : day === yesterday ? c.planet.yesterday : formatDayShort(day)), [today, yesterday, c])
@@ -140,10 +143,12 @@ export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }
       className="grid items-center justify-items-center gap-4 rounded-xl border border-border bg-surface px-4 py-4 sm:px-8 md:grid-cols-[auto_minmax(0,24rem)] md:justify-center md:justify-items-start md:gap-8 xl:gap-12 xl:py-6"
     >
       <div className="grid place-items-center" style={{ width: Math.round(size * 1.3), height: size, maxWidth: '100%' }}>
-        {noGl || trades === undefined ? (
+        {noGl ? (
           flat
+        ) : trades === undefined ? (
+          <BrainPlaceholder size={size} />
         ) : (
-          <Suspense fallback={flat}>
+          <Suspense fallback={<BrainPlaceholder size={size} />}>
             <TradeBrain3D
               trades={spiral}
               size={size}
@@ -183,15 +188,19 @@ export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }
         <div data-brain-stats className="flex justify-center gap-8 md:justify-start">
           <div>
             <p className="text-xs text-muted">{c.planet.trades}</p>
-            <AnimatedNumber value={closed.length} format={(n) => String(Math.round(n))} className="num font-display text-2xl font-semibold xl:text-3xl" />
+            {loading ? <Skeleton className="mt-1 h-8 w-12 rounded-md xl:h-9" /> : <AnimatedNumber value={closed.length} format={(n) => String(Math.round(n))} className="num font-display text-2xl font-semibold xl:text-3xl" />}
           </div>
           <div>
             <p className="text-xs text-muted">{c.planet.result}</p>
-            <AnimatedNumber
-              value={total}
-              format={formatPnl}
-              className={`num font-display text-2xl font-semibold xl:text-3xl ${total > 0 ? 'text-up' : total < 0 ? 'text-down' : ''}`}
-            />
+            {loading ? (
+              <Skeleton className="mt-1 h-8 w-28 rounded-md xl:h-9" />
+            ) : (
+              <AnimatedNumber
+                value={total}
+                format={formatPnl}
+                className={`num font-display text-2xl font-semibold xl:text-3xl ${total > 0 ? 'text-up' : total < 0 ? 'text-down' : ''}`}
+              />
+            )}
           </div>
         </div>
         {closed.length > MAX_NODES && (
@@ -218,7 +227,11 @@ export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }
                   </span>
                   <span className="text-sm font-semibold">{r.name}</span>
                   <span className="truncate text-right text-xs text-muted">
-                    <span className="num group-hover:hidden group-focus-visible:hidden">{counts[r.ex] ?? '—'}</span>
+                    {loading ? (
+                      <Skeleton className="ml-auto inline-block h-3 w-6 rounded group-hover:hidden group-focus-visible:hidden" />
+                    ) : (
+                      <span className="num group-hover:hidden group-focus-visible:hidden">{counts[r.ex] ?? '—'}</span>
+                    )}
                     <span className="hidden group-hover:inline group-focus-visible:inline">{r.status}</span>
                   </span>
                 </button>
