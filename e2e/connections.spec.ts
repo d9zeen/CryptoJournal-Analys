@@ -515,6 +515,24 @@ test('«Мозг из сделок»: сделки за 30 дней, списо�
   await expect(spiral).toHaveAttribute('data-brain-zoom', 'in', { timeout: 10_000 })
   await spiral.locator('[data-brain-enter]').click()
   await expect(spiral).toHaveAttribute('data-brain-zoom', 'out', { timeout: 10_000 })
+  // колесо мыши: до клика по сцене — прокрутка страницы и подсказка, после клика — приближение (владелец 26.11.2026)
+  if ((page.viewportSize()?.width ?? 0) >= 768) {
+    const box = (await spiral.locator('canvas[data-brain-canvas]').boundingBox())!
+    await page.mouse.move(box.x + 24, box.y + 24)
+    await page.mouse.wheel(0, -700)
+    await expect(spiral.locator('[data-brain-wheel-hint]')).toHaveCSS('opacity', '1')
+    await page.waitForTimeout(600)
+    await expect(spiral).toHaveAttribute('data-brain-zoom', 'out')
+    await page.mouse.click(box.x + 24, box.y + 24)
+    await expect(spiral).toHaveAttribute('data-brain-wheel', 'on')
+    await page.mouse.wheel(0, -700)
+    await expect(spiral).toHaveAttribute('data-brain-zoom', 'in', { timeout: 10_000 })
+    // увёл мышь — колесо снова крутит страницу
+    await page.mouse.move(box.x - 40, box.y + box.height / 2)
+    await expect(spiral).not.toHaveAttribute('data-brain-wheel', 'on')
+    await spiral.locator('[data-brain-enter]').click()
+    await expect(spiral).toHaveAttribute('data-brain-zoom', 'out', { timeout: 10_000 })
+  }
   // «Обновить» в сцене — синхронизация обеих бирж
   await spiral.locator('[data-brain-refresh]').click()
   await expect(page.getByText('Загружаем 2 источника')).toBeVisible()

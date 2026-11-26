@@ -54,7 +54,7 @@ type Props = {
   busy: boolean
   onOpenTrade: (id: string) => void
   onRefresh: () => void
-  labels: { scene: string; refresh: string; empty: string; enter: string; exit: string }
+  labels: { scene: string; refresh: string; empty: string; enter: string; exit: string; wheel: string }
   /** WebGL недоступен — нарисовать запасной вариант */
   onFail?: () => void
   scheme?: BrainScheme
@@ -140,6 +140,7 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
   const [inner, setInner] = useState(false)
   const W = Math.round(size * 1.3)
   const small = size < 330
+  const wheelLabel = labels.wheel
 
   useEffect(() => {
     const host = wrap.current
@@ -612,6 +613,10 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
     }
     const onDown = (e: PointerEvent) => {
       setNdc(e)
+      // клик по сцене «включает» колесо (владелец 26.11.2026): до клика колесо прокручивает страницу, а не приближает
+      armed = true
+      wheelHint.style.opacity = '0'
+      host.dataset.brainWheel = 'on'
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY })
       pinch = 0
       drag = { x: e.clientX, y: e.clientY, moved: pts.size > 1 ? 99 : 0, type: e.pointerType }
@@ -631,6 +636,8 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
       else setSel(id)
     }
     const onLeave = () => {
+      armed = false
+      delete host.dataset.brainWheel
       inside = false
       drag = null
       ndc.set(9, 9)
@@ -640,8 +647,20 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
     canvas.addEventListener('pointerdown', onDown)
     canvas.addEventListener('pointerup', onUp)
     canvas.addEventListener('pointerleave', onLeave)
-    // колесо: вверх — ближе / внутрь, вниз — наружу; снаружи и дальше крутить вниз — прокручивается страница
+    // колесо: вверх — ближе / внутрь, вниз — наружу — только после клика по сцене (увёл мышь — снова прокрутка страницы);
+    // до клика колесо крутит страницу, а над сценой на миг появляется подсказка «нажми, чтобы приближать колесом»
+    let armed = false
+    let hintTimer = 0
+    const wheelHint = mk('pointer-events-none absolute left-1/2 top-1/2 z-[4] -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-lg border border-border bg-surface px-3 py-2 text-xs font-semibold opacity-0 shadow-lg transition-opacity duration-200')
+    wheelHint.dataset.brainWheelHint = ''
+    wheelHint.textContent = wheelLabel
     const onWheel = (e: WheelEvent) => {
+      if (!armed) {
+        wheelHint.style.opacity = '1'
+        window.clearTimeout(hintTimer)
+        hintTimer = window.setTimeout(() => (wheelHint.style.opacity = '0'), 1400)
+        return
+      }
       const next = Math.max(0, Math.min(1, zoomT - e.deltaY / 700))
       if (next === zoomT) return
       e.preventDefault()
@@ -912,7 +931,8 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
       canvas.removeEventListener('pointerleave', onLeave)
       canvas.removeEventListener('wheel', onWheel)
       host.removeEventListener('brain-toggle', toggle)
-      ;[...clusterEls, tip].forEach((el) => el.remove())
+      window.clearTimeout(hintTimer)
+      ;[...clusterEls, tip, wheelHint].forEach((el) => el.remove())
       for (const s of sparks) s.m.material.dispose()
       inst?.dispose()
       glow.geometry.dispose()

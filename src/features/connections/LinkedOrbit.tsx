@@ -151,7 +151,7 @@ export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }
               busy={refreshing}
               onOpenTrade={openTrade}
               onRefresh={onRefresh}
-              labels={{ scene: fmt(c.planet.scene, { range: rangeName(days).toLowerCase() }), refresh: c.planet.refresh, empty: c.planet.empty, enter: c.planet.enter, exit: c.planet.exit }}
+              labels={{ scene: fmt(c.planet.scene, { range: rangeName(days).toLowerCase() }), refresh: c.planet.refresh, empty: c.planet.empty, enter: c.planet.enter, exit: c.planet.exit, wheel: c.planet.wheel }}
               onFail={() => setNoGl(true)}
             />
           </Suspense>
