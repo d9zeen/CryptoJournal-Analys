@@ -2,7 +2,7 @@
  * «Мозг из сделок» на странице «Биржи» (владелец 26.11.2026: «как нейронные связки» → «Мозг из сделок», «хочу зайти в этот мозг и клацать внутри»;
  * вторая версия — владелец: «слишком большие токены», «не нравятся фишки», «все сделки за всё время» и «анимация, как строятся нейроны при выгрузке сделок с биржи»).
  *
- * Каждая сделка — маленький светящийся нейрон (плюс --color-up / минус --color-down, чуть крупнее — больше сумма), без жетонов и картинок в сцене.
+ * Каждая сделка — маленький светящийся нейрон (фиолетовая схема, владелец 26.11.2026: плюс — яркий --color-primary, минус — серый; чуть крупнее — больше сумма), без жетонов и картинок в сцене.
  * Нейроны одной монеты собраны в своё «полушарие» (центр — из тикера, место нейрона — из id сделки: при новых сделках остальные не прыгают).
  * Связи: каждая сделка — с предыдущей сделкой (нить времени) и с предыдущей сделкой той же монеты.
  *  - при открытии сеть «вырастает» по порядку сделок: нейрон загорается, к нему тянется связь, искра бежит по новой нити;
@@ -37,7 +37,12 @@ export type BrainTrade = {
   when: string
   /** иконка монеты для карточки сделки; нет — без неё */
   icon: string | null
+  /** цвет монеты (из её логотипа, coins.color) — для схемы «по монетам» */
+  color?: string | null
 }
+
+/** цветовая схема: по результату (плюс / минус), по монетам (цвет логотипа; минус — тусклее), фиолетовая (по умолчанию: плюс — яркий цвет кнопок, минус — серый), мятная */
+export type BrainScheme = 'result' | 'coin' | 'mono' | 'accent'
 
 type Props = {
   /** от старых к новым */
@@ -52,6 +57,7 @@ type Props = {
   labels: { scene: string; refresh: string; empty: string; enter: string; exit: string }
   /** WebGL недоступен — нарисовать запасной вариант */
   onFail?: () => void
+  scheme?: BrainScheme
 }
 
 function tokenColor(name: string): THREE.Color {
@@ -73,6 +79,7 @@ const readPalette = () => ({
   muted: tokenColor('--color-muted'),
   text: tokenColor('--color-text'),
   primary: tokenColor('--color-primary'),
+  accent: tokenColor('--color-accent'),
   light: document.documentElement.dataset.theme === 'light',
 })
 const reduced = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -121,7 +128,7 @@ function placeOf(tr: BrainTrade, center: THREE.Vector3, out: THREE.Vector3): THR
   return out.copy(center).add(off.multiply(SHAPE))
 }
 
-export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh, labels, onFail }: Props) {
+export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh, labels, onFail, scheme: schemeProp }: Props) {
   const wrap = useRef<HTMLDivElement>(null)
   const live = useRef({ trades, focus, busy, onOpenTrade, sel: null as string | null })
   live.current.trades = trades
@@ -176,6 +183,8 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
 
     const still = reduced()
     let C = readPalette()
+    // схема цвета: по умолчанию фиолетовая (владелец 26.11.2026 из четырёх: по результату, по монетам, фиолетовая, мятная)
+    const scheme: BrainScheme = schemeProp ?? 'mono'
     const disposables: { dispose: () => void }[] = []
     const track = <T extends { dispose: () => void }>(x: T) => (disposables.push(x), x)
 
@@ -235,13 +244,15 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
     const hlMat = track(new THREE.LineBasicMaterial({ transparent: true, opacity: 0.95, depthWrite: false }))
     const hl = new THREE.LineSegments(new THREE.BufferGeometry(), hlMat)
     brain.add(hl)
+    /** цвет ядер, аксонов и примеси в связях: у мятной схемы — мята, у остальных — цвет кнопок */
+    const hub = () => (scheme === 'accent' ? C.accent : C.primary)
     const blendFor = () => (C.light ? THREE.NormalBlending : THREE.AdditiveBlending)
     const paintMats = () => {
       glowMat.blending = somaMat.blending = linkMat.blending = axonMat.blending = blendFor()
       glowMat.opacity = C.light ? 0.35 : 0.85
       somaMat.opacity = C.light ? 0.3 : 0.45
-      somaMat.color.copy(C.primary)
-      axonMat.color.copy(C.primary)
+      somaMat.color.copy(hub())
+      axonMat.color.copy(hub())
       axonMat.opacity = C.light ? 0.4 : 0.42
       hlMat.color.copy(C.primary)
       for (const m of [glowMat, somaMat, linkMat, axonMat]) m.needsUpdate = true
@@ -292,13 +303,28 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
     const col = new THREE.Color()
     let dimFor: (i: number) => number = () => 1
     /** ядро нейрона: цвет результата, смягчённый к цвету текста (сигнал виден, но без «ёлочной гирлянды»); не в фокусе — к фону */
+    /** основной цвет нейрона по схеме; во всех схемах, кроме «по результату», минус — тусклее (к фону) */
+    const coinCol = new Map<string, THREE.Color>()
+    const baseOf = (i: number, out: THREE.Color) => {
+      const tr = nodes[i].tr
+      const win = tr.pnl >= 0
+      if (scheme === 'result') return out.copy(win ? C.up : C.down)
+      if (scheme === 'coin') {
+        let c = coinCol.get(tr.label)
+        if (!c) {
+          c = tr.color ? new THREE.Color().setStyle(tr.color, THREE.SRGBColorSpace) : C.primary.clone()
+          coinCol.set(tr.label, c)
+        }
+        out.copy(c)
+      } else out.copy(scheme === 'accent' ? C.accent : C.primary)
+      return win ? out : out.lerp(C.muted, 0.55).lerp(C.surface, 0.35)
+    }
     const colorOf = (i: number, out: THREE.Color) =>
-      out
-        .copy(nodes[i].tr.pnl >= 0 ? C.up : C.down)
+      baseOf(i, out)
         .lerp(C.text, C.light ? 0.18 : 0.28)
         .lerp(C.surface, (1 - dimFor(i)) * 0.85)
-    /** свечение — чистый цвет результата, тише */
-    const glowOf = (i: number, out: THREE.Color) => out.copy(nodes[i].tr.pnl >= 0 ? C.up : C.down).lerp(C.surface, (1 - dimFor(i)) * 0.92)
+    /** свечение — чистый цвет, тише */
+    const glowOf = (i: number, out: THREE.Color) => baseOf(i, out).lerp(C.surface, (1 - dimFor(i)) * 0.92)
     let hoverI = -1
     let nearFade = 0
     const camLocal = new THREE.Vector3()
@@ -337,10 +363,10 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
       if (lc) {
         const mix = new THREE.Color()
         edgeList.forEach(([a, b], k) => {
-          glowOf(a, col).lerp(C.primary, 0.55)
+          glowOf(a, col).lerp(hub(), 0.55)
           mix.copy(col)
           lc.setXYZ(k * 2, mix.r, mix.g, mix.b)
-          glowOf(b, col).lerp(C.primary, 0.55)
+          glowOf(b, col).lerp(hub(), 0.55)
           lc.setXYZ(k * 2 + 1, col.r, col.g, col.b)
         })
         lc.needsUpdate = true

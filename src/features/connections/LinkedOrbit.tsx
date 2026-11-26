@@ -89,8 +89,8 @@ export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }
   // иконки монет — те же, что в «Портфеле» (coins, у тикера — монета с большей капитализацией: список уже по рангу)
   const { data: coins } = useCoins()
   const icons = useMemo(() => {
-    const m = new Map<string, string | null>()
-    for (const cn of coins ?? []) if (!m.has(cn.symbol.toUpperCase())) m.set(cn.symbol.toUpperCase(), cn.icon ?? null)
+    const m = new Map<string, { icon: string | null; color: string | null }>()
+    for (const cn of coins ?? []) if (!m.has(cn.symbol.toUpperCase())) m.set(cn.symbol.toUpperCase(), { icon: cn.icon ?? null, color: cn.color ?? null })
     return m
   }, [coins])
   const spiral = useMemo<BrainTrade[]>(
@@ -103,7 +103,8 @@ export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }
           exchange: tr.exchange,
           exName: exchangeName(tr.exchange, t.exchange.other),
           label,
-          icon: tr.market_type === 'prediction' ? null : coinIconUrl(icons.get(baseCoin(label)) ?? null),
+          icon: tr.market_type === 'prediction' ? null : coinIconUrl(icons.get(baseCoin(label))?.icon ?? null),
+          color: icons.get(baseCoin(label))?.color ?? null,
           symbol: tr.title || tr.symbol,
           side: tr.side === 'short' ? t.side.short : t.side.long,
           pnl: Number(tr.pnl),
