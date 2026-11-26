@@ -1,6 +1,6 @@
 /**
  * «Подключённые биржи» на странице «Биржи».
- *  - слева — «Спираль времени» (владелец 25.11.2026 вместо планетария с глазом, components/fx/TimeSpiral3D): сделки за выбранный диапазон (неделя … всё время) —
+ *  - слева — «Мозг из сделок» (владелец 26.11.2026, components/fx/TradeBrain3D; до этого — «Спираль времени»): сделки за выбранный диапазон (неделя … всё время) —
  *    камни на нити времени; навёл — сделка, нажал — её страница; «Обновить» в углу сцены — все работающие подключения разом.
  *    Пока сцена грузится (отдельный файл сборки) и если WebGL нет — плоская «Орбита»;
  *  - справа — «Подключено: Bybit, OKX…», как приходят сделки, итог за 30 дней, список подключённых бирж (точка статуса; наведение — горят
@@ -19,16 +19,16 @@ import { Button } from '@/components/ui/Button'
 import { ExchangeLogo } from '@/components/ExchangeLogo'
 import { AnimatedNumber } from '@/components/AnimatedNumber'
 import { Orbit } from '@/components/fx/Orbit'
-import type { SpiralTrade } from '@/components/fx/TimeSpiral3D'
+import type { BrainTrade } from '@/components/fx/TradeBrain3D'
 import { useTrades } from '@/features/trades/api'
 import { useProfile } from '@/features/settings/api'
 import { coinIconUrl, useCoins } from '@/features/portfolio/api'
 import { errorCodeOf, type Connection } from './api'
 
-const TimeSpiral3D = lazy(() => import('@/components/fx/TimeSpiral3D').then((m) => ({ default: m.TimeSpiral3D })))
+const TradeBrain3D = lazy(() => import('@/components/fx/TradeBrain3D').then((m) => ({ default: m.TradeBrain3D })))
 
 /** сколько последних сделок на спирали (больше — мелко и тяжело); остальные — в итоге справа */
-const MAX_ON_SPIRAL = 60
+const MAX_NODES = 60
 
 /** диапазон спирали (владелец 25.11.2026: «выбирать диапазон — неделя, месяц и т. д.»): дней назад от сейчас, 0 — всё время */
 const RANGES = [7, 30, 90, 365, 0] as const
@@ -93,9 +93,9 @@ export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }
     for (const cn of coins ?? []) if (!m.has(cn.symbol.toUpperCase())) m.set(cn.symbol.toUpperCase(), cn.icon ?? null)
     return m
   }, [coins])
-  const spiral = useMemo<SpiralTrade[]>(
+  const spiral = useMemo<BrainTrade[]>(
     () =>
-      closed.slice(-MAX_ON_SPIRAL).map((tr) => {
+      closed.slice(-MAX_NODES).map((tr) => {
         const day = zonedParts(tr.exit_at!, tz).date
         const label = shortLabel(tr.symbol, tr.title)
         return {
@@ -107,7 +107,6 @@ export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }
           symbol: tr.title || tr.symbol,
           side: tr.side === 'short' ? t.side.short : t.side.long,
           pnl: Number(tr.pnl),
-          day,
           when: `${dayLabel(day)}, ${formatTimeIn(tr.exit_at!, tz)}`,
         }
       }),
@@ -144,15 +143,14 @@ export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }
           flat
         ) : (
           <Suspense fallback={flat}>
-            <TimeSpiral3D
+            <TradeBrain3D
               trades={spiral}
-              dayLabel={dayLabel}
               size={size}
               focus={focus}
               busy={refreshing}
               onOpenTrade={openTrade}
               onRefresh={onRefresh}
-              labels={{ scene: fmt(c.planet.scene, { range: rangeName(days).toLowerCase() }), refresh: c.planet.refresh, back: c.planet.back, empty: c.planet.empty }}
+              labels={{ scene: fmt(c.planet.scene, { range: rangeName(days).toLowerCase() }), refresh: c.planet.refresh, empty: c.planet.empty, enter: c.planet.enter, exit: c.planet.exit }}
               onFail={() => setNoGl(true)}
             />
           </Suspense>
@@ -165,7 +163,7 @@ export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }
         </div>
         {/* итог за 30 дней — числа догоняют, когда приходят новые сделки */}
         {/* диапазон спирали и итога */}
-        <div role="radiogroup" aria-label={c.planet.range} onKeyDown={radioKeys} data-spiral-range className="flex flex-wrap justify-center gap-1.5 md:justify-start">
+        <div role="radiogroup" aria-label={c.planet.range} onKeyDown={radioKeys} data-brain-range className="flex flex-wrap justify-center gap-1.5 md:justify-start">
           {RANGES.map((d) => (
             <button
               key={d}
@@ -181,7 +179,7 @@ export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }
             </button>
           ))}
         </div>
-        <div data-spiral-stats className="flex justify-center gap-8 md:justify-start">
+        <div data-brain-stats className="flex justify-center gap-8 md:justify-start">
           <div>
             <p className="text-xs text-muted">{c.planet.trades}</p>
             <AnimatedNumber value={closed.length} format={(n) => String(Math.round(n))} className="num font-display text-2xl font-semibold xl:text-3xl" />
@@ -195,8 +193,8 @@ export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }
             />
           </div>
         </div>
-        {closed.length > MAX_ON_SPIRAL && (
-          <p data-spiral-trimmed className="-mt-2 text-center text-xs text-muted md:text-left">{fmt(c.planet.trimmed, { n: MAX_ON_SPIRAL, total: closed.length })}</p>
+        {closed.length > MAX_NODES && (
+          <p data-brain-trimmed className="-mt-2 text-center text-xs text-muted md:text-left">{fmt(c.planet.trimmed, { n: MAX_NODES, total: closed.length })}</p>
         )}
         <div className="border-t border-border pt-3">
           <p className="mb-1 text-xs text-muted">{c.planet.list}</p>
@@ -205,7 +203,7 @@ export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }
               <li key={r.ex}>
                 <button
                   type="button"
-                  data-spiral-ex={r.ex}
+                  data-brain-ex={r.ex}
                   data-status={r.error ? 'error' : 'ok'}
                   onPointerEnter={() => setFocus(r.ex)}
                   onFocus={() => setFocus(r.ex)}
