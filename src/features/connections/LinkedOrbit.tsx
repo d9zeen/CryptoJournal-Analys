@@ -3,6 +3,7 @@
  *  - слева — «Мозг из сделок» (владелец 26.11.2026, components/fx/TradeBrain3D; до этого — «Спираль времени»): сделки за выбранный диапазон (неделя … всё время) —
  *    камни на нити времени; навёл — сделка, нажал — её страница; «Обновить» в углу сцены — все работающие подключения разом.
  *    Пока грузятся сделки и сцена — тихая заготовка (BrainPlaceholder); плоская «Орбита» — только если WebGL нет;
+ *    Нажал на подпись монеты в сцене — мозг поворачивается к её доле, справа карточка монеты (сделки, винрейт, результат) и «Весь мозг».
  *  - справа — «Подключено: Bybit, OKX…», как приходят сделки, итог за 30 дней, список подключённых бирж (точка статуса; наведение — горят
  *    только сделки этой биржи и виден статус, нажатие — панель биржи) и «Подключить ещё».
  * Проблемы с ключом — строками под блоком (ConnectionsCard).
@@ -11,7 +12,7 @@ import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { fmt, useT } from '@/i18n'
 import { exchangeName } from '@/lib/exchanges'
-import { formatDayShort, formatDuration, formatPnl, formatTimeIn } from '@/lib/format'
+import { formatDayShort, formatDuration, formatPercent, formatPnl, formatTimeIn } from '@/lib/format'
 import { useMediaQuery } from '@/lib/useMediaQuery'
 import { radioKeys } from '@/lib/radioKeys'
 import { browserTimeZone, zonedParts } from '@/lib/tz'
@@ -27,6 +28,8 @@ import { useProfile } from '@/features/settings/api'
 import { coinIconUrl, useCoins } from '@/features/portfolio/api'
 import { errorCodeOf, type Connection } from './api'
 
+/** все сделки за всё время — для порядка монет (доли в мозге стоят на своих местах при любом диапазоне) */
+const ALL_TIME = { from: null, to: null }
 const TradeBrain3D = lazy(() => import('@/components/fx/TradeBrain3D').then((m) => ({ default: m.TradeBrain3D })))
 
 /** сколько последних сделок на спирали (больше — мелко и тяжело); остальные — в итоге справа */
@@ -79,6 +82,15 @@ export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }
   const rangeName = (d: RangeDays) => (d === 7 ? c.planet.ranges.week : d === 30 ? c.planet.ranges.month : d === 90 ? c.planet.ranges.quarter : d === 365 ? c.planet.ranges.year : c.planet.ranges.all)
   const { data: trades } = useTrades(range)
   const loading = trades === undefined
+  const { data: allTrades } = useTrades(ALL_TIME)
+  // порядок монет — по первой закрытой сделке за всё время
+  const coinOrder = useMemo(() => {
+    const seen = new Set<string>()
+    const rows = (allTrades ?? []).filter((tr) => tr.exit_at && tr.pnl !== null).sort((a, b) => Date.parse(a.exit_at!) - Date.parse(b.exit_at!))
+    for (const tr of rows) seen.add(shortLabel(tr.symbol, tr.title))
+    return [...seen]
+  }, [allTrades])
+  const [coin, setCoin] = useState<string | null>(null)
   const today = zonedParts(new Date().toISOString(), tz).date
   const yesterday = zonedParts(new Date(Date.now() - 86_400_000).toISOString(), tz).date
   const dayLabel = useCallback((day: string) => (day === today ? c.planet.today : day === yesterday ? c.planet.yesterday : formatDayShort(day)), [today, yesterday, c])
@@ -116,6 +128,16 @@ export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }
       }),
     [closed, tz, t, dayLabel, icons],
   )
+
+  // выбранная монета: итог по ней в выбранном диапазоне; в диапазоне её нет — снова весь мозг
+  const coinStats = useMemo(() => {
+    if (!coin) return null
+    const mine = spiral.filter((tr) => tr.label === coin)
+    if (!mine.length) return null
+    const pnl = mine.reduce((s, tr) => s + tr.pnl, 0)
+    return { n: mine.length, pnl, win: mine.filter((tr) => tr.pnl > 0).length / mine.length, icon: mine.find((tr) => tr.icon)?.icon ?? null }
+  }, [coin, spiral])
+  const activeCoin = coinStats ? coin : null
 
   // список подключённых бирж: точка статуса и строка «обновлено 12 мин назад» / «ключ не работает»
   const rows = useMemo(() => {
@@ -158,6 +180,9 @@ export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }
               onRefresh={onRefresh}
               labels={{ scene: fmt(c.planet.scene, { range: rangeName(days).toLowerCase() }), refresh: c.planet.refresh, empty: c.planet.empty, enter: c.planet.enter, exit: c.planet.exit, wheel: c.planet.wheel }}
               onFail={() => setNoGl(true)}
+              coins={coinOrder}
+              coin={activeCoin}
+              onCoin={setCoin}
             />
           </Suspense>
         )}
@@ -205,6 +230,24 @@ export function LinkedOrbit({ conns, pro, onAdd, onOpen, onRefresh, refreshing }
         </div>
         {closed.length > MAX_NODES && (
           <p data-brain-trimmed className="-mt-2 text-center text-xs text-muted md:text-left">{fmt(c.planet.trimmed, { n: MAX_NODES, total: closed.length })}</p>
+        )}
+        {activeCoin && coinStats && (
+          <div data-brain-coin-card={activeCoin} className="flex items-center gap-3 rounded-lg border border-primary/60 bg-primary/8 px-3 py-2.5 animate-rise">
+            {coinStats.icon ? <img src={coinStats.icon} alt="" className="size-7 shrink-0 rounded-full bg-surface-2" /> : null}
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold">{activeCoin}</p>
+              <p className="text-xs text-muted">{fmt(c.planet.coinLine, { n: coinStats.n, win: formatPercent(coinStats.win, 0) })}</p>
+            </div>
+            <span className={`num shrink-0 text-sm font-semibold ${coinStats.pnl > 0 ? 'text-up' : coinStats.pnl < 0 ? 'text-down' : ''}`}>{formatPnl(coinStats.pnl)}</span>
+            <button
+              type="button"
+              data-brain-coin-reset
+              onClick={() => setCoin(null)}
+              className="h-8 shrink-0 rounded-lg border border-border bg-surface px-2.5 text-xs font-semibold transition-colors hover:border-primary"
+            >
+              {c.planet.allBrain}
+            </button>
+          </div>
         )}
         <div className="border-t border-border pt-3">
           <p className="mb-1 text-xs text-muted">{c.planet.list}</p>
