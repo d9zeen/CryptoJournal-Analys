@@ -556,6 +556,17 @@ test('«Мозг из сделок»: сделки за 30 дней, списо�
     await spiral.locator('[data-brain-enter]').click()
     await expect(spiral).toHaveAttribute('data-brain-zoom', 'out', { timeout: 10_000 })
   }
+  // клик по подписи монеты — мозг поворачивается к ней, справа карточка монеты; «Весь мозг» — снова весь (владелец 27.11.2026)
+  await expect(spiral).toHaveAttribute('data-brain-grown', 'done', { timeout: 15_000 })
+  const coinBtn = spiral.locator('button[data-brain-coin][tabindex="0"]').first()
+  await expect(coinBtn).toBeVisible({ timeout: 10_000 })
+  const coinName = (await coinBtn.getAttribute('data-brain-coin'))!
+  await coinBtn.dispatchEvent('click')
+  const card = block.locator('[data-brain-coin-card]')
+  await expect(card).toHaveAttribute('data-brain-coin-card', coinName)
+  await expect(card).toContainText('Сделок: 1')
+  await card.locator('[data-brain-coin-reset]').click()
+  await expect(card).toHaveCount(0)
   // «Обновить» в сцене — синхронизация обеих бирж
   await spiral.locator('[data-brain-refresh]').click()
   await expect(page.getByText('Загружаем 2 источника')).toBeVisible()
