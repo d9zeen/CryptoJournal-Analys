@@ -400,9 +400,13 @@ const signedPct = (v: number) => (v > 0 ? '+' : v < 0 ? '−' : '') + formatPerc
 /** Кольцо долей: viewBox 200×200, радиус средней линии, толщина, зазор между кусками (цвет поверхности), насколько выдвигается кусок под мышью */
 const RING = { r: 78, w: 30, gap: 2.4, pop: 6 }
 const RING_C = 2 * Math.PI * RING.r
-/** иконка монеты на кольце — у куска от 7 % (меньше — не помещается) */
+/** иконка монеты на кольце — у куска от 7 %; у куска от 1,5 % до 7 % — поменьше и снаружи кольца (внутри не помещается) */
 const RING_ICON_MIN = 0.07
-const RING_ICON = 20
+const RING_ICON_OUT_MIN = 0.015
+const RING_ICON = 24
+const RING_ICON_OUT = 18
+/** центр иконки снаружи: край кольца + отступ */
+const RING_OUT_R = RING.r + RING.w / 2 + 3 + RING_ICON_OUT / 2
 
 /** относительная яркость цвета #rrggbb (WCAG) */
 function luminance(hex: string): number | null {
@@ -468,6 +472,8 @@ export function Allocation({ rows, amounts = true }: { rows: PortfolioRow[]; amo
       i,
       ix: 100 + Math.cos(mid) * RING.r,
       iy: 100 + Math.sin(mid) * RING.r,
+      ox: 100 + Math.cos(mid) * RING_OUT_R,
+      oy: 100 + Math.sin(mid) * RING_OUT_R,
       dash: single ? `${RING_C} 0` : `${Math.max(0.01, len - RING.gap)} ${RING_C}`,
       offset: single ? 0 : -(start + RING.gap / 2),
       dx: single ? 0 : Math.cos(mid) * RING.pop,
@@ -485,9 +491,9 @@ export function Allocation({ rows, amounts = true }: { rows: PortfolioRow[]; amo
         <p className="text-sm text-muted">{a.empty}</p>
       ) : (
         <>
-          <div className="relative mx-auto aspect-square w-full max-w-[220px]">
+          <div className="relative mx-auto aspect-square w-full max-w-[264px]">
             <svg
-              viewBox="0 0 200 200"
+              viewBox="-20 -20 240 240"
               role="img"
               aria-label={fmt(a.barLabel, {
                 list: parts.map((s) => `${name(s)} ${formatPercent(s.share)}`).join(', '),
@@ -508,7 +514,7 @@ export function Allocation({ rows, amounts = true }: { rows: PortfolioRow[]; amo
                     r={RING.r}
                     fill="none"
                     stroke="white"
-                    strokeWidth={RING.w + RING.pop * 2 + 4}
+                    strokeWidth={(RING_OUT_R + RING_ICON_OUT / 2 + RING.pop + 2 - RING.r) * 2}
                     strokeDasharray={RING_C}
                     transform="rotate(-90 100 100)"
                     className="ring-draw"
@@ -517,7 +523,7 @@ export function Allocation({ rows, amounts = true }: { rows: PortfolioRow[]; amo
                 </mask>
               </defs>
               <g mask={`url(#${maskId})`}>
-                {arcs.map(({ s, i, ix, iy, dash, offset, dx, dy }) => (
+                {arcs.map(({ s, i, ix, iy, ox, oy, dash, offset, dx, dy }) => (
                   <g
                     key={key(s)}
                     data-seg={key(s)}
@@ -539,25 +545,30 @@ export function Allocation({ rows, amounts = true }: { rows: PortfolioRow[]; amo
                       strokeDashoffset={offset}
                       transform="rotate(-90 100 100)"
                     />
-                    {/* иконка монеты на её куске (от 7 %): кружок цвета карточки + картинка из нашего Storage; появляется, когда до неё дошла прорисовка */}
-                    {s.symbol !== null && s.share / shareSum >= RING_ICON_MIN && parts.length > 1 && (
-                      <g data-ring-icon={key(s)}>
-                        <circle cx={ix} cy={iy} r={RING_ICON / 2 + 1.5} className="fill-surface" />
-                        {iconOf(s) ? (
-                          <image href={iconOf(s)!} x={ix - RING_ICON / 2} y={iy - RING_ICON / 2} width={RING_ICON} height={RING_ICON} clipPath={`url(#${maskId}-clip)`} preserveAspectRatio="xMidYMid slice" />
-                        ) : (
-                          <text x={ix} y={iy} dy="0.35em" textAnchor="middle" className="fill-muted text-[7px] font-bold">
-                            {(s.symbol ?? '').slice(0, 3)}
-                          </text>
-                        )}
-                      </g>
-                    )}
+                    {/* иконка монеты на её куске (от 7 %): подложка цвета карточки + логотип из нашего Storage; появляется, когда до неё дошла прорисовка */}
+                    {s.symbol !== null && parts.length > 1 && s.share / shareSum >= RING_ICON_OUT_MIN && (() => {
+                      const inside = s.share / shareSum >= RING_ICON_MIN
+                      const [x, y, d] = inside ? [ix, iy, RING_ICON] : [ox, oy, RING_ICON_OUT]
+                      return (
+                        <g data-ring-icon={key(s)} data-place={inside ? 'in' : 'out'}>
+                          {/* подложка цвета карточки: логотип обычно залит тем же цветом, что и кусок, — без неё он сливается */}
+                          <circle cx={x} cy={y} r={d / 2 + (inside ? 3 : 1.5)} className="fill-surface" />
+                          {iconOf(s) ? (
+                            <image href={iconOf(s)!} x={x - d / 2} y={y - d / 2} width={d} height={d} clipPath={`url(#${maskId}-clip)`} preserveAspectRatio="xMidYMid slice" />
+                          ) : (
+                            <text x={x} y={y} dy="0.35em" textAnchor="middle" className="fill-muted text-[7px] font-bold">
+                              {(s.symbol ?? '').slice(0, 3)}
+                            </text>
+                          )}
+                        </g>
+                      )
+                    })()}
                   </g>
                 ))}
               </g>
             </svg>
             {/* центр: стоимость и число монет; под мышью поверх — монета, сумма, доля (смена — только прозрачностью: сумма не набегает заново) */}
-            <div aria-hidden className="pointer-events-none absolute inset-[22%] grid place-items-center text-center" data-alloc-center>
+            <div aria-hidden className="pointer-events-none absolute inset-[26%] grid place-items-center text-center" data-alloc-center>
               <div className={`col-start-1 row-start-1 flex max-w-full flex-col items-center transition-opacity duration-150 ${on ? 'opacity-0' : ''}`}>
                 {amounts ? (
                   <AnimatedNumber value={total} format={formatUsd} className="num max-w-full truncate font-display text-lg font-semibold" />

@@ -234,8 +234,9 @@ test('кольцо долей: у монеты — цвет её логотип�
     { ...many(1)[0], id: 'g', symbol: 'GOLD', price: 60, color: '#dda85b', icon: 'gold.svg' },
     { ...many(1)[0], id: 'a', symbol: 'APEX', price: 30, color: '#073183', icon: 'apex.svg' },
     { ...many(1)[0], id: 'h', symbol: 'HYP', price: 10, color: '#96fce4', icon: null },
+    { ...many(1)[0], id: 's', symbol: 'SMOL', price: 2.5, color: '#b87c29', icon: 'smol.svg' },
   ]
-  db.holdings = manual(['GOLD', 'APEX', 'HYP'])
+  db.holdings = manual(['GOLD', 'APEX', 'HYP', 'SMOL'])
   await fakeSupabase(page, db)
   await page.goto('portfolio')
   const alloc = page.locator('[data-portfolio-alloc]')
@@ -249,6 +250,9 @@ test('кольцо долей: у монеты — цвет её логотип�
   // иконки на кольце: картинка из Storage, без иконки — буквы монеты
   await expect(alloc.locator('[data-ring-icon="GOLD"] image')).toHaveAttribute('href', /coin-icons\/gold\.svg$/)
   await expect(alloc.locator('[data-ring-icon="HYP"] text')).toHaveText('HYP')
+  await expect(alloc.locator('[data-ring-icon="GOLD"]')).toHaveAttribute('data-place', 'in')
+  // мелкая монета (2,4 %) — иконка снаружи кольца, рядом со своим куском
+  await expect(alloc.locator('[data-ring-icon="SMOL"]')).toHaveAttribute('data-place', 'out')
   // настоящий цвет на экране: золото — тёплое (красный канал больше синего)
   const stroke = await ring('GOLD').evaluate((e) => getComputedStyle(e).stroke)
   expect(stroke).toMatch(/^(rgb|color|oklab)/)
