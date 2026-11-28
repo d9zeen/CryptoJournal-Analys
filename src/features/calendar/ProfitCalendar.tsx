@@ -24,6 +24,7 @@ import { PaletteStrip } from '@/features/palette/PaletteStrip'
 import { zonedParts } from '@/lib/tz'
 import { useGlare } from '@/lib/motion'
 import { DayPanel, type DayTrade } from './DayPanel'
+import { CoinChip } from '@/features/portfolio/CoinChip'
 
 const monthTitle = () => new Intl.DateTimeFormat(intlLocale(), { month: 'long', year: 'numeric' })
 /** «Ноябрь 2026» — без «г.» и без CSS capitalize (он делал «2026 Г.») */
@@ -423,7 +424,7 @@ function PairsCard({ data, fill }: { data: MonthPairs; fill: boolean }) {
         <div ref={listRef} data-pairs className="mt-2 flex flex-col gap-2.5 xl:min-h-0 xl:flex-1">
           {shown.map((p) => (
             <div key={p.symbol} title={`${p.symbol}: ${plural(p.count, c.tradesN)}`} className="grid h-4 shrink-0 grid-cols-[88px_minmax(0,1fr)_auto] items-center gap-2 text-xs">
-              <span className="truncate font-medium">{p.symbol}</span>
+              <CoinChip symbol={p.symbol} size="xs" />
               <Bar value={p.pnl} max={max} />
               <span className={`num w-20 text-right font-semibold ${p.pnl < 0 ? 'text-down' : ''}`}>{formatPnl(p.pnl)}</span>
             </div>

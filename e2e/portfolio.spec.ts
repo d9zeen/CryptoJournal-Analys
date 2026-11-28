@@ -76,22 +76,29 @@ test('портфель: балансы Bybit приходят сами, икон
   await expect(kpis).toContainText('по цене входа у 1 из 3')
   await expect(kpis.locator('[data-kpi-realized]')).toContainText('Зафиксировано')
 
-  // график (3 снимка + «сейчас») и полоса долей: от большей к меньшей, проценты на блоках, суммы в легенде
+  // график (3 снимка + «сейчас») и кольцо долей (владелец 28.11.2026): куски от большей к меньшей, в центре стоимость и число монет, доли и суммы в легенде
   await expect(page.locator('[data-portfolio-chart] .recharts-area')).toBeVisible()
   const alloc = page.locator('[data-portfolio-alloc]')
   await expect(alloc.getByRole('img', { name: /^Доли монет: BTC 77,6 %, ETH 18,6 %, USDT 3,7 %$/ })).toBeVisible()
-  await expect(alloc.locator('[data-alloc-bar] [data-seg]')).toHaveCount(3)
-  await expect(alloc.locator('[data-alloc-bar] [data-seg="BTC"]')).toHaveText('77,6 %')
-  // USDT — 3,7 %: на узком блоке процент не печатается, он в легенде рядом с суммой
-  await expect(alloc.locator('[data-alloc-bar] [data-seg="USDT"]')).toHaveText('')
+  await expect(alloc.locator('[data-alloc-donut] [data-seg]')).toHaveCount(3)
+  await expect(alloc.locator('[data-alloc-center]')).toContainText('4 монеты')
+  await expect(alloc.locator('li[data-seg="BTC"] [data-share]')).toHaveText('77,6 %')
   await expect(alloc.locator('li[data-seg="USDT"]')).toContainText('1 200,50 $3,7 %')
   await expect(alloc).toContainText('Хуже всех за 24 ч')
-  // наведение на строку легенды — блок этой монеты выделен, остальные приглушены
+  // кольцо прорисовано: маска дошла до конца
+  await expect.poll(() => alloc.locator('.ring-draw').evaluate((e) => getComputedStyle(e).strokeDashoffset)).toBe('0px')
+  // наведение на строку легенды — кусок этой монеты выдвинут, остальные приглушены, в центре — монета и её доля
   await alloc.locator('li[data-seg="ETH"]').hover()
-  await expect(alloc.locator('[data-alloc-bar]')).toHaveAttribute('data-hover', 'ETH')
-  await expect.poll(() => alloc.locator('[data-alloc-bar] [data-seg="BTC"]').evaluate((e) => getComputedStyle(e).opacity)).toBe('0.35')
-  await expect(alloc.locator('[data-alloc-bar] [data-seg="ETH"]')).toHaveCSS('opacity', '1')
+  await expect(alloc.locator('[data-alloc-donut]')).toHaveAttribute('data-hover', 'ETH')
+  await expect.poll(() => alloc.locator('[data-alloc-donut] [data-seg="BTC"]').evaluate((e) => getComputedStyle(e).opacity)).toBe('0.35')
+  await expect(alloc.locator('[data-alloc-donut] [data-seg="ETH"]')).toHaveCSS('opacity', '1')
+  await expect(alloc.locator('[data-alloc-donut] [data-seg="ETH"]')).toHaveAttribute('style', /translate/)
+  await expect(alloc.locator('[data-alloc-center]')).toContainText('ETH')
+  await expect(alloc.locator('[data-alloc-center]')).toContainText('18,6 %')
   await page.mouse.move(0, 0)
+  // убрали мышь — в центре снова стоимость, и она не набегает заново с нуля
+  await expect(alloc.locator('[data-alloc-center-coin]')).toHaveCount(0)
+  await expect(alloc.locator('[data-alloc-center]')).toContainText('32 200,50 $4 монеты', { timeout: 300 })
   // мини-график стейблкоина — ровная линия, у остальных — точка цветом итога недели
   await expect(table.locator('[data-coin="USDT"] [data-spark]')).toHaveAttribute('data-spark', 'flat')
   // ведём мышью по графику (на сенсорном экране — обычная подсказка у точки) — крупная цифра показывает стоимость в точке, строка над графиком — дату и изменение; убрали мышь — снова «сейчас»
@@ -193,24 +200,70 @@ test('доли: 7 монет — 4 крупные и «Другое», одна 
   await page.goto('portfolio')
   const alloc = page.locator('[data-portfolio-alloc]')
   // 100 + 90 + 80 + 70 = четыре крупные, остальные три (60 + 50 + 40 = 150) — «Другое · 3 монеты»
-  await expect(alloc.locator('[data-alloc-bar] [data-seg]')).toHaveCount(5)
+  await expect(alloc.locator('[data-alloc-donut] [data-seg]')).toHaveCount(5)
   await expect(alloc.locator('li[data-seg]').last()).toContainText('Другое3 монеты')
   await expect(alloc.locator('li[data-seg="other"]')).toContainText('150,00 $')
-  // цвет — по месту доли (шаги одного фиолетового), «Другое» — серый токен
-  await expect(alloc.locator('[data-alloc-bar] [data-seg="C0"]')).toHaveAttribute('style', /--color-alloc-1/)
-  await expect(alloc.locator('[data-alloc-bar] [data-seg="other"]')).toHaveAttribute('style', /--color-alloc-other/)
+  // у монет без цвета логотипа — шаги одного фиолетового по месту доли, «Другое» — серый токен
+  await expect(alloc.locator('[data-alloc-donut] [data-seg="C0"] circle.ring-coin')).toHaveAttribute('style', /--ring-c: var\(--color-alloc-1\)/)
+  await expect(alloc.locator('[data-alloc-donut] [data-seg="other"] circle.ring-coin')).toHaveAttribute('style', /--ring-c: var\(--color-alloc-other\)/)
+  // у каждого куска — плашка «логотип + тикер» снаружи кольца; у «Другого» плашки нет
+  await expect(alloc.locator('[data-ring-chip="C0"]')).toContainText('C0')
+  await expect(alloc.locator('[data-ring-chip]')).toHaveCount(4)
+  await expect(alloc.locator('[data-ring-chip="other"]')).toHaveCount(0)
 
   db.holdings = manual(['C0'])
   await page.reload()
-  await expect(alloc.locator('[data-alloc-bar] [data-seg]')).toHaveCount(1)
-  await expect(alloc.locator('[data-alloc-bar] [data-seg="C0"]')).toHaveText('100 %')
+  // одна монета — целое кольцо без зазора
+  await expect(alloc.locator('[data-alloc-donut] [data-seg]')).toHaveCount(1)
+  await expect(alloc.locator('li[data-seg="C0"] [data-share]')).toHaveText('100 %')
+  await expect(alloc.locator('[data-alloc-donut] [data-seg="C0"] circle')).toHaveAttribute('stroke-dashoffset', '0')
+  // одна монета — без плашки у кольца (она и так в центре и в легенде)
+  await expect(alloc.locator('[data-ring-chip]')).toHaveCount(0)
 
   // монета без цены: стоимость 0 — долю посчитать не из чего
   db.coins = [{ ...many(1)[0], price: null }]
   await page.reload()
   await expect(alloc).toContainText('Нет монет с ценой')
-  await expect(alloc.locator('[data-alloc-bar]')).toHaveCount(0)
+  await expect(alloc.locator('[data-alloc-donut]')).toHaveCount(0)
   await expect(page.locator('[data-hero-sub]')).toContainText('без цены: 1')
+})
+
+test('кольцо долей: у монеты — цвет её логотипа и иконка на куске; слишком тёмный / светлый цвет подмешивает цвет текста', async ({ page, db }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  db.usage = { plan: 'pro', trades_created: 0, trade_limit: null }
+  db.coins = [
+    { ...many(1)[0], id: 'g', symbol: 'GOLD', price: 60, color: '#dda85b', icon: 'gold.svg' },
+    { ...many(1)[0], id: 'a', symbol: 'APEX', price: 30, color: '#073183', icon: 'apex.svg' },
+    { ...many(1)[0], id: 'h', symbol: 'HYP', price: 10, color: '#96fce4', icon: null },
+    { ...many(1)[0], id: 's', symbol: 'SMOL', price: 2.5, color: '#b87c29', icon: 'smol.svg' },
+  ]
+  db.holdings = manual(['GOLD', 'APEX', 'HYP', 'SMOL'])
+  await fakeSupabase(page, db)
+  await page.goto('portfolio')
+  const alloc = page.locator('[data-portfolio-alloc]')
+  const ring = (s: string) => alloc.locator(`[data-alloc-donut] [data-seg="${s}"] circle.ring-coin`)
+  await expect(ring('GOLD')).toHaveAttribute('style', /--ring-c: #dda85b; --ring-mix-d: 0%; --ring-mix-l: 0%/)
+  // тёмно-синий — на тёмной теме с примесью текста, светлая мята — на светлой
+  await expect(ring('APEX')).toHaveAttribute('style', /--ring-c: #073183; --ring-mix-d: 50%/)
+  await expect(ring('HYP')).toHaveAttribute('style', /--ring-mix-l: 45%/)
+  // тот же цвет — у квадратика в легенде
+  await expect(alloc.locator('li[data-seg="GOLD"] i')).toHaveAttribute('style', /#dda85b/)
+  // плашки у кольца: логотип из Storage + тикер, без логотипа — буквы монеты; есть и у мелкой монеты (2,4 %)
+  await expect(alloc.locator('[data-ring-chip="GOLD"] img')).toHaveAttribute('src', /coin-icons\/gold\.svg$/)
+  await expect(alloc.locator('[data-ring-chip="GOLD"]')).toContainText('GOLD')
+  await expect(alloc.locator('[data-ring-chip="HYP"]')).toContainText('HYP')
+  await expect(alloc.locator('[data-ring-chip="SMOL"]')).toBeVisible()
+  // плашки не налезают друг на друга
+  const boxes = await alloc.locator('[data-ring-chip]').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()))
+  for (let i = 0; i < boxes.length; i++)
+    for (let j = i + 1; j < boxes.length; j++) {
+      const a = boxes[i]
+      const b = boxes[j]
+      expect(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top).toBe(true)
+    }
+  // настоящий цвет на экране: золото — тёплое (красный канал больше синего)
+  const stroke = await ring('GOLD').evaluate((e) => getComputedStyle(e).stroke)
+  expect(stroke).toMatch(/^(rgb|color|oklab)/)
 })
 
 test('портфель по ссылке без сумм: в легенде долей нет денег', async ({ page, db }) => {
@@ -228,8 +281,10 @@ test('портфель по ссылке без сумм: в легенде до
   await fakeSupabase(page, db, { signedIn: false })
   await page.goto(`p/${'ab'.repeat(16)}`)
   const alloc = page.locator('[data-portfolio-alloc]')
-  await expect(alloc.locator('[data-alloc-bar] [data-seg="C0"]')).toHaveText('70 %')
+  await expect(alloc.locator('li[data-seg="C0"] [data-share]')).toHaveText('70 %')
   await expect(alloc.locator('li[data-seg="C0"]')).not.toContainText('$')
+  // в центре кольца — без денег
+  await expect(alloc.locator('[data-alloc-center]')).not.toContainText('$')
 })
 
 test('фильтр источника: цифры — по источнику, над графиком сказано, что график — весь портфель', async ({ page, db }) => {

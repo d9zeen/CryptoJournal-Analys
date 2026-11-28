@@ -29,6 +29,7 @@ import { browserTimeZone } from '@/lib/tz'
 import { ScanStrip } from './ScanStrip'
 import { CalendarLanding } from './CalendarLanding'
 import { Shimmer } from '@/components/fx/Shimmer'
+import { CoinChip } from '@/features/portfolio/CoinChip'
 
 const MAX_BYTES = 5 * 1024 * 1024
 const PREVIEW_ROWS = 100
@@ -394,7 +395,7 @@ export function ImportPage() {
                           <td className="px-2 py-2">
                             {r.trade ? (
                               <>
-                                <span className="font-medium">{r.trade.title ?? r.trade.symbol}</span> <SideBadge side={r.trade.side} />
+                                <CoinChip symbol={r.trade.symbol} title={r.trade.title} className="font-medium" /> <SideBadge side={r.trade.side} />
                                 <div className="text-xs text-muted md:hidden">{formatDateTime(r.trade.exit_at)}</div>
                               </>
                             ) : (

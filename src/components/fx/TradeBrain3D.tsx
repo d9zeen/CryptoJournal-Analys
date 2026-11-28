@@ -206,7 +206,8 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
     const still = reduced()
     let C = readPalette()
     // схема цвета: по умолчанию фиолетовая (владелец 26.11.2026 из четырёх: по результату, по монетам, фиолетовая, мятная)
-    const scheme: BrainScheme = schemeProp ?? 'mono'
+    // по умолчанию — цвет монеты из её логотипа (владелец 28.11.2026: «у каждой монеты свой цвет и иконка, везде»; до этого — фиолетовая)
+    const scheme: BrainScheme = schemeProp ?? 'coin'
     const disposables: { dispose: () => void }[] = []
     const track = <T extends { dispose: () => void }>(x: T) => (disposables.push(x), x)
 
@@ -235,7 +236,7 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
       el.type = 'button'
       el.tabIndex = -1
       el.className =
-        'absolute left-0 top-0 z-[2] cursor-pointer whitespace-nowrap rounded-md border border-transparent bg-surface/70 px-1.5 py-0.5 text-xs font-semibold text-muted opacity-0 transition-[opacity,color,border-color] duration-300 hover:border-primary/60 hover:text-text'
+        'absolute left-0 top-0 z-[2] flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-md border border-transparent bg-surface-2/90 py-0.5 pr-2 pl-0.5 text-xs font-semibold text-text opacity-0 transition-[opacity,border-color] duration-300 hover:border-primary/60'
       el.style.pointerEvents = 'none'
       el.addEventListener('click', () => {
         const label = el.dataset.brainCoin
@@ -685,11 +686,11 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
     }
 
     // подписи у самых больших «полушарий»
-    let clusters: { label: string; n: number; c: THREE.Vector3; first: number }[] = []
+    let clusters: { label: string; n: number; c: THREE.Vector3; first: number; icon: string | null }[] = []
     const buildClusters = () => {
       clusters = [...cls]
         .sort((a, b) => b.n - a.n)
-        .map((c) => ({ label: c.label, n: c.n, c: c.p, first: c.first }))
+        .map((c) => ({ label: c.label, n: c.n, c: c.p, first: c.first, icon: nodes[c.first]?.tr.icon ?? null }))
     }
 
     // подсветка связей нейрона под мышью — по изгибам дендритов
@@ -1188,10 +1189,14 @@ export function TradeBrain3D({ trades, size, focus, busy, onOpenTrade, onRefresh
         if (el.dataset.brainCoin !== c.label || el.dataset.n !== String(c.n)) {
           el.dataset.brainCoin = c.label
           el.dataset.n = String(c.n)
-          el.textContent = `${c.label} · ${c.n}`
+          // плашка монеты «логотип + тикер · сделок» (как в списке сделок и «Портфеле»); логотипа нет — буквы на кружке
+          el.innerHTML =
+            (c.icon
+              ? `<img src="${esc(c.icon)}" alt="" class="size-[18px] rounded-full bg-surface">`
+              : `<span class="grid size-[18px] place-items-center rounded-full bg-surface text-[10px] text-muted">${esc(c.label.slice(0, 2))}</span>`) +
+            `<span>${esc(c.label)}</span><span class="font-normal text-muted">${c.n}</span>`
         }
         el.classList.toggle('border-primary', ci >= 0)
-        el.classList.toggle('text-text', ci >= 0)
         el.setAttribute('aria-pressed', String(ci >= 0))
         const p = toScreen(c.c)
         el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -50%)`

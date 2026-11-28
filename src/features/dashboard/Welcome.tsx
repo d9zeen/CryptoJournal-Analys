@@ -20,6 +20,7 @@ import { useProfile } from '@/features/settings/api'
 import { exchangeName } from '@/lib/exchanges'
 import type { ClosedTrade } from '@/lib/calc/stats'
 import { big, Counts, gaugeRow, HalfGauge, PfCaption, Widget } from './Widgets'
+import { CoinChip } from '@/features/portfolio/CoinChip'
 
 export function Welcome() {
   return (
@@ -434,7 +435,7 @@ function RecentTrades({ trades, pos }: { trades: ClosedTrade[]; pos: number }) {
           >
             <span className="flex min-w-0 items-center gap-2">
               <span className="num w-11 shrink-0 text-xs text-muted">{formatDayShort(tr.exit_at.slice(0, 10))}</span>
-              <span className="truncate font-medium">{tr.symbol}</span>
+              <CoinChip symbol={tr.symbol} />
               <SideBadge side={tr.side} />
             </span>
             <span className={`num shrink-0 font-semibold ${pnlClass(tr.pnl)}`}>{formatPnl(tr.pnl)}</span>

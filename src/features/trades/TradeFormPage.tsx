@@ -25,6 +25,7 @@ import { isStopOnWrongSide, marginUsd, qtyCoins } from '@/lib/calc/trade'
 import { formatNumber, formatPnl, formatR, formatUsd, isoToLocalInput, pnlClass } from '@/lib/format'
 import { dbErrorMessage } from '@/lib/errors'
 import type { MarketType, Side } from '@/lib/calc/trade'
+import { CoinChip } from '@/features/portfolio/CoinChip'
 
 // график сделки тянет Recharts — грузим лениво, отдельным файлом
 const TradeChart = lazy(() => import('./TradeChart').then((m) => ({ default: m.TradeChart })))
@@ -160,7 +161,18 @@ function TradeForm({ existing }: { existing: ReturnType<typeof useTrade>['data']
               <path d="M19 12H5M11 6l-6 6 6 6" />
             </svg>
           </Link>
-          <h1 className="truncate text-xl font-semibold">{isNew ? t.tradeForm.titleNew : `${t.tradeForm.titleEdit} ${existing!.title ?? existing!.symbol}`}</h1>
+          <h1 className="flex min-w-0 items-center gap-2 truncate text-xl font-semibold">
+            {isNew ? (
+              t.tradeForm.titleNew
+            ) : existing!.title ? (
+              `${t.tradeForm.titleEdit} ${existing!.title}`
+            ) : (
+              <>
+                <span className="shrink-0">{t.tradeForm.titleEdit}</span>
+                <CoinChip symbol={existing!.symbol} size="md" />
+              </>
+            )}
+          </h1>
         </div>
         <div className="flex shrink-0 items-center gap-1 md:gap-3">
           {!isNew && (

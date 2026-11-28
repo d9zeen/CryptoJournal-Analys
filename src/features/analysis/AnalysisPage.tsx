@@ -20,6 +20,7 @@ import { rangeFor, type CustomRange, type PeriodPreset } from '@/lib/period'
 import { byEmotion, bySetup, bySide, bySymbol, closedTrades, groupTotal, topMistakes, type ClosedTrade, type Group, type StatTrade } from '@/lib/calc/stats'
 import { GroupTable, type Row } from '@/features/dashboard/GroupTable'
 import { GroupTrades } from './GroupTrades'
+import { CoinChip } from '@/features/portfolio/CoinChip'
 
 /** Вкладки «Разбора» — капсулой по центру (как верхнее меню). «Время суток» и «Плечо» владелец убрал 15.11.2026 */
 const TABS = ['setups', 'mistakes', 'pairs', 'emotions'] as const
@@ -145,7 +146,7 @@ export function AnalysisPage() {
           total: stats.mistakesTotal,
         }
       case 'pairs':
-        return { title: t.analysis.tabs.pairs, rows: stats.symbols.map((g) => ({ id: g.key, label: stats.titles.get(g.key) ?? g.key, group: g })), total: stats.total }
+        return { title: t.analysis.tabs.pairs, rows: stats.symbols.map((g) => ({ id: g.key, label: stats.titles.get(g.key) ?? g.key, node: <CoinChip symbol={g.key} title={stats.titles.get(g.key)} />, group: g })), total: stats.total }
       case 'emotions':
         return { title: t.analysis.tabs.emotions, rows: toRows(stats.emotions, names(emotions), c.noEmotion), total: stats.total }
     }

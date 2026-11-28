@@ -17,6 +17,7 @@ import { intlLocale } from '@/lib/locale'
 import { parseYmd } from '@/lib/period'
 import { zonedParts } from '@/lib/tz'
 import type { TradeWithTags } from '@/types/db'
+import { CoinChip } from '@/features/portfolio/CoinChip'
 
 const RECENT_N = 5
 
@@ -41,7 +42,7 @@ export function RecentTrades({ trades, timeZone, i = 0 }: { trades: TradeWithTag
             <Link to={`/trades/${tr.id}`} className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-2.5 text-sm transition-colors hover:bg-surface-2/60">
               <span className="flex min-w-0 items-center gap-2">
                 <span className="num w-12 shrink-0 text-xs text-muted">{formatDayShort(zonedParts(tr.exit_at!, timeZone).date)}</span>
-                <span className="truncate font-medium">{tr.title ?? tr.symbol}</span>
+                <CoinChip symbol={tr.symbol} title={tr.title} className="truncate font-medium" />
                 <SideBadge side={tr.side} />
               </span>
               <span className={`num shrink-0 font-semibold whitespace-nowrap ${pnlClass(Number(tr.pnl))}`}>{formatPnl(Number(tr.pnl))}</span>

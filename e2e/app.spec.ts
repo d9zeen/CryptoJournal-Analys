@@ -210,7 +210,13 @@ test.describe('дашборд и сделки', () => {
     db.trades = [makeTrade(0, { symbol: 'OLDUSDT', entry_at: '2025-01-05T10:00:00Z', exit_at: '2025-01-05T12:00:00Z' })]
     await fakeSupabase(page, db)
     await page.goto('trades')
-    await expect(page.getByText('OLDUSDT').filter({ visible: true }).first()).toBeVisible()
+    // пара — плашкой «логотип + тикер»: OLDUSDT → OLD
+    await expect(page.locator('[data-coin-chip="OLD"]').filter({ visible: true }).first()).toBeVisible()
+    // котировка пары не теряется: «OLD/USDT» и маленький логотип USDT поверх (владелец 28.11.2026: «а USDT где потерял?»)
+    const chip = page.locator('[data-coin-chip="OLD"]').filter({ visible: true }).first()
+    await expect(chip).toHaveAttribute('data-quote', 'USDT')
+    await expect(chip).toContainText('OLD/USDT')
+    await expect(chip.locator('[data-quote-icon]')).toHaveCount(1)
   })
 
   test('пустой дневник предлагает импорт', async ({ page, db }) => {
@@ -864,7 +870,7 @@ test('«Разбор»: сводка Long / Short наверху, строка-�
   await expect(page.locator('[data-shot="insight"]')).toHaveText(/^Лучше всего работает: Отбой \(\+178,00\s\$\)\. Дороже всего обходится: Вход без стопа \(−178,00\s\$\)\.$/)
   // полоска: плюс — вправо от середины, минус — влево (на вкладке «Пары» есть и плюс, и минус)
   await page.getByRole('tab', { name: 'Пары' }).click()
-  await expect(page.locator('[data-shot="analysis-table"] tbody')).toContainText('BTCUSDT')
+  await expect(page.locator('[data-shot="analysis-table"] tbody [data-coin-chip="BTC"]')).toBeVisible()
   const bars = page.locator('[data-bar] i:last-child')
   const cls = await bars.evaluateAll((els) => els.map((e) => e.className))
   expect(cls.some((c) => c.includes('left-1/2') && c.includes('bg-up'))).toBe(true)
@@ -1118,17 +1124,17 @@ test.describe('«Разбор»: вкладки, «Итого», сортиро�
     await expect(page.getByRole('tab', { name: 'Пары' })).toHaveAttribute('aria-selected', 'true')
     const table = page.locator('[data-shot="analysis-table"]')
     // по умолчанию — по PnL: BTC (+100) выше ETH (+20)
-    await expect(table.locator('tbody tr').first()).toContainText('BTCUSDT')
+    await expect(table.locator('tbody tr').first().locator('[data-coin-chip="BTC"]')).toBeVisible()
     await expect(table.locator('tfoot tr[data-total]')).toContainText('Итого')
     await expect(table.locator('tfoot [data-money]')).toHaveText(/\+120,00\s\$/)
     await table.getByRole('button', { name: 'Сортировать: Винрейт' }).click()
     await expect(table.locator('th[aria-sort="descending"]')).toContainText('Винрейт')
-    await expect(table.locator('tbody tr').first()).toContainText('BTCUSDT')
+    await expect(table.locator('tbody tr').first().locator('[data-coin-chip="BTC"]')).toBeVisible()
     await table.getByRole('button', { name: 'Сортировать: Винрейт' }).click()
-    await expect(table.locator('tbody tr').first()).toContainText('ETHUSDT')
+    await expect(table.locator('tbody tr').first().locator('[data-coin-chip="ETH"]')).toBeVisible()
     if (!isMobile) {
       await table.getByRole('button', { name: 'Сортировать: Сделок' }).click()
-      await expect(table.locator('tbody tr').first()).toContainText('ETHUSDT')
+      await expect(table.locator('tbody tr').first().locator('[data-coin-chip="ETH"]')).toBeVisible()
     }
     // ссылка с вкладкой открывает её же
     await page.goto('analysis?tab=emotions')

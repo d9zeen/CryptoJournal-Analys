@@ -13,6 +13,7 @@ import { SideBadge } from '@/components/SideBadge'
 import { formatDateShort, formatPnl, pnlClass } from '@/lib/format'
 import { screenshotUrls } from '@/features/trades/screenshot'
 import type { TradeWithTags } from '@/types/db'
+import { CoinChip } from '@/features/portfolio/CoinChip'
 
 type Props = {
   /** заголовок: название выбранной строки или null — «Все сделки периода» */
@@ -149,7 +150,7 @@ export function GroupTrades({ name, trades, onReset, canPick = true }: Props) {
                 {/* строка 1: пара и PnL; строка 2: Long / Short и дата */}
                 <div className="flex items-baseline justify-between gap-1.5 px-1 text-sm">
                   <span className="min-w-0 truncate font-medium" title={tr.title ?? tr.symbol}>
-                    {tr.title ?? tr.symbol}
+                    <CoinChip symbol={tr.symbol} title={tr.title} />
                   </span>
                   <span className={`num shrink-0 font-semibold ${pnlClass(pnl)}`}>{formatPnl(pnl)}</span>
                 </div>

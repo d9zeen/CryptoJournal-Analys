@@ -21,6 +21,7 @@ import { formatDateTime, formatDuration, formatPnl, formatPrice, formatR, format
 import { dbErrorMessage } from '@/lib/errors'
 import type { TradeWithTags } from '@/types/db'
 import { useMediaQuery } from '@/lib/useMediaQuery'
+import { CoinChip } from '@/features/portfolio/CoinChip'
 
 /** Сколько сделок рисуем за раз: тысячи строк сразу тормозят браузер */
 const PAGE = 100
@@ -319,7 +320,7 @@ export function TradesPage() {
                       <td className="num px-4 py-3 font-semibold">
                         <Grow open={fresh.has(tr.id)}>
                           <Link to={`/trades/${tr.id}`} onClick={(e) => e.stopPropagation()} className="hover:underline" title={tr.title ?? undefined}>
-                            {tr.title ? <span className="line-clamp-2 max-w-80 font-sans">{tr.title}</span> : tr.symbol}
+                            {tr.title ? <span className="line-clamp-2 max-w-80 font-sans">{tr.title}</span> : <CoinChip symbol={tr.symbol} className="font-sans" />}
                           </Link>
                           <ShotsBadge trade={tr} />
                         </Grow>
@@ -599,7 +600,7 @@ function TradeCard({
         >
           <div className="flex items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2">
-              <span className={tr.title ? 'line-clamp-2 font-semibold' : 'num font-semibold'}>{tr.title ?? tr.symbol}</span>
+              {tr.title ? <span className="line-clamp-2 font-semibold">{tr.title}</span> : <CoinChip symbol={tr.symbol} />}
               <SideBadge side={tr.side} />
               <ShotsBadge trade={tr} />
               {tr.exit_at === null && <OpenBadge />}
