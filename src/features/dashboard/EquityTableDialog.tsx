@@ -10,6 +10,7 @@ import type { EquityPoint } from '@/lib/calc/stats'
 import { formatDateTime, pnlClass } from '@/lib/format'
 import { Button } from '@/components/ui/Button'
 import { formatUnit, inUnit, type EquityUnit } from './equityTime'
+import { CoinChip } from '@/features/portfolio/CoinChip'
 
 const PAGE = 100
 
@@ -83,7 +84,7 @@ export function EquityTableDialog({ open, onClose, curve, unit, balance }: Props
                     className="num cursor-pointer border-t border-border transition-colors hover:bg-surface-2/60"
                   >
                     <td className="px-3 py-2 whitespace-nowrap text-muted">{formatDateTime(r.at)}</td>
-                    <td className="px-3 py-2 font-semibold">{r.symbol}</td>
+                    <td className="px-3 py-2">{r.symbol ? <CoinChip symbol={r.symbol} /> : null}</td>
                     <td className={`px-3 py-2 text-right whitespace-nowrap ${pnlClass(trade)}`}>{formatUnit(trade, unit)}</td>
                     <td className={`px-3 py-2 text-right whitespace-nowrap ${pnlClass(total)}`}>{formatUnit(total, unit)}</td>
                     <td className={`px-3 py-2 text-right whitespace-nowrap ${dd < -1e-9 ? 'text-loss' : 'text-muted'}`}>

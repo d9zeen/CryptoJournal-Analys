@@ -3,14 +3,14 @@
  * сортировка по клику на заголовок (PnL, винрейт, число сделок; для ошибок — убытки), внизу строка «Итого».
  * Деньги не обрезаются (data-money, e2e); полоска — PnL от середины, в «Ошибках» — красная справа налево.
  */
-import { useState, type CSSProperties } from 'react'
+import { useState, type CSSProperties, type ReactNode } from 'react'
 import { RollNumber } from '@/components/RollNumber'
 import { fmt, useT } from '@/i18n'
 import { Card } from '@/components/ui/Card'
 import { formatPercent, formatPnl, formatR, pnlClass } from '@/lib/format'
 import { avgMistakeLoss, sortGroups, type Group, type GroupSortKey } from '@/lib/calc/stats'
 
-export type Row = { id: string; label: string; group: Group<unknown> }
+export type Row = { id: string; label: string; group: Group<unknown>; /** вместо текста — своё (плашка монеты во вкладке «Пары») */ node?: ReactNode }
 
 type Props = {
   title: string
@@ -99,7 +99,7 @@ export function GroupTable({ title, hint, rows, total, mode = 'default', empty, 
             </tr>
           </thead>
           <tbody>
-            {visible.map(({ id, label, group: g }) => (
+            {visible.map(({ id, label, node, group: g }) => (
               <tr
                 key={id}
                 data-row={id}
@@ -122,7 +122,7 @@ export function GroupTable({ title, hint, rows, total, mode = 'default', empty, 
               >
                 {/* название ужимается и переносится, деньги — никогда: у колонок с суммами whitespace-nowrap и ширина по содержимому */}
                 <td className={`max-w-0 ${py} pr-3 ${onSelect ? 'pl-3' : ''}`} title={label}>
-                  <div className="[overflow-wrap:anywhere]">{label}</div>
+                  <div className="[overflow-wrap:anywhere]">{node ?? label}</div>
                   {/* на телефоне колонки «Сделок» нет (тесно для сумм) — число под названием */}
                   <div className="mt-1 text-xs text-muted sm:hidden">{fmt(t.dashboard.tooltipTrades, { n: g.count })}</div>
                   {mistakes ? (

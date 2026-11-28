@@ -16,6 +16,7 @@ import { useUsage } from '@/features/settings/api'
 import { dbErrorMessage } from '@/lib/errors'
 import { formatDay, formatPnl, formatTimeIn, pnlClass } from '@/lib/format'
 import { NOTE_MAX, useDayNote, useSaveDayNote } from './notesApi'
+import { CoinChip } from '@/features/portfolio/CoinChip'
 
 export type DayTrade = { id: string; symbol: string; title?: string | null; side: 'long' | 'short'; exit_at: string; pnl: number }
 
@@ -67,7 +68,7 @@ export function DayPanel({ day, trades, timeZone, onClose }: { day: string; trad
                 <Link to={`/trades/${tr.id}`} className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm hover:bg-surface-2/60">
                   <span className="flex min-w-0 items-center gap-2">
                     <span className="num w-14 shrink-0 text-xs text-muted">{formatTimeIn(tr.exit_at, timeZone)}</span>
-                    <span className="truncate font-medium">{tr.title ?? tr.symbol}</span>
+                    <CoinChip symbol={tr.symbol} title={tr.title} className="truncate font-medium" />
                     <SideBadge side={tr.side} />
                   </span>
                   <span className={`num shrink-0 font-semibold ${pnlClass(tr.pnl)}`}>{formatPnl(tr.pnl)}</span>

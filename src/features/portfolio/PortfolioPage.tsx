@@ -40,7 +40,6 @@ import {
 } from '@/lib/calc/portfolio'
 import type { Connection } from '@/features/connections/api'
 import {
-  coinIconUrl,
   useAddManual,
   useAutoRefreshPortfolio,
   useCoins,
@@ -400,13 +399,28 @@ const signedPct = (v: number) => (v > 0 ? '+' : v < 0 ? '−' : '') + formatPerc
 /** Кольцо долей: viewBox 200×200, радиус средней линии, толщина, зазор между кусками (цвет поверхности), насколько выдвигается кусок под мышью */
 const RING = { r: 78, w: 30, gap: 2.4, pop: 6 }
 const RING_C = 2 * Math.PI * RING.r
-/** иконка монеты на кольце — у куска от 7 %; у куска от 1,5 % до 7 % — поменьше и снаружи кольца (внутри не помещается) */
-const RING_ICON_MIN = 0.07
-const RING_ICON_OUT_MIN = 0.015
-const RING_ICON = 24
-const RING_ICON_OUT = 18
-/** центр иконки снаружи: край кольца + отступ */
-const RING_OUT_R = RING.r + RING.w / 2 + 3 + RING_ICON_OUT / 2
+/** viewBox кольца: −10…210 (запас под выдвинутый кусок) */
+const RING_VB = { min: -10, size: 220 }
+/** плашка монеты «логотип + тикер» у куска от 1,5 % — снаружи кольца, у середины куска (владелец 28.11.2026, образец — его NEAR / VVV / HYPE) */
+const RING_CHIP_MIN = 0.015
+/** радиус точки, к которой липнет плашка: край кольца + отступ */
+const RING_CHIP_R = RING.r + RING.w / 2 + 5
+/** наименьшее расстояние между плашками по высоте, % размера кольца (соседние мелкие куски — плашки не налезают) */
+const RING_CHIP_GAP = 11
+const pct = (v: number) => ((v - RING_VB.min) / RING_VB.size) * 100
+
+/** плашки по бокам кольца: справа — от точки вправо, слева — влево, сверху и снизу — по центру; на одной стороне раздвигаем по высоте */
+function placeChips<T extends { mid: number }>(items: T[]): (T & { x: number; y: number; side: 'l' | 'r' | 'c' })[] {
+  const placed = items.map((it) => {
+    const c = Math.cos(it.mid)
+    return { ...it, x: pct(100 + c * RING_CHIP_R), y: pct(100 + Math.sin(it.mid) * RING_CHIP_R), side: (c > 0.3 ? 'r' : c < -0.3 ? 'l' : 'c') as 'l' | 'r' | 'c' }
+  })
+  for (const side of ['l', 'r', 'c'] as const) {
+    const list = placed.filter((p) => p.side === side).sort((a, b) => a.y - b.y)
+    for (let i = 1; i < list.length; i++) if (list[i].y - list[i - 1].y < RING_CHIP_GAP) list[i].y = list[i - 1].y + RING_CHIP_GAP
+  }
+  return placed
+}
 
 /** относительная яркость цвета #rrggbb (WCAG) */
 function luminance(hex: string): number | null {
@@ -470,10 +484,7 @@ export function Allocation({ rows, amounts = true }: { rows: PortfolioRow[]; amo
     return {
       s,
       i,
-      ix: 100 + Math.cos(mid) * RING.r,
-      iy: 100 + Math.sin(mid) * RING.r,
-      ox: 100 + Math.cos(mid) * RING_OUT_R,
-      oy: 100 + Math.sin(mid) * RING_OUT_R,
+      mid,
       dash: single ? `${RING_C} 0` : `${Math.max(0.01, len - RING.gap)} ${RING_C}`,
       offset: single ? 0 : -(start + RING.gap / 2),
       dx: single ? 0 : Math.cos(mid) * RING.pop,
@@ -481,7 +492,7 @@ export function Allocation({ rows, amounts = true }: { rows: PortfolioRow[]; amo
     }
   })
   const colorFor = (s: { symbol: string | null; color: string | null }, i: number) => ringColor(s.symbol === null ? null : s.color, `var(--color-alloc-${tone(s, i)})`)
-  const iconOf = (s: { symbol: string | null }) => (s.symbol === null ? null : coinIconUrl(rows.find((r) => r.symbol === s.symbol)?.coin?.icon ?? null))
+  const chips = parts.length > 1 ? placeChips(arcs.filter((x) => x.s.symbol !== null && x.s.share / shareSum >= RING_CHIP_MIN)) : []
   const on = hover ? parts.find((s) => key(s) === hover) : undefined
   const onRow = on ? rows.find((r) => r.symbol === on.symbol) : undefined
   return (
@@ -491,9 +502,9 @@ export function Allocation({ rows, amounts = true }: { rows: PortfolioRow[]; amo
         <p className="text-sm text-muted">{a.empty}</p>
       ) : (
         <>
-          <div className="relative mx-auto aspect-square w-full max-w-[264px]">
+          <div className="relative mx-auto my-2 aspect-square w-[min(220px,calc(100%-8.5rem))]">
             <svg
-              viewBox="-20 -20 240 240"
+              viewBox={`${RING_VB.min} ${RING_VB.min} ${RING_VB.size} ${RING_VB.size}`}
               role="img"
               aria-label={fmt(a.barLabel, {
                 list: parts.map((s) => `${name(s)} ${formatPercent(s.share)}`).join(', '),
@@ -503,18 +514,15 @@ export function Allocation({ rows, amounts = true }: { rows: PortfolioRow[]; amo
               className="alloc-bar size-full overflow-visible"
             >
               <defs>
-                <clipPath id={`${maskId}-clip`} clipPathUnits="objectBoundingBox">
-                  <circle cx="0.5" cy="0.5" r="0.5" />
-                </clipPath>
                 {/* маска прорисовки: белая дуга бежит по кругу от 12 часов и открывает кольцо */}
-                <mask id={maskId} maskUnits="userSpaceOnUse" x="-20" y="-20" width="240" height="240">
+                <mask id={maskId} maskUnits="userSpaceOnUse" x={RING_VB.min} y={RING_VB.min} width={RING_VB.size} height={RING_VB.size}>
                   <circle
                     cx="100"
                     cy="100"
                     r={RING.r}
                     fill="none"
                     stroke="white"
-                    strokeWidth={(RING_OUT_R + RING_ICON_OUT / 2 + RING.pop + 2 - RING.r) * 2}
+                    strokeWidth={RING.w + RING.pop * 2 + 4}
                     strokeDasharray={RING_C}
                     transform="rotate(-90 100 100)"
                     className="ring-draw"
@@ -523,7 +531,7 @@ export function Allocation({ rows, amounts = true }: { rows: PortfolioRow[]; amo
                 </mask>
               </defs>
               <g mask={`url(#${maskId})`}>
-                {arcs.map(({ s, i, ix, iy, ox, oy, dash, offset, dx, dy }) => (
+                {arcs.map(({ s, i, dash, offset, dx, dy }) => (
                   <g
                     key={key(s)}
                     data-seg={key(s)}
@@ -545,28 +553,34 @@ export function Allocation({ rows, amounts = true }: { rows: PortfolioRow[]; amo
                       strokeDashoffset={offset}
                       transform="rotate(-90 100 100)"
                     />
-                    {/* иконка монеты на её куске (от 7 %): подложка цвета карточки + логотип из нашего Storage; появляется, когда до неё дошла прорисовка */}
-                    {s.symbol !== null && parts.length > 1 && s.share / shareSum >= RING_ICON_OUT_MIN && (() => {
-                      const inside = s.share / shareSum >= RING_ICON_MIN
-                      const [x, y, d] = inside ? [ix, iy, RING_ICON] : [ox, oy, RING_ICON_OUT]
-                      return (
-                        <g data-ring-icon={key(s)} data-place={inside ? 'in' : 'out'}>
-                          {/* подложка цвета карточки: логотип обычно залит тем же цветом, что и кусок, — без неё он сливается */}
-                          <circle cx={x} cy={y} r={d / 2 + (inside ? 3 : 1.5)} className="fill-surface" />
-                          {iconOf(s) ? (
-                            <image href={iconOf(s)!} x={x - d / 2} y={y - d / 2} width={d} height={d} clipPath={`url(#${maskId}-clip)`} preserveAspectRatio="xMidYMid slice" />
-                          ) : (
-                            <text x={x} y={y} dy="0.35em" textAnchor="middle" className="fill-muted text-[7px] font-bold">
-                              {(s.symbol ?? '').slice(0, 3)}
-                            </text>
-                          )}
-                        </g>
-                      )
-                    })()}
                   </g>
                 ))}
               </g>
             </svg>
+            {/* плашки монет у кусков: логотип + тикер; появляются, когда кольцо дорисовалось; наведение — как на кусок */}
+            <div className="alloc-legend pointer-events-none absolute inset-0" data-hover={hover ?? undefined}>
+              {chips.map(({ s, x, y, side }) => {
+                const row = rows.find((r) => r.symbol === s.symbol)
+                return (
+                  <span
+                    key={key(s)}
+                    data-ring-chip={key(s)}
+                    data-on={hover === key(s) ? '' : undefined}
+                    onMouseEnter={() => setHover(key(s))}
+                    onMouseLeave={() => setHover(null)}
+                    className="alloc-seg ring-chip pointer-events-auto absolute flex items-center gap-1.5 rounded-md border border-transparent bg-surface-2 py-0.5 pr-2 pl-0.5 text-xs font-semibold whitespace-nowrap data-[on]:border-primary"
+                    style={{
+                      left: `${x}%`,
+                      top: `${y}%`,
+                      transform: side === 'r' ? 'translate(0, -50%)' : side === 'l' ? 'translate(-100%, -50%)' : `translate(-50%, ${y < 50 ? '-100%' : '0'})`,
+                    }}
+                  >
+                    <CoinIcon symbol={s.symbol!} icon={row?.coin?.icon} size={18} />
+                    {name(s)}
+                  </span>
+                )
+              })}
+            </div>
             {/* центр: стоимость и число монет; под мышью поверх — монета, сумма, доля (смена — только прозрачностью: сумма не набегает заново) */}
             <div aria-hidden className="pointer-events-none absolute inset-[26%] grid place-items-center text-center" data-alloc-center>
               <div className={`col-start-1 row-start-1 flex max-w-full flex-col items-center transition-opacity duration-150 ${on ? 'opacity-0' : ''}`}>
