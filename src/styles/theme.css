@@ -732,6 +732,22 @@
 .alloc-seg {
   transition: opacity 160ms var(--ease-snap);
 }
+/* Кольцо долей (Allocation, 28.11.2026): кусок под мышью выдвигается наружу (transform), кольцо прорисовывается по кругу маской (stroke-dashoffset) */
+.ring-seg {
+  transition: opacity 160ms var(--ease-snap), transform 220ms var(--ease-spring);
+}
+.ring-draw {
+  stroke-dashoffset: 0;
+  animation: ring-draw 1s var(--ease-snap) both;
+}
+@keyframes ring-draw {
+  from { stroke-dashoffset: var(--ring-c); }
+  to { stroke-dashoffset: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ring-draw { animation: none; }
+  .ring-seg { transition: opacity 160ms var(--ease-snap); }
+}
 :is(.alloc-bar, .alloc-legend)[data-hover] .alloc-seg:not([data-on]) {
   opacity: 0.35;
 }

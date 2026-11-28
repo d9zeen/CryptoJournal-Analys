@@ -6,7 +6,7 @@
  * Сверху — стоимость, изменение за 24 ч, прибыль и вложено (по ценам входа); на xl рядом график стоимости и кольцо «Из чего состоит»;
  * ниже — таблица монет с иконками (на телефоне — карточки). Балансы бирж приходят сами (api.ts), монеты можно добавить руками.
  */
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { fmt, plural, useT } from '@/i18n'
@@ -396,27 +396,54 @@ function Stat({
 
 const signedPct = (v: number) => (v > 0 ? '+' : v < 0 ? '−' : '') + formatPercent(Math.abs(v), 2)
 
-/** Доля печатается на самой полосе, если блок шире ~10 %; уже — доля пишется в легенде рядом с названием */
-const LABEL_MIN = 0.1
+/** Кольцо долей: viewBox 200×200, радиус средней линии, толщина, зазор между кусками (цвет поверхности), насколько выдвигается кусок под мышью */
+const RING = { r: 78, w: 30, gap: 2.4, pop: 6 }
+const RING_C = 2 * Math.PI * RING.r
 
 /**
- * «Из чего состоит» (18.11.2026, скилл dataviz: одно целое из ≤ 5 частей читается полосой, а не кольцом):
- * высокая полоса 28px — доли блоками от большей к меньшей, проценты прямо на блоках; цвет — шаги одного фиолетового
- * (--color-alloc-1…4, «Другое» серым; проверено validate_palette на обеих темах). Ниже — легенда с иконками и суммами,
- * наведение на строку или блок приглушает остальные. Полоса открывается той же «шторкой», что и график.
- * amounts = false — портфель по ссылке со скрытыми суммами: в легенде только названия.
+ * «Из чего состоит» — кольцо с суммой в центре (владелец 28.11.2026: «пай-чарт» вместо полосы; выбрал кольцо из трёх вариантов;
+ * образцы 21st.dev — tanstack-charts-center-donut и tanstack-charts-pie-interactive). Скилл dataviz кольцо для долей не любит
+ * (углы читаются хуже длины), поэтому доли — и числом в легенде у каждой строки, и в центре кольца при наведении.
+ * Куски от большей доли к меньшей по часовой стрелке от 12 часов, между ними зазор цвета карточки; цвет — шаги одного фиолетового
+ * (--color-alloc-1…4, «Другое» серым; validate_palette на обеих темах). В центре — стоимость и число монет (набегает).
+ * Наведение на кусок или строку легенды: кусок выдвигается наружу, остальные тише, в центре — монета, сумма и доля.
+ * Появление: кольцо прорисовывается по кругу (маска stroke-dashoffset, .ring-draw), «уменьшить движение» — сразу целиком.
+ * amounts = false — портфель по ссылке со скрытыми суммами: в центре и в легенде только доли.
  */
 export function Allocation({ rows, amounts = true }: { rows: PortfolioRow[]; amounts?: boolean }) {
   const t = useT()
   const a = t.portfolio.alloc
-  // доли меньше 0,05 % (мелочь вроде SHIB на 0,0001 $, если её показали) — не блоком в полосу: это пустая щель «0 %»
+  // доли меньше 0,05 % (мелочь вроде SHIB на 0,0001 $, если её показали) — не куском: это пустая щель «0 %»
   const parts = allocation(rows, 4).filter((s, _, all) => all.length === 1 || s.share >= 0.0005)
   const m = movers(rows)
   const [hover, setHover] = useState<string | null>(null)
+  const maskId = `alloc-ring-${useId().replace(/:/g, '')}`
   const key = (s: { symbol: string | null }) => s.symbol ?? 'other'
   const tone = (s: { symbol: string | null }, i: number) => (s.symbol === null ? 'other' : String(i + 1))
   const rest = rows.filter((r) => r.value !== null && r.value > 0).length - (parts.length - (parts.some((s) => s.symbol === null) ? 1 : 0))
   const name = (s: { symbol: string | null }) => (s.symbol === null ? a.other : s.symbol === 'POLYMARKET' ? t.portfolio.polymarket : s.symbol)
+  const total = parts.reduce((x, s) => x + s.value, 0)
+  const priced = rows.filter((r) => r.value !== null && r.value > 0).length
+  // куски: начало и длина по окружности; доли считаем от суммы показанных (после отсечения мелочи), чтобы кольцо замыкалось
+  const shareSum = parts.reduce((x, s) => x + s.share, 0) || 1
+  let at = 0
+  const arcs = parts.map((s, i) => {
+    const len = (s.share / shareSum) * RING_C
+    const start = at
+    at += len
+    const mid = ((start + len / 2) / RING_C) * Math.PI * 2 - Math.PI / 2
+    const single = parts.length === 1
+    return {
+      s,
+      i,
+      dash: single ? `${RING_C} 0` : `${Math.max(0.01, len - RING.gap)} ${RING_C}`,
+      offset: single ? 0 : -(start + RING.gap / 2),
+      dx: single ? 0 : Math.cos(mid) * RING.pop,
+      dy: single ? 0 : Math.sin(mid) * RING.pop,
+    }
+  })
+  const on = hover ? parts.find((s) => key(s) === hover) : undefined
+  const onRow = on ? rows.find((r) => r.symbol === on.symbol) : undefined
   return (
     <section data-portfolio-alloc style={{ '--i': 1 } as CSSProperties} className="rise flex min-w-0 flex-col gap-4 rounded-lg border border-border bg-surface p-4 sm:p-6">
       <h2 className="text-sm font-semibold">{a.title}</h2>
@@ -424,37 +451,79 @@ export function Allocation({ rows, amounts = true }: { rows: PortfolioRow[]; amo
         <p className="text-sm text-muted">{a.empty}</p>
       ) : (
         <>
-          <div className="relative">
-            <div
+          <div className="relative mx-auto aspect-square w-full max-w-[220px]">
+            <svg
+              viewBox="0 0 200 200"
               role="img"
               aria-label={fmt(a.barLabel, {
                 list: parts.map((s) => `${name(s)} ${formatPercent(s.share)}`).join(', '),
               })}
-              data-alloc-bar
+              data-alloc-donut
               data-hover={hover ?? undefined}
-              className="alloc-bar flex h-7 gap-0.5"
+              className="alloc-bar size-full overflow-visible"
             >
-              {parts.map((s, i) => (
-                <div
-                  key={key(s)}
-                  data-seg={key(s)}
-                  data-on={hover === key(s) ? '' : undefined}
-                  onMouseEnter={() => setHover(key(s))}
-                  onMouseLeave={() => setHover(null)}
-                  title={`${name(s)} · ${formatPercent(s.share)}`}
-                  style={{
-                    flexGrow: s.share,
-                    background: `var(--color-alloc-${tone(s, i)})`,
-                    color: `var(--color-alloc-ink-${tone(s, i)})`,
-                  }}
-                  className="alloc-seg flex min-w-1 basis-0 items-center overflow-hidden rounded-[4px] px-2"
-                >
-                  {s.share >= LABEL_MIN && <span className="num text-xs font-semibold whitespace-nowrap">{formatPercent(s.share)}</span>}
+              <defs>
+                {/* маска прорисовки: белая дуга бежит по кругу от 12 часов и открывает кольцо */}
+                <mask id={maskId} maskUnits="userSpaceOnUse" x="-20" y="-20" width="240" height="240">
+                  <circle
+                    cx="100"
+                    cy="100"
+                    r={RING.r}
+                    fill="none"
+                    stroke="white"
+                    strokeWidth={RING.w + RING.pop * 2 + 4}
+                    strokeDasharray={RING_C}
+                    transform="rotate(-90 100 100)"
+                    className="ring-draw"
+                    style={{ '--ring-c': RING_C } as CSSProperties}
+                  />
+                </mask>
+              </defs>
+              <g mask={`url(#${maskId})`}>
+                {arcs.map(({ s, i, dash, offset, dx, dy }) => (
+                  <g
+                    key={key(s)}
+                    data-seg={key(s)}
+                    data-on={hover === key(s) ? '' : undefined}
+                    onMouseEnter={() => setHover(key(s))}
+                    onMouseLeave={() => setHover(null)}
+                    className="alloc-seg ring-seg"
+                    style={{ transform: hover === key(s) ? `translate(${dx}px, ${dy}px)` : undefined }}
+                  >
+                    <title>{`${name(s)} · ${formatPercent(s.share)}`}</title>
+                    <circle
+                      cx="100"
+                      cy="100"
+                      r={RING.r}
+                      fill="none"
+                      stroke={`var(--color-alloc-${tone(s, i)})`}
+                      strokeWidth={RING.w}
+                      strokeDasharray={dash}
+                      strokeDashoffset={offset}
+                      transform="rotate(-90 100 100)"
+                    />
+                  </g>
+                ))}
+              </g>
+            </svg>
+            {/* центр: стоимость и число монет; под мышью поверх — монета, сумма, доля (смена — только прозрачностью: сумма не набегает заново) */}
+            <div aria-hidden className="pointer-events-none absolute inset-[22%] grid place-items-center text-center" data-alloc-center>
+              <div className={`col-start-1 row-start-1 flex max-w-full flex-col items-center transition-opacity duration-150 ${on ? 'opacity-0' : ''}`}>
+                {amounts ? (
+                  <AnimatedNumber value={total} format={formatUsd} className="num max-w-full truncate font-display text-lg font-semibold" />
+                ) : (
+                  <span className="num font-display text-lg font-semibold">100 %</span>
+                )}
+                <span className="text-xs text-muted">{plural(priced, t.portfolio.kpi.coins)}</span>
+              </div>
+              {on && (
+                <div data-alloc-center-coin className="col-start-1 row-start-1 flex max-w-full flex-col items-center animate-fade-in">
+                  {on.symbol === null ? null : <CoinIcon symbol={on.symbol} icon={onRow?.coin?.icon} size={22} />}
+                  <b className="mt-1 max-w-full truncate text-sm font-semibold">{name(on)}</b>
+                  {amounts && <span className="num text-sm">{formatUsd(on.value)}</span>}
+                  <span className="num text-xs text-muted">{formatPercent(on.share)}</span>
                 </div>
-              ))}
-            </div>
-            <div aria-hidden className="pointer-events-none absolute -inset-px overflow-hidden">
-              <div className="eq-curtain size-full bg-surface" />
+              )}
             </div>
           </div>
 
@@ -478,7 +547,7 @@ export function Allocation({ rows, amounts = true }: { rows: PortfolioRow[]; amo
                   </span>
                   <span className="num text-right whitespace-nowrap">
                     {amounts && formatUsd(s.value)}
-                    {s.share < LABEL_MIN && <span className="ml-2 text-xs text-muted">{formatPercent(s.share)}</span>}
+                    <span data-share className={`${amounts ? 'ml-2 text-xs text-muted' : ''} inline-block min-w-[3.25rem] text-right`}>{formatPercent(s.share)}</span>
                   </span>
                 </li>
               )
