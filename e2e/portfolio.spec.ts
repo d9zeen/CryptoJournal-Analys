@@ -206,9 +206,10 @@ test('доли: 7 монет — 4 крупные и «Другое», одна 
   // у монет без цвета логотипа — шаги одного фиолетового по месту доли, «Другое» — серый токен
   await expect(alloc.locator('[data-alloc-donut] [data-seg="C0"] circle.ring-coin')).toHaveAttribute('style', /--ring-c: var\(--color-alloc-1\)/)
   await expect(alloc.locator('[data-alloc-donut] [data-seg="other"] circle.ring-coin')).toHaveAttribute('style', /--ring-c: var\(--color-alloc-other\)/)
-  // иконка монеты — на куске от 7 %; у «Другого» иконки нет
-  await expect(alloc.locator('[data-ring-icon="C0"]')).toHaveCount(1)
-  await expect(alloc.locator('[data-ring-icon="other"]')).toHaveCount(0)
+  // у каждого куска — плашка «логотип + тикер» снаружи кольца; у «Другого» плашки нет
+  await expect(alloc.locator('[data-ring-chip="C0"]')).toContainText('C0')
+  await expect(alloc.locator('[data-ring-chip]')).toHaveCount(4)
+  await expect(alloc.locator('[data-ring-chip="other"]')).toHaveCount(0)
 
   db.holdings = manual(['C0'])
   await page.reload()
@@ -216,8 +217,8 @@ test('доли: 7 монет — 4 крупные и «Другое», одна 
   await expect(alloc.locator('[data-alloc-donut] [data-seg]')).toHaveCount(1)
   await expect(alloc.locator('li[data-seg="C0"] [data-share]')).toHaveText('100 %')
   await expect(alloc.locator('[data-alloc-donut] [data-seg="C0"] circle')).toHaveAttribute('stroke-dashoffset', '0')
-  // одна монета — без иконки на кольце (она и так в центре и в легенде)
-  await expect(alloc.locator('[data-ring-icon]')).toHaveCount(0)
+  // одна монета — без плашки у кольца (она и так в центре и в легенде)
+  await expect(alloc.locator('[data-ring-chip]')).toHaveCount(0)
 
   // монета без цены: стоимость 0 — долю посчитать не из чего
   db.coins = [{ ...many(1)[0], price: null }]
@@ -247,12 +248,19 @@ test('кольцо долей: у монеты — цвет её логотип�
   await expect(ring('HYP')).toHaveAttribute('style', /--ring-mix-l: 45%/)
   // тот же цвет — у квадратика в легенде
   await expect(alloc.locator('li[data-seg="GOLD"] i')).toHaveAttribute('style', /#dda85b/)
-  // иконки на кольце: картинка из Storage, без иконки — буквы монеты
-  await expect(alloc.locator('[data-ring-icon="GOLD"] image')).toHaveAttribute('href', /coin-icons\/gold\.svg$/)
-  await expect(alloc.locator('[data-ring-icon="HYP"] text')).toHaveText('HYP')
-  await expect(alloc.locator('[data-ring-icon="GOLD"]')).toHaveAttribute('data-place', 'in')
-  // мелкая монета (2,4 %) — иконка снаружи кольца, рядом со своим куском
-  await expect(alloc.locator('[data-ring-icon="SMOL"]')).toHaveAttribute('data-place', 'out')
+  // плашки у кольца: логотип из Storage + тикер, без логотипа — буквы монеты; есть и у мелкой монеты (2,4 %)
+  await expect(alloc.locator('[data-ring-chip="GOLD"] img')).toHaveAttribute('src', /coin-icons\/gold\.svg$/)
+  await expect(alloc.locator('[data-ring-chip="GOLD"]')).toContainText('GOLD')
+  await expect(alloc.locator('[data-ring-chip="HYP"]')).toContainText('HYP')
+  await expect(alloc.locator('[data-ring-chip="SMOL"]')).toBeVisible()
+  // плашки не налезают друг на друга
+  const boxes = await alloc.locator('[data-ring-chip]').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()))
+  for (let i = 0; i < boxes.length; i++)
+    for (let j = i + 1; j < boxes.length; j++) {
+      const a = boxes[i]
+      const b = boxes[j]
+      expect(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top).toBe(true)
+    }
   // настоящий цвет на экране: золото — тёплое (красный канал больше синего)
   const stroke = await ring('GOLD').evaluate((e) => getComputedStyle(e).stroke)
   expect(stroke).toMatch(/^(rgb|color|oklab)/)
