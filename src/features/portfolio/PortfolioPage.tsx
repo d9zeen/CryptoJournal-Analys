@@ -490,7 +490,6 @@ export function Allocation({ rows, amounts = true }: { rows: PortfolioRow[]; amo
                     className="alloc-seg ring-seg"
                     style={{ transform: hover === key(s) ? `translate(${dx}px, ${dy}px)` : undefined }}
                   >
-                    <title>{`${name(s)} · ${formatPercent(s.share)}`}</title>
                     <circle
                       cx="100"
                       cy="100"
