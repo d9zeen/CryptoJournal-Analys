@@ -40,6 +40,7 @@ import {
 } from '@/lib/calc/portfolio'
 import type { Connection } from '@/features/connections/api'
 import {
+  coinIconUrl,
   useAddManual,
   useAutoRefreshPortfolio,
   useCoins,
@@ -399,6 +400,35 @@ const signedPct = (v: number) => (v > 0 ? '+' : v < 0 ? '−' : '') + formatPerc
 /** Кольцо долей: viewBox 200×200, радиус средней линии, толщина, зазор между кусками (цвет поверхности), насколько выдвигается кусок под мышью */
 const RING = { r: 78, w: 30, gap: 2.4, pop: 6 }
 const RING_C = 2 * Math.PI * RING.r
+/** иконка монеты на кольце — у куска от 7 % (меньше — не помещается) */
+const RING_ICON_MIN = 0.07
+const RING_ICON = 20
+
+/** относительная яркость цвета #rrggbb (WCAG) */
+function luminance(hex: string): number | null {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
+  if (!m) return null
+  const n = parseInt(m[1], 16)
+  const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
+    const c = v / 255
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+  })
+  return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2]
+}
+
+/**
+ * Цвет монеты для кольца и легенды (владелец 28.11.2026: «у каждой монеты свой цвет, как у её иконки»): coins.color — из логотипа
+ * (prices-worker svgColor). Слишком тёмный на тёмной теме (APE #073183) или слишком светлый на светлой (HYPE #96fce4) — подмешиваем
+ * цвет текста (--ring-mix-d / --ring-mix-l, выбирает тема в theme.css), иначе кусок сливается с карточкой.
+ * Цвета нет (у XRP логотип чёрно-белый) — шаг фиолетового по месту, «Другое» — серый.
+ */
+export function ringColor(color: string | null | undefined, fallback: string): CSSProperties {
+  const lum = color ? luminance(color) : null
+  if (lum === null || !color) return { '--ring-c': fallback, '--ring-mix-d': '0%', '--ring-mix-l': '0%' } as CSSProperties
+  const d = lum < 0.04 ? 50 : lum < 0.08 ? 30 : 0
+  const l = lum > 0.7 ? 45 : lum > 0.55 ? 25 : 0
+  return { '--ring-c': color, '--ring-mix-d': `${d}%`, '--ring-mix-l': `${l}%` } as CSSProperties
+}
 
 /**
  * «Из чего состоит» — кольцо с суммой в центре (владелец 28.11.2026: «пай-чарт» вместо полосы; выбрал кольцо из трёх вариантов;
@@ -436,12 +466,16 @@ export function Allocation({ rows, amounts = true }: { rows: PortfolioRow[]; amo
     return {
       s,
       i,
+      ix: 100 + Math.cos(mid) * RING.r,
+      iy: 100 + Math.sin(mid) * RING.r,
       dash: single ? `${RING_C} 0` : `${Math.max(0.01, len - RING.gap)} ${RING_C}`,
       offset: single ? 0 : -(start + RING.gap / 2),
       dx: single ? 0 : Math.cos(mid) * RING.pop,
       dy: single ? 0 : Math.sin(mid) * RING.pop,
     }
   })
+  const colorFor = (s: { symbol: string | null; color: string | null }, i: number) => ringColor(s.symbol === null ? null : s.color, `var(--color-alloc-${tone(s, i)})`)
+  const iconOf = (s: { symbol: string | null }) => (s.symbol === null ? null : coinIconUrl(rows.find((r) => r.symbol === s.symbol)?.coin?.icon ?? null))
   const on = hover ? parts.find((s) => key(s) === hover) : undefined
   const onRow = on ? rows.find((r) => r.symbol === on.symbol) : undefined
   return (
@@ -463,6 +497,9 @@ export function Allocation({ rows, amounts = true }: { rows: PortfolioRow[]; amo
               className="alloc-bar size-full overflow-visible"
             >
               <defs>
+                <clipPath id={`${maskId}-clip`} clipPathUnits="objectBoundingBox">
+                  <circle cx="0.5" cy="0.5" r="0.5" />
+                </clipPath>
                 {/* маска прорисовки: белая дуга бежит по кругу от 12 часов и открывает кольцо */}
                 <mask id={maskId} maskUnits="userSpaceOnUse" x="-20" y="-20" width="240" height="240">
                   <circle
@@ -475,12 +512,12 @@ export function Allocation({ rows, amounts = true }: { rows: PortfolioRow[]; amo
                     strokeDasharray={RING_C}
                     transform="rotate(-90 100 100)"
                     className="ring-draw"
-                    style={{ '--ring-c': RING_C } as CSSProperties}
+                    style={{ '--ring-len': RING_C } as CSSProperties}
                   />
                 </mask>
               </defs>
               <g mask={`url(#${maskId})`}>
-                {arcs.map(({ s, i, dash, offset, dx, dy }) => (
+                {arcs.map(({ s, i, ix, iy, dash, offset, dx, dy }) => (
                   <g
                     key={key(s)}
                     data-seg={key(s)}
@@ -495,12 +532,26 @@ export function Allocation({ rows, amounts = true }: { rows: PortfolioRow[]; amo
                       cy="100"
                       r={RING.r}
                       fill="none"
-                      stroke={`var(--color-alloc-${tone(s, i)})`}
+                      style={colorFor(s, i)}
+                      className="ring-coin"
                       strokeWidth={RING.w}
                       strokeDasharray={dash}
                       strokeDashoffset={offset}
                       transform="rotate(-90 100 100)"
                     />
+                    {/* иконка монеты на её куске (от 7 %): кружок цвета карточки + картинка из нашего Storage; появляется, когда до неё дошла прорисовка */}
+                    {s.symbol !== null && s.share / shareSum >= RING_ICON_MIN && parts.length > 1 && (
+                      <g data-ring-icon={key(s)}>
+                        <circle cx={ix} cy={iy} r={RING_ICON / 2 + 1.5} className="fill-surface" />
+                        {iconOf(s) ? (
+                          <image href={iconOf(s)!} x={ix - RING_ICON / 2} y={iy - RING_ICON / 2} width={RING_ICON} height={RING_ICON} clipPath={`url(#${maskId}-clip)`} preserveAspectRatio="xMidYMid slice" />
+                        ) : (
+                          <text x={ix} y={iy} dy="0.35em" textAnchor="middle" className="fill-muted text-[7px] font-bold">
+                            {(s.symbol ?? '').slice(0, 3)}
+                          </text>
+                        )}
+                      </g>
+                    )}
                   </g>
                 ))}
               </g>
@@ -538,7 +589,7 @@ export function Allocation({ rows, amounts = true }: { rows: PortfolioRow[]; amo
                   onMouseLeave={() => setHover(null)}
                   className="alloc-seg grid grid-cols-[10px_24px_minmax(0,1fr)_auto] items-center gap-x-2.5 border-b border-border py-2 text-sm last:border-0"
                 >
-                  <i aria-hidden className="size-2.5 rounded-[3px]" style={{ background: `var(--color-alloc-${tone(s, i)})` }} />
+                  <i aria-hidden className="ring-coin-bg size-2.5 rounded-[3px]" style={colorFor(s, i)} />
                   {s.symbol === null ? <span aria-hidden className="size-6 rounded-full bg-surface-2" /> : <CoinIcon symbol={s.symbol} icon={row?.coin?.icon} size={24} />}
                   <span className="flex min-w-0 items-baseline gap-2">
                     <b className="truncate font-semibold">{name(s)}</b>

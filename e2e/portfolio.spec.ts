@@ -203,9 +203,12 @@ test('доли: 7 монет — 4 крупные и «Другое», одна 
   await expect(alloc.locator('[data-alloc-donut] [data-seg]')).toHaveCount(5)
   await expect(alloc.locator('li[data-seg]').last()).toContainText('Другое3 монеты')
   await expect(alloc.locator('li[data-seg="other"]')).toContainText('150,00 $')
-  // цвет — по месту доли (шаги одного фиолетового), «Другое» — серый токен
-  await expect(alloc.locator('[data-alloc-donut] [data-seg="C0"] circle')).toHaveAttribute('stroke', 'var(--color-alloc-1)')
-  await expect(alloc.locator('[data-alloc-donut] [data-seg="other"] circle')).toHaveAttribute('stroke', 'var(--color-alloc-other)')
+  // у монет без цвета логотипа — шаги одного фиолетового по месту доли, «Другое» — серый токен
+  await expect(alloc.locator('[data-alloc-donut] [data-seg="C0"] circle.ring-coin')).toHaveAttribute('style', /--ring-c: var\(--color-alloc-1\)/)
+  await expect(alloc.locator('[data-alloc-donut] [data-seg="other"] circle.ring-coin')).toHaveAttribute('style', /--ring-c: var\(--color-alloc-other\)/)
+  // иконка монеты — на куске от 7 %; у «Другого» иконки нет
+  await expect(alloc.locator('[data-ring-icon="C0"]')).toHaveCount(1)
+  await expect(alloc.locator('[data-ring-icon="other"]')).toHaveCount(0)
 
   db.holdings = manual(['C0'])
   await page.reload()
@@ -213,6 +216,8 @@ test('доли: 7 монет — 4 крупные и «Другое», одна 
   await expect(alloc.locator('[data-alloc-donut] [data-seg]')).toHaveCount(1)
   await expect(alloc.locator('li[data-seg="C0"] [data-share]')).toHaveText('100 %')
   await expect(alloc.locator('[data-alloc-donut] [data-seg="C0"] circle')).toHaveAttribute('stroke-dashoffset', '0')
+  // одна монета — без иконки на кольце (она и так в центре и в легенде)
+  await expect(alloc.locator('[data-ring-icon]')).toHaveCount(0)
 
   // монета без цены: стоимость 0 — долю посчитать не из чего
   db.coins = [{ ...many(1)[0], price: null }]
@@ -220,6 +225,33 @@ test('доли: 7 монет — 4 крупные и «Другое», одна 
   await expect(alloc).toContainText('Нет монет с ценой')
   await expect(alloc.locator('[data-alloc-donut]')).toHaveCount(0)
   await expect(page.locator('[data-hero-sub]')).toContainText('без цены: 1')
+})
+
+test('кольцо долей: у монеты — цвет её логотипа и иконка на куске; слишком тёмный / светлый цвет подмешивает цвет текста', async ({ page, db }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  db.usage = { plan: 'pro', trades_created: 0, trade_limit: null }
+  db.coins = [
+    { ...many(1)[0], id: 'g', symbol: 'GOLD', price: 60, color: '#dda85b', icon: 'gold.svg' },
+    { ...many(1)[0], id: 'a', symbol: 'APEX', price: 30, color: '#073183', icon: 'apex.svg' },
+    { ...many(1)[0], id: 'h', symbol: 'HYP', price: 10, color: '#96fce4', icon: null },
+  ]
+  db.holdings = manual(['GOLD', 'APEX', 'HYP'])
+  await fakeSupabase(page, db)
+  await page.goto('portfolio')
+  const alloc = page.locator('[data-portfolio-alloc]')
+  const ring = (s: string) => alloc.locator(`[data-alloc-donut] [data-seg="${s}"] circle.ring-coin`)
+  await expect(ring('GOLD')).toHaveAttribute('style', /--ring-c: #dda85b; --ring-mix-d: 0%; --ring-mix-l: 0%/)
+  // тёмно-синий — на тёмной теме с примесью текста, светлая мята — на светлой
+  await expect(ring('APEX')).toHaveAttribute('style', /--ring-c: #073183; --ring-mix-d: 50%/)
+  await expect(ring('HYP')).toHaveAttribute('style', /--ring-mix-l: 45%/)
+  // тот же цвет — у квадратика в легенде
+  await expect(alloc.locator('li[data-seg="GOLD"] i')).toHaveAttribute('style', /#dda85b/)
+  // иконки на кольце: картинка из Storage, без иконки — буквы монеты
+  await expect(alloc.locator('[data-ring-icon="GOLD"] image')).toHaveAttribute('href', /coin-icons\/gold\.svg$/)
+  await expect(alloc.locator('[data-ring-icon="HYP"] text')).toHaveText('HYP')
+  // настоящий цвет на экране: золото — тёплое (красный канал больше синего)
+  const stroke = await ring('GOLD').evaluate((e) => getComputedStyle(e).stroke)
+  expect(stroke).toMatch(/^(rgb|color|oklab)/)
 })
 
 test('портфель по ссылке без сумм: в легенде долей нет денег', async ({ page, db }) => {
