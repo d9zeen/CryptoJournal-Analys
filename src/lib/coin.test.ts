@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { baseCoin } from './coin'
+import { baseCoin, quoteCoin } from './coin'
 
 describe('baseCoin — монета из тикера пары', () => {
   it.each([
@@ -18,3 +18,19 @@ describe('baseCoin — монета из тикера пары', () => {
     ['', ''],
   ])('%s → %s', (input, out) => expect(baseCoin(input)).toBe(out))
 })
+
+describe('quoteCoin — котировка пары', () => {
+  it.each([
+    ['BTCUSDT', 'USDT'],
+    ['ETH-USDT-SWAP', 'USDT'],
+    ['HYPEUSDC', 'USDC'],
+    ['SOL/USD', 'USD'],
+    ['BTC_FDUSD', 'FDUSD'],
+    ['kPEPEUSDC', 'USDC'],
+    ['XAUT', null],
+    ['HYPE-PERP', null],
+    ['USDT', null],
+    ['USDC', null],
+  ])('%s → %s', (input, out) => expect(quoteCoin(input)).toBe(out))
+})
+

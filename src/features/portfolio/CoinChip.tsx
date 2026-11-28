@@ -5,7 +5,7 @@
  * Сделка Polymarket (есть title) — не монета: текст вопроса, как раньше.
  */
 import { useMemo } from 'react'
-import { baseCoin } from '@/lib/coin'
+import { baseCoin, quoteCoin } from '@/lib/coin'
 import { coinsBySymbol } from '@/lib/calc/portfolio'
 import { useCoins } from './api'
 import { CoinIcon } from './CoinIcon'
@@ -31,11 +31,26 @@ export function CoinChip({ symbol, title, size = 'sm', className = '' }: Props) 
   if (title) return <span className={`line-clamp-2 ${className}`}>{title}</span>
   const coin = baseCoin(symbol)
   const icon = coins.get(coin)?.icon ?? null
+  // котировка пары (USDT / USDC) — маленьким логотипом поверх и «/ USDT» после тикера (владелец 28.11.2026: «а USDT где потерял?»)
+  const quote = quoteCoin(symbol)
+  const qIcon = quote ? (coins.get(quote)?.icon ?? null) : null
+  const big = size === 'md' ? 24 : size === 'sm' ? 18 : 14
+  const small = size === 'md' ? 13 : size === 'sm' ? 11 : 9
   const box = size === 'md' ? 'gap-2 rounded-md bg-surface-2 py-1 pr-2.5 pl-1 text-base' : size === 'sm' ? 'gap-1.5 rounded-md bg-surface-2 py-0.5 pr-2 pl-0.5 text-xs' : 'gap-1 text-xs'
   return (
-    <span data-coin-chip={coin} title={symbol} className={`inline-flex max-w-full min-w-0 items-center align-middle font-semibold ${box} ${className}`}>
-      <CoinIcon symbol={coin} icon={icon} size={size === 'md' ? 24 : size === 'sm' ? 18 : 14} />
-      <span className="truncate">{coin}</span>
+    <span data-coin-chip={coin} data-quote={quote ?? undefined} title={symbol} className={`inline-flex max-w-full min-w-0 items-center align-middle font-semibold ${box} ${className}`}>
+      <span className="relative shrink-0" style={{ width: big, height: big }}>
+        <CoinIcon symbol={coin} icon={icon} size={big} />
+        {quote && (
+          <span data-quote-icon className="absolute -right-1 -bottom-1 rounded-full bg-surface-2 p-px">
+            <CoinIcon symbol={quote} icon={qIcon} size={small} />
+          </span>
+        )}
+      </span>
+      <span className={`truncate ${quote ? 'ml-0.5' : ''}`}>
+        {coin}
+        {quote && <span className="font-normal text-muted">/{quote}</span>}
+      </span>
     </span>
   )
 }

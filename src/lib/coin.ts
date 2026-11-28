@@ -19,3 +19,18 @@ export function baseCoin(symbol: string): string {
   else s = s.replace(MULT, (m) => (m === 'K' ? 'K' : ''))
   return s
 }
+
+const QUOTE_ONLY = /(?:^|[-_/:])?(USDT|USDC|FDUSD|BUSD|USDE|USD)$/
+/**
+ * Котировка пары (владелец 28.11.2026: «а USDT где потерял? где иконки USDT, USDC?»): BTCUSDT → USDT, ETH-USDT-SWAP → USDT,
+ * HYPEUSDC → USDC, SOL/USD → USD. Котировки нет (XAUT, HYPE-PERP) или тикер сам стейблкоин (USDT) — null.
+ */
+export function quoteCoin(symbol: string): string | null {
+  const s = symbol.trim().toUpperCase().replace(/-SWAP$/, '').replace(/[-_/]?PERP$/, '')
+  const m = QUOTE_ONLY.exec(s)
+  if (!m) return null
+  // сам стейблкоин без пары (USDT) — не «USDT / USDT»
+  if (s === m[1] || s.replace(/[-_/:]$/, '') === m[1]) return null
+  return m[1]
+}
+

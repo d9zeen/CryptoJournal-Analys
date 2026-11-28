@@ -212,6 +212,11 @@ test.describe('дашборд и сделки', () => {
     await page.goto('trades')
     // пара — плашкой «логотип + тикер»: OLDUSDT → OLD
     await expect(page.locator('[data-coin-chip="OLD"]').filter({ visible: true }).first()).toBeVisible()
+    // котировка пары не теряется: «OLD/USDT» и маленький логотип USDT поверх (владелец 28.11.2026: «а USDT где потерял?»)
+    const chip = page.locator('[data-coin-chip="OLD"]').filter({ visible: true }).first()
+    await expect(chip).toHaveAttribute('data-quote', 'USDT')
+    await expect(chip).toContainText('OLD/USDT')
+    await expect(chip.locator('[data-quote-icon]')).toHaveCount(1)
   })
 
   test('пустой дневник предлагает импорт', async ({ page, db }) => {
